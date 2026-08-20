@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+#
+# Deterministic structural checks on a task state file — the replacement
+# for "the lead reads the whole file and eyeballs it" and for "dispatch a
+# verifier agent." Neither of those is what you want here: eyeballing costs
+# lead context on every single hop, and a verifier agent costs a paid call
+# per hop *and* can misjudge the same way the role it's checking can. A
+# script that only asserts structural facts (right heading, no duplicates,
+# no unfilled placeholder) can't hallucinate a pass — it either matches or
+# it doesn't.
+#
+# This is deliberately narrow: it catches shape problems (the T-01 incident
+# this exists because of — a verdict landed as a duplicate heading outside
+# Review verdicts), not correctness of the content. Content is still the
+# reviewer's and the lead's job.
+#
+# Usage: scripts/verify-state.sh T-01
+# Exit 0 = structurally sound, prints one OK line.
+# Exit 1 = specific problems printed to stderr, one per line.
+
+set -eu
+
+ID="${1:?usage: verify-state.sh <task-id, e.g. T-01>}"
+FILE=".agents/${ID}.md"
+
+[ -f "$FILE" ] || { echo "verify-state.sh: no such file: $FILE" >&2; exit 1; }
+
+FAIL=0
+fail() { printf 'verify-state.sh: %s\n' "$1" >&2; FAIL=1; }
+
+STATUS="$(grep -m1 '^\*\*Status:\*\*' "$FILE" | sed 's/.*Status:\*\* *//')"
+case "$STATUS" in
+  draft|spec-approved|in-progress|in-review|changes-requested|testing|done) ;;
+  *) fail "unrecognised Status: '$STATUS'" ;;
+esac
+
+# An unfilled "### Pass N ... verdict: <PASS | CHANGES_REQUESTED>" placeholder
+# is fine while still drafting/implementing, but not once review has run.
+if grep -q '^### Pass .*verdict: <PASS | CHANGES_REQUESTED>$' "$FILE"; then
+  case "$STATUS" in
+    draft|spec-approved|in-progress) ;;
+    *) fail "a Review verdicts pass heading still has the unfilled placeholder verdict, but Status is '$STATUS'" ;;
+  esac
+fi
+
+# Duplicate "### Pass N" headings usually mean a misplaced append rather
+# than a genuine second review pass under a reused number.
+DUPES="$(grep -o '^### Pass [0-9]*' "$FILE" | sort | uniq -d || true)"
+[ -z "$DUPES" ] || fail "duplicate Review verdicts heading(s): $DUPES"
+
+# Every "### Pass" heading must live inside the Review verdicts section —
+# not appended after Open questions or anywhere else in the file. This is
+# the exact class of bug the T-01 permission-bypass incident produced.
+IN_SECTION="$(awk '/^## Review verdicts/{f=1;next} /^## /{f=0} f' "$FILE" | grep -c '^### Pass ' || true)"
+TOTAL="$(grep -c '^### Pass ' "$FILE" || true)"
+[ "$IN_SECTION" = "$TOTAL" ] || fail "a '### Pass' heading exists outside the Review verdicts section ($TOTAL total, $IN_SECTION inside it)"
+
+if [ "$FAIL" -eq 0 ]; then
+  echo "verify-state.sh: $FILE OK (Status: $STATUS)"
+fi
+exit "$FAIL"

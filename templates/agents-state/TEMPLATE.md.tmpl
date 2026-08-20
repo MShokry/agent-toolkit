@@ -1,0 +1,110 @@
+# T-<id> — <short title>
+
+> The spine of the pipeline. Every role reads this file and appends to it.
+> **Nothing is passed between roles by prose alone.** If a fact is not
+> written here, the next role does not know it.
+>
+> Copy to `.agents/T-<id>.md` and fill in. Never delete another role's
+> section.
+
+**Status:** draft | spec-approved | in-progress | in-review | changes-requested | testing | done
+**Owner right now:** planner | senior-dev | builder | reviewer | tester | lead
+**Implementer for this task:** senior-dev (claude/__CLAUDE_MODEL__) | builder (__BUILDER_MODEL__)
+**OpenCode session id:** none yet — set after the first `oc.sh` call, reused for every later call on this task
+**Review loop count:** 0 / 2
+**Latest handoff:** <one line, overwritten by whichever role finishes last —
+`<role> → <outcome in a few words> → next: <role>`. This is what the lead
+reads between steps instead of the whole file; open the full file only when
+this line, or `scripts/verify-state.sh`, says something needs a look.>
+
+---
+
+## Goal
+
+<One paragraph. What the user actually wants, in their terms. Not a
+solution.>
+
+## Acceptance criteria
+
+> Checkable statements only. "Works well" is not checkable. A statement that
+> names an exact input and an exact observable output is. Only the planner
+> writes these. **No other role may edit them.**
+
+- [ ] AC1 —
+- [ ] AC2 —
+- [ ] AC3 —
+
+## Constraints
+
+> From this project's own guidance file unless stated otherwise. Restated
+> here so no role has to remember them.
+
+- Surgical changes only. Every changed line traces to this Goal.
+- No new runtime dependency unless this task explicitly calls for one.
+
+## Files in scope
+
+> The planner sets this. The implementer may not touch a file outside it
+> without appending to Open questions first and stopping.
+
+| File | Why |
+| --- | --- |
+| | |
+
+## New permissions required
+
+> Any new manifest permission, API scope, credential, or dependency, with
+> justification. Empty is the expected answer. The reviewer treats a silent
+> addition as an automatic CHANGES_REQUESTED.
+
+| Permission / dependency | Why it is unavoidable |
+| --- | --- |
+| | |
+
+## Decisions log
+
+> Append-only. Date, role, decision, and the reason. A decision without a
+> reason is not a decision, it is a preference.
+
+| When | Role | Decision | Why |
+| --- | --- | --- | --- |
+| | | | |
+
+## Review verdicts
+
+> Written by the reviewer only. PASS or CHANGES_REQUESTED, then numbered
+> findings with file:line and severity.
+
+### Pass 1 — <date> — verdict: <PASS | CHANGES_REQUESTED>
+
+<findings, or "none">
+
+## Test results
+
+> Written by the tester only. Never edits source; reports and triages.
+
+### Run 1 — <date>
+
+- Command:
+- Result:
+- Failures with reproduction steps:
+
+## Findings for docs
+
+> Any role may append a line here when something learned in this task is
+> true beyond this task — a platform gotcha, a design gap, an incident, a
+> constraint someone will hit again. Format, one per line:
+>
+>     - [docs/SOME-DOC.md] one-line finding, self-contained
+>
+> `scripts/promote-findings.sh T-<id>` copies these verbatim into the named
+> doc when you run it (idempotent — already-present lines are skipped). No
+> role is ever granted write access to `docs/` directly; this is a
+> deterministic copy, not an agent editing project documentation.
+
+## Open questions
+
+> Any role may append. **The implementer must stop when it adds one here.**
+> Only the lead clears them.
+
+- [ ]

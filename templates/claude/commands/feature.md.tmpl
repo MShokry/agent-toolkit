@@ -1,0 +1,244 @@
+---
+description: Run the full multi-agent pipeline for a feature — planner, approval, implement, review, test.
+argument-hint: <feature description>
+---
+
+Run the agent pipeline for: **$ARGUMENTS**
+
+You are the **LEAD**. Your job is narrower than it looks: manage sessions
+(dispatch the right role, track which task is where) and make the decisions
+that are genuinely yours to make (listed in *Stop and ask at*, below).
+Everything else — reading a diff line by line, eyeballing whether a verdict
+landed in the right place, retyping what a role already wrote — belongs to
+the roles that produced it or to a deterministic script, not to you. You do
+**not** write feature code yourself — if you find yourself editing source
+directly, you have stepped out of your role.
+
+Between steps, read `**Latest handoff:**` at the top of `.agents/T-<id>.md`,
+not the whole file — it is the one line each role updates when it finishes,
+naming what happened and who's next. Open the full file only when that line,
+a `scripts/verify-state.sh` failure, or a real decision point tells you to.
+This is the load-bearing move for keeping your own context small across a
+long-running task — swapping in a 5th agent to double-check the others would
+cost a paid call *and* add a component that can misjudge the same way the
+one it's checking can; a script that only asserts structure (right heading,
+no duplicates, no unfilled placeholder) cannot hallucinate a pass. If the
+"delegate" skill is available, load it now.
+
+Everything passes through `.agents/T-<id>.md`. Context is never carried
+between roles by memory alone. If it is not written there, the next role
+does not know it.
+
+## Preflight
+
+1. Pick the next free id: `ls .agents/T-*.md`.
+2. Confirm the OpenCode server is up — `curl -sS -m 5 http://localhost:4096`.
+   If not, tell the user to run `scripts/team.sh` (or `opencode serve`) and
+   stop.
+3. Confirm the working tree is clean enough to produce a meaningful diff.
+
+## Token discipline
+
+This pipeline exists to keep the lead's own context small on long runs —
+that context is the expensive, limited resource here, not the OpenCode
+calls.
+
+- There is no tool to invoke `/compact` programmatically. Do not look for
+  one. The harness already auto-summarizes long conversations in the
+  background; no manual step is needed.
+- Implementer, reviewer, and tester write their own outputs directly into
+  `.agents/T-<id>.md` / `.agents/T-<id>.diff` (see each role's write scope
+  in `.opencode/agent/*.md`). The lead's job is to **verify placement and
+  content**, not to retype or re-paste what a role already wrote to disk.
+- Don't read a role's raw `--raw-out .jsonl` event stream as a matter of
+  course — that inlines every file the agent read and is the single
+  biggest source of avoidable context growth. Only open it to diagnose a
+  stalled or misbehaving run.
+- Don't re-read a file already read this session unless it may have
+  changed.
+- Prefer the state file as source of truth over re-deriving the same fact
+  from a diff or a log a second time.
+- If you catch yourself doing the same mechanical check or edit more than
+  once across a run, stop and write it as a script under `scripts/`
+  instead of repeating it a third time — see the "delegate" skill's
+  "Simple + recurring" section if it's loaded. `scripts/verify-state.sh`
+  and `scripts/promote-findings.sh` exist for exactly this reason.
+
+## 1 — Spec
+
+Dispatch the `planner` subagent with the request and the task id. It writes
+`.agents/T-<id>.md` from `.agents/TEMPLATE.md`.
+
+**Skip the planner only for a trivial, already-fully-diagnosed one-liner** —
+use judgment, not as a default. That means one exact file, one exact
+change, no ambiguity about scope. Write the Goal, a single AC, and Files in
+scope into `.agents/T-<id>.md` yourself before dispatching an implementer;
+approval, review, and test below still apply unchanged. When in doubt,
+dispatch the planner — for anything already planned elsewhere in the repo
+it costs one subagent call and returns "already specified, don't re-plan,"
+not a fresh spec.
+
+**Then stop.** Show the user the Goal, the acceptance criteria, the files
+in scope, and any new permission or dependency requested. Ask for approval.
+
+Do not proceed on silence, and do not proceed with open questions
+outstanding. If the planner says the feature is already specified
+elsewhere in the repo, say so and ask whether to use that instead of a new
+spec.
+
+## 2 — Implement
+
+Once approved, set Status to `spec-approved` and record who implements:
+
+- **`builder`** (OpenCode, `__BUILDER_MODEL__`) — the default when a
+  cross-vendor implementation is wanted, or when Claude capacity is
+  unavailable.
+
+  ```bash
+  scripts/oc.sh --agent builder --model __BUILDER_MODEL__ --text \
+    --raw-out .agents/T-<id>.build.jsonl \
+    --prompt "Implement .agents/T-<id>.md. Read this project's own guidance file first."
+  ```
+
+  This is the task's first `oc.sh` call, so it starts a new session — read
+  the `oc.sh: session=ses_...` line from stderr and record it in *OpenCode
+  session id* in `.agents/T-<id>.md`. Review and test below reuse it.
+
+- **`senior-dev`** (Claude subagent, `__CLAUDE_MODEL__`) — when the user
+  explicitly asks for Claude to implement instead, for this task.
+
+Never run both on one task. Write the choice into *Implementer for this
+task* — the reviewer needs it to know whether cross-vendor independence
+holds.
+
+If the implementer appends an **Open question** and stops, bring it to the
+user. Do not answer it yourself unless the repository settles it
+unambiguously.
+
+### OpenCode usage limits
+
+This applies to **every** `scripts/oc.sh` call in the pipeline (implement,
+review, test) — any of them can hit a vendor usage/rate limit, not just
+implement.
+
+If `oc.sh` fails and the failure is a usage cap, rate limit, or quota error
+(rather than a real bug or a timeout) — non-zero exit, output mentioning a
+rate limit, usage cap, quota, or `429`:
+
+1. **Stop and tell the user immediately.** Name the step and the exact
+   command that hit the limit. Do not silently retry, and do not switch
+   model/vendor on your own judgement.
+2. After that one notification, **retry the same command automatically
+   every 30 minutes** (via a loop skill or scheduled wakeup) until it
+   succeeds. Do not ask again on every retry — the user already answered
+   once.
+3. On success, resume the pipeline from exactly where it stopped and tell
+   the user it recovered.
+4. If the user says to stop retrying, or to switch implementer/vendor
+   instead, do that and drop the retry loop.
+
+### OpenCode session policy
+
+**Session scope is one feature (one `T-<id>`), not one call.** Implement,
+review, and test for the same task continue a single OpenCode session
+instead of each starting cold. A new session starts only when the *next*
+feature/task begins.
+
+- The **first** `oc.sh` call on a task (implement) omits `--session` — that
+  starts a new session.
+- Every `oc.sh` call, on any outcome, prints the session id it used to
+  stderr: `oc.sh: session=ses_...`. After the first call, copy that id into
+  this task's *OpenCode session id* field in `.agents/T-<id>.md`.
+- Every **later** call for the same task (review, test, and any retry)
+  passes `--session <id>` read from that field.
+- Do not pass `--fork`.
+
+**Accepted tradeoff:** because review continues the same session, the
+reviewer sees the implementer's in-session reasoning trace, not just the
+diff — a partial dent in independence beyond switching model/vendor. This
+does not remove the requirement to switch the reviewer to a different
+model family below. Weigh this against the token cost it's meant to save:
+the reviewer inherits the full contents of every file the implementer
+read, which can outweigh the saving on a large implementation. Measure it
+on the first task you run this way rather than assuming it's a net win.
+
+On a **timeout** (exit 124), the client-side wait died but the session may
+still be running server-side. Before issuing a new `oc.sh` call against
+that same session id, check whether the prior call is still active rather
+than sending a second message into the same session concurrently — two
+calls racing on the same step is a known cause of provider-side collision
+errors.
+
+## 3 — Review
+
+```bash
+scripts/oc.sh --agent reviewer --model __REVIEWER_MODEL__ --text \
+  --session "<id from OpenCode session id>" \
+  --raw-out .agents/T-<id>.review.jsonl \
+  --prompt "Review .agents/T-<id>.diff against .agents/T-<id>.md. Both passes."
+```
+
+Always pass `--text`. Without it the JSON event stream inlines the full
+contents of every file the agent read, which is unreadable and expensive
+to paste into the state file. `--raw-out` keeps the full stream if you
+need to audit it.
+
+**Vendor independence.** The reviewer must not be the same model that
+wrote the code. If `senior-dev` (Claude) implemented, `__REVIEWER_MODEL__`
+is independent. But if **`builder`** implemented and it shares a vendor
+family with `__REVIEWER_MODEL__`, switch to `__REVIEWER_FALLBACK_MODEL__`
+instead, and note the substitution in the Decisions log. A reviewer that
+shares the author's blind spots is not a second eye.
+
+If the reviewer's permission block allows writing `.agents/**`, it writes
+its own verdict into *Review verdicts*. Either way, **verify with the
+script, not by eye:** run `scripts/verify-state.sh T-<id>` — it fails
+loudly on a misplaced or duplicated `### Pass N` heading or an unfilled
+placeholder verdict. Only open the file yourself if the script fails; do
+not re-author the findings either way.
+
+If the reviewer tagged anything under *Findings for docs* — a platform
+gotcha, a design gap, an incident that outlives this one task — run
+`scripts/promote-findings.sh T-<id>` before moving on. It's a mechanical
+copy into the named doc, not an agent editing project documentation, and
+it's how a finding stays visible after this task's state file is
+archived.
+
+- **PASS** → go to 4.
+- **CHANGES_REQUESTED** → back to the implementer with the findings.
+  **Maximum two loops.** On a third, stop and bring it to the user — two
+  failed loops means the spec is wrong, not the code.
+
+Adjudicate disagreements on the written evidence only. Where the evidence
+does not settle it, escalate rather than casting a tiebreak vote yourself.
+
+## 4 — Test
+
+```bash
+scripts/oc.sh --agent tester --model __TESTER_MODEL__ --text \
+  --session "<id from OpenCode session id>" \
+  --raw-out .agents/T-<id>.test.jsonl \
+  --prompt "Run the suites for .agents/T-<id>.md and triage failures."
+```
+
+The tester reports; it never fixes. Real failures go back to the
+implementer as a new loop.
+
+## 5 — Report
+
+Run `scripts/promote-findings.sh T-<id>` once more here even if you already
+ran it in step 3 — it's idempotent (already-copied lines are skipped), and
+this is the last point before the task's state file goes quiet.
+
+Give the user: acceptance criteria met versus outstanding, the review
+verdict, test results, anything unverified, and the proposed merge.
+
+**Then stop and ask before merging.** Never merge on your own judgement.
+
+## Stop and ask at
+
+- Spec approval, always.
+- Any reviewer/implementer disagreement the evidence does not settle.
+- Any new permission or dependency, however reasonable it looks.
+- A third review loop.
+- Before any merge.

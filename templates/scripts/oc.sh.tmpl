@@ -1,0 +1,179 @@
+#!/usr/bin/env bash
+#
+# Wrapper for every OpenCode invocation in the agent pipeline.
+#
+# Why this exists rather than calling `opencode run` directly:
+#
+#   1. --attach reuses an already-running `opencode serve`, skipping MCP cold
+#      boot on every call. Without it each invocation pays startup again.
+#   2. `opencode run` hangs forever if the agent hits a permission prompt in a
+#      non-TTY. That is the known failure mode this wrapper exists to guard
+#      against, so every call is bounded by a hard timeout and a non-zero exit.
+#   3. Model is an argument, so the lead can switch vendors without editing a
+#      single agent prompt.
+#
+# Usage:
+#   scripts/oc.sh --agent reviewer --model hcnsec/DeepSeek-V4-Pro \
+#                 --prompt-file .agents/T-001.review-request.md
+#   scripts/oc.sh --agent tester --model hcnsec/auto --prompt "run the suite"
+#   echo "..." | scripts/oc.sh --agent reviewer --model hcnsec/glm-5.3
+#
+# --session <id> continues an existing OpenCode session instead of starting a
+# new one — pass the session id captured from an earlier call's "session=..."
+# line (also visible in --raw-out as each event's sessionID). The pipeline's
+# session scope is one feature/task, not one call: implement, review, and test
+# for the same T-<id> continue the same session; a new one starts only for the
+# next task. Every call (with or without --session) prints the session id it
+# used to stderr on completion so the caller can record it.
+#
+# --text extracts just the agent's final prose from the JSON event stream. The
+# raw stream is still what crosses the wire (and is kept with --raw-out), but it
+# inlines the full contents of every file the agent reads, so it is unreadable
+# for a human and expensive to paste back into a state file.
+#
+# Env:
+#   OC_SERVER   default http://localhost:4096
+#   OC_TIMEOUT  default 600 (seconds)
+#
+# Exit codes:
+#   0   ok
+#   1   usage or runtime error
+#   124 timed out  (almost always a permission prompt in a non-TTY)
+
+set -eu
+
+SERVER="${OC_SERVER:-http://localhost:4096}"
+TIMEOUT_SECS="${OC_TIMEOUT:-600}"
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+
+AGENT=""
+MODEL=""
+PROMPT=""
+PROMPT_FILE=""
+TEXT_ONLY=0
+RAW_OUT=""
+SESSION=""
+
+die() { printf '%s\n' "oc.sh: $*" >&2; exit 1; }
+
+usage() {
+  sed -n '3,30p' "$0" | sed 's/^# \{0,1\}//'
+  exit 1
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --agent)       [ $# -ge 2 ] || die "--agent needs a value";       AGENT="$2";       shift 2 ;;
+    --model)       [ $# -ge 2 ] || die "--model needs a value";       MODEL="$2";       shift 2 ;;
+    --prompt)      [ $# -ge 2 ] || die "--prompt needs a value";      PROMPT="$2";      shift 2 ;;
+    --prompt-file) [ $# -ge 2 ] || die "--prompt-file needs a value"; PROMPT_FILE="$2"; shift 2 ;;
+    --text)        TEXT_ONLY=1; shift ;;
+    --raw-out)     [ $# -ge 2 ] || die "--raw-out needs a value";     RAW_OUT="$2";     shift 2 ;;
+    --session)     [ $# -ge 2 ] || die "--session needs a value";     SESSION="$2";     shift 2 ;;
+    -h|--help)     usage ;;
+    *)             die "unknown argument: $1  (try --help)" ;;
+  esac
+done
+
+[ -n "$AGENT" ] || die "--agent is required"
+[ -n "$MODEL" ] || die "--model is required"
+
+# Prompt from --prompt, --prompt-file, or stdin, in that order.
+if [ -z "$PROMPT" ]; then
+  if [ -n "$PROMPT_FILE" ]; then
+    [ -f "$PROMPT_FILE" ] || die "prompt file not found: $PROMPT_FILE"
+    PROMPT="$(cat "$PROMPT_FILE")"
+  elif [ ! -t 0 ]; then
+    PROMPT="$(cat)"
+  fi
+fi
+[ -n "$PROMPT" ] || die "no prompt given (--prompt, --prompt-file, or stdin)"
+
+# GNU timeout is `timeout` on Linux and via coreutils on macOS, `gtimeout` when
+# coreutils is installed unprefixed-off. Resolve whichever exists.
+if command -v timeout >/dev/null 2>&1; then
+  TIMEOUT_BIN="timeout"
+elif command -v gtimeout >/dev/null 2>&1; then
+  TIMEOUT_BIN="gtimeout"
+else
+  die "neither 'timeout' nor 'gtimeout' found — install coreutils (brew install coreutils)"
+fi
+
+# Fail fast with a clear message rather than letting --attach silently fall back
+# to a cold local server, which is the slow path this wrapper exists to avoid.
+if ! curl -sS -o /dev/null -m 5 "$SERVER" 2>/dev/null; then
+  die "no opencode server at $SERVER — start one with:  opencode serve --port 4096
+     (or run scripts/team.sh, which starts it in pane 1)"
+fi
+
+printf '%s\n' "oc.sh: agent=$AGENT model=$MODEL timeout=${TIMEOUT_SECS}s server=$SERVER session=${SESSION:-new}" >&2
+
+RAW_TMP="$(mktemp "${TMPDIR:-/tmp}/oc-raw.XXXXXX")"
+trap 'rm -f "$RAW_TMP"' EXIT
+
+SESSION_ARGS=()
+[ -n "$SESSION" ] && SESSION_ARGS=(--session "$SESSION")
+
+set +e
+printf '%s' "$PROMPT" | "$TIMEOUT_BIN" "$TIMEOUT_SECS" \
+  opencode run \
+    --attach "$SERVER" \
+    --dir "$REPO_ROOT" \
+    --agent "$AGENT" \
+    --model "$MODEL" \
+    ${SESSION_ARGS[@]+"${SESSION_ARGS[@]}"} \
+    --format json > "$RAW_TMP"
+STATUS=$?
+set -e
+
+[ -n "$RAW_OUT" ] && cp "$RAW_TMP" "$RAW_OUT"
+
+# Report the session id actually used, whatever the outcome, so the caller can
+# persist it and continue the same session on the next call for this task.
+USED_SESSION="$(grep -o '"sessionID":"[^"]*"' "$RAW_TMP" 2>/dev/null | head -1 | cut -d'"' -f4)"
+[ -n "$USED_SESSION" ] && printf '%s\n' "oc.sh: session=$USED_SESSION" >&2
+
+emit() {
+  if [ "$TEXT_ONLY" -eq 1 ]; then
+    # Concatenate the text parts in order; that is the agent's actual answer.
+    python3 -c '
+import json, sys
+for line in open(sys.argv[1]):
+    line = line.strip()
+    if not line: continue
+    try: e = json.loads(line)
+    except ValueError: continue
+    if e.get("type") == "text":
+        t = e.get("part", {}).get("text")
+        if t: sys.stdout.write(t)
+sys.stdout.write("\n")
+' "$RAW_TMP"
+  else
+    cat "$RAW_TMP"
+  fi
+}
+
+if [ "$STATUS" -eq 124 ]; then
+  cat >&2 <<MSG
+
+oc.sh: TIMED OUT after ${TIMEOUT_SECS}s (agent=$AGENT model=$MODEL)
+
+  The usual cause is a permission prompt with no TTY to answer it: opencode run
+  waits forever instead of failing. Check that .opencode/agent/$AGENT.md sets
+  'question: deny' and that its bash permissions cover every command the agent
+  needed, rather than leaving one on "ask".
+
+  Reproduce interactively to see which prompt it stopped on:
+    opencode run --attach $SERVER --agent $AGENT --model $MODEL "<prompt>"
+
+MSG
+  exit 124
+fi
+
+if [ "$STATUS" -ne 0 ]; then
+  emit
+  printf '%s\n' "oc.sh: opencode exited $STATUS (agent=$AGENT model=$MODEL)" >&2
+  exit "$STATUS"
+fi
+
+emit

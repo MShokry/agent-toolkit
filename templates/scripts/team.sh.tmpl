@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+#
+# tmux layout for the agent team.
+#
+#   pane 0 (left, big)    claude          <- you talk to the lead here
+#   pane 1 (top right)    opencode serve  <- the server oc.sh attaches to
+#   pane 2 (mid right)    .agents/ activity tail
+#   pane 3 (bottom right) free pane
+#
+# Usage:  scripts/team.sh [session-name]
+#         scripts/team.sh --kill
+
+set -eu
+
+SESSION="${1:-__PROJECT_NAME__}"
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+PORT="${OC_PORT:-4096}"
+
+if [ "${1:-}" = "--kill" ]; then
+  tmux kill-session -t "${2:-__PROJECT_NAME__}" 2>/dev/null && echo "killed ${2:-__PROJECT_NAME__}" || echo "no such session"
+  exit 0
+fi
+
+command -v tmux >/dev/null 2>&1 || { echo "team.sh: tmux not found" >&2; exit 1; }
+
+if tmux has-session -t "$SESSION" 2>/dev/null; then
+  echo "team.sh: session '$SESSION' already exists — attaching"
+  exec tmux attach -t "$SESSION"
+fi
+
+mkdir -p "$REPO_ROOT/.agents"
+
+tmux new-session -d -s "$SESSION" -c "$REPO_ROOT" -n team
+
+tmux split-window -h -t "$SESSION:team" -c "$REPO_ROOT"
+tmux send-keys -t "$SESSION:team.1" "opencode serve --port $PORT" C-m
+
+tmux split-window -v -t "$SESSION:team.1" -c "$REPO_ROOT"
+tmux send-keys -t "$SESSION:team.2" \
+  "echo '--- .agents/ activity ---'; ls -t .agents/ 2>/dev/null; \
+   command -v fswatch >/dev/null 2>&1 \
+     && fswatch -o .agents | while read -r _; do date '+%H:%M:%S'; ls -t .agents/ | head -5; done \
+     || while true; do sleep 5; ls -t .agents/ 2>/dev/null | head -5; done" C-m
+
+tmux split-window -v -t "$SESSION:team.2" -c "$REPO_ROOT"
+
+tmux select-pane -t "$SESSION:team.0"
+tmux send-keys -t "$SESSION:team.0" "claude" C-m
+
+exec tmux attach -t "$SESSION"
