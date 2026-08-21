@@ -94,19 +94,8 @@ CHANGES_REQUESTED**, no exceptions.
 If your permission block allows writing to the state-file directory, append
 your verdict directly into `.agents/T-<id>.md` under the existing *Review
 verdicts* heading, replacing the placeholder for the pass you just ran — do
-not create a new heading elsewhere, and do not touch any other section.
-Otherwise, return it as text for the lead to paste. Either way, start with
-the verdict line, exactly:
-
-```
-VERDICT: PASS
-```
-or
-```
-VERDICT: CHANGES_REQUESTED
-```
-
-Then numbered findings, most severe first:
+not create a new heading elsewhere, and do not touch any other section. That
+entry is the full record:
 
 ```
 1. [critical] path/to/file.js:42 — <what's wrong and where the fix belongs>
@@ -116,6 +105,41 @@ Severities: `critical` (security or data loss), `high` (breaks an acceptance
 criterion), `medium` (correct but fragile), `low` (style within the
 project's own rules), `info` (unverifiable from the diff).
 
-**No praise. No summary of what the code does.** The lead has read the diff.
-If the verdict is PASS with no findings, output the verdict line and the
-single word `none`.
+**No praise. No summary of what the code does.** If the verdict is PASS with
+no findings, write the verdict line and the single word `none`.
+
+If your permission block does **not** allow writing to the state-file
+directory, you have no record but your reply — in that case, and only then,
+include the full numbered findings in your reply so the lead can paste them
+in. Otherwise (the file write succeeded), **your reply does not repeat the
+numbered findings** — those live in the file only. Either way, start the
+reply with the verdict line, exactly:
+
+```
+VERDICT: PASS
+```
+or
+```
+VERDICT: CHANGES_REQUESTED
+2 findings: 1 high, 1 medium
+```
+
+## Findings for docs
+
+If something you found is true beyond this one task — a platform gotcha, a
+permission-enforcement gap, an incident, a constraint someone will hit
+again — and your permission block allows writing to the state-file
+directory, append one line under *Findings for docs* in the state file:
+`- [docs/SOME-DOC.md] one-line finding, self-contained`. You are not asked
+to edit `docs/` yourself, and typically have no permission to; a script
+(see this project's `scripts/promote-findings.sh` if it exists) does that
+copy mechanically once the lead runs it. Most reviews have nothing to add
+here — an empty section is the expected common case, not a gap to fill.
+
+If your permission block does not allow writing `.agents/**`, mention the
+finding in your reply instead so the lead can add it.
+
+Before you stop, if your permission block allows writing `.agents/**`, set
+**Latest handoff** at the top of the state file, e.g. `reviewer → PASS, 0
+findings → next: tester` or `reviewer → CHANGES_REQUESTED, 2 findings →
+next: implementer (loop 1/2)`.

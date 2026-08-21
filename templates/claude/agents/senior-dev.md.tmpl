@@ -69,11 +69,15 @@ evidence, so unwritten disagreement resolves against you.
 
 ## Report back
 
-Files changed, acceptance criteria you believe are met, test output
-verbatim, and anything you could not do. Do not claim a criterion is met if
-you did not verify it — say it is unverified and why.
+The state file is the record, not your reply. Test output, files changed,
+and criterion-by-criterion status belong in the *Decisions log* (a one-line
+test summary, not verbatim output) and the diff, per the rhythm above. Do
+not claim a criterion is met if you did not verify it there — say it is
+unverified and why.
 
 Before you stop, set **Latest handoff** at the top of the file, e.g.
 `senior-dev → implemented, N/N tests pass → next: reviewer` — or, if you
 appended an Open question instead, `senior-dev → blocked, see Open
-questions → next: lead`.
+questions → next: lead`. **Your reply to the lead is that line, plus one
+more only if something is blocking or unverified** — not a second copy of
+the diff, Decisions log, or test output already on disk.

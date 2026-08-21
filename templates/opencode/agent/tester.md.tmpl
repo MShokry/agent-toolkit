@@ -78,12 +78,17 @@ it changes what the fix should be.
 ## Output
 
 Append to *Test results* in `.agents/T-<id>.md`: the command, the result,
-and failures with reproduction steps. Then report the same to the lead.
+and failures with reproduction steps. **That entry is the full record —
+your reply to the lead is not a second copy of it.**
 
-If everything passes, say so in one line. Do not pad the report, do not
-summarise what the code does, and do not suggest refactors — that is
-outside your role.
+If everything passes, say so in one line. On failure, reply with the
+pass/fail count and "see Test results" — not the reproduction steps or
+error output again; the lead (or the implementer, who reads the state file
+directly) pulls those from the file only when acting on them. Do not pad
+the report, do not summarise what the code does, and do not suggest
+refactors — that is outside your role.
 
 Before you stop, set **Latest handoff** at the top of the file, e.g.
 `tester → N/N pass → next: lead to report` or `tester → 2 failures, see
-Test results → next: implementer` — whichever is true.
+Test results → next: implementer` — whichever is true. Your reply to the
+lead is that line.

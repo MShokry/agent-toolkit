@@ -4,12 +4,69 @@ A reusable version of the planner → implement → review → test multi-agent
 pipeline: Claude subagents for planning/implementing, OpenCode (any vendor)
 for cross-vendor implement/review/test, a state file
 (`.agents/T-<id>.md`) as the single handoff surface between roles, and a
-`delegate` skill so the lead's own context stays small across a long run.
+`delegate` skill so the lead's own context stays small across a long run. 
 
 It grew out of a real project (a browser-extension repo) and was pulled out
 here so the same setup — permissions, session-reuse policy, cross-vendor
 independence rules, the state-file contract — doesn't get re-invented and
 re-debugged from scratch in every new repo.
+
+## How it flows
+
+```mermaid
+flowchart TD
+    Req([Feature request]) --> Lead
+    Lead -->|dispatch| Planner
+    Planner -->|writes T-id.md - Goal, ACs, files in scope| Lead
+    Lead -->|shows spec to user| Approve{User approves?}
+    Approve -- no or open questions --> Req
+    Approve -- yes --> Impl[Implementer<br/>builder or senior-dev]
+    Impl -->|code, T-id.diff, Decisions log| Review[Reviewer]
+    Review -- PASS --> Test[Tester]
+    Review -- CHANGES_REQUESTED, max 2 loops --> Impl
+    Test -- N of N pass --> Report[Lead reports to user]
+    Test -- failures --> Impl
+    Report --> Merge{Merge?}
+```
+
+Every arrow into or out of a role is really a write to, or a read from,
+`.agents/T-<id>.md` — see below.
+
+### Context stays small, by construction
+
+```mermaid
+sequenceDiagram
+    participant Lead
+    participant Role as Role (any)
+    participant File as .agents/T-id.md
+
+    Lead->>Role: dispatch (task id, short prompt)
+    Role->>File: full detail - diff, Decisions log,<br/>verdict, test results
+    Role->>File: Latest handoff (one line)
+    Role-->>Lead: short reply - verdict or pass count only
+    Note over Lead: reads Latest handoff,<br/>not the whole file
+    Lead->>File: opens the full file only on a<br/>verify-state.sh failure or a real decision
+```
+
+A role's chat reply is a receipt, not the record — the record is always the
+file. That's what keeps the lead's own context flat whether the run has one
+task or twenty: it never accumulates a second copy of every diff, verdict,
+and test log it dispatched.
+
+### Role permissions at a glance
+
+| Role | Reads | Writes | Notes |
+| --- | --- | --- | --- |
+| Planner | whole repo | `.agents/T-<id>.md` only | never touches source |
+| Implementer (`senior-dev` / `builder`) | whole repo | source + `.agents/T-<id>.diff` + state file | the only roles that edit source |
+| Reviewer | whole repo (read-only) | state file only, or nothing — see below | blanket `edit`/`write: deny` by default in this toolkit |
+| Tester | whole repo (read-only) | `<test-dir>/**` + state file only | never fixes, only reports |
+
+The reviewer template ships **safer than it has to be** — blanket deny, not
+scoped-allow on `.agents/**` — because a permission block that reads
+correctly in YAML isn't proof it's enforced by the runtime. Loosen it only
+after verifying that live against your own OpenCode server (see "Design
+decisions" below).
 
 ## What's in it
 
@@ -31,6 +88,8 @@ skills/
   toolkit-init/SKILL.md  a thin skill wrapping bin/init.sh, so a lead can
                           run this conversationally in a target repo
 ```
+
+
 
 ## Quick start
 
@@ -61,27 +120,29 @@ existing project's customizations survive.
 ## Design decisions, and why
 
 - **Zero dependency, bash + sed only.** Matches the style of the project
-  this was extracted from, and means the scaffolder itself has nothing to
-  install or go stale.
+this was extracted from, and means the scaffolder itself has nothing to
+install or go stale.
 - **Project-specific constraints are never duplicated into the templates.**
-  Every generated agent file says "read this project's own `CLAUDE.md` /
-  `AGENTS.md` first" rather than trying to guess or hardcode what a given
-  project cares about (security posture, banned patterns, style). The
-  toolkit owns the *process*; each project's own guidance file owns the
-  *content*.
+Every generated agent file says "read this project's own `CLAUDE.md` /
+`AGENTS.md` first" rather than trying to guess or hardcode what a given
+project cares about (security posture, banned patterns, style). The
+toolkit owns the *process*; each project's own guidance file owns the
+*content*.
 - **The reviewer defaults to blanket-deny on edit/write.** A prior real run
-  found that a blanket "deny" configuration still let a reviewer write to a
-  file outside its intended scope — the enforcement didn't match the
-  config. `reviewer.md.tmpl` keeps the safe default and documents, inline,
-  exactly how to verify before loosening it (dispatch the agent, try to
-  make it edit a source file, confirm it's refused). Do not trust "the
-  reviewer can't touch source" without having run that check once against
-  your actual OpenCode server.
+found that a blanket "deny" configuration still let a reviewer write to a
+file outside its intended scope — the enforcement didn't match the
+config. `reviewer.md.tmpl` keeps the safe default and documents, inline,
+exactly how to verify before loosening it (dispatch the agent, try to
+make it edit a source file, confirm it's refused). Do not trust "the
+reviewer can't touch source" without having run that check once against
+your actual OpenCode server.
 - **Session reuse (implement → review → test in one OpenCode session) is
-  documented as a real tradeoff, not a free win.** It saves reload cost but
-  feeds the reviewer the implementer's full read/edit trace, which can be
-  larger than the diff it's meant to review. Measure it before assuming
-  it's cheaper.
+documented as a real tradeoff, not a free win.** It saves reload cost but
+feeds the reviewer the implementer's full read/edit trace, which can be
+larger than the diff it's meant to review. Measure it before assuming
+it's cheaper.
+
+
 
 ## The `delegate` skill
 
@@ -99,13 +160,27 @@ Skill, and only genuinely one-off judgment or cross-vendor work becomes a
 delegate dispatch. `verify-state.sh` and `promote-findings.sh` exist
 because that rule was applied to this toolkit's own pipeline.
 
+```mermaid
+flowchart TD
+    Task[A task shows up] --> Q1{Recurring?}
+    Q1 -- no --> Q2{Needs judgment?}
+    Q2 -- no --> Self[Do it yourself - one tool call]
+    Q2 -- yes --> Deleg[Dispatch a delegate]
+    Q1 -- yes --> Q3{Needs judgment?}
+    Q3 -- no --> Script[Write a script under scripts/]
+    Q3 -- yes --> Skill[Write it up as a Skill]
+```
+
+[Read more about agent delegation rules here.](https://mcpmarket.com/tools/skills/claude-agent-delegation-rules)
+
 ## Known gaps
 
 - No automated test for `init.sh` beyond a manual smoke run into a scratch
-  directory (see the commit history / conversation this was built from). If
-  this toolkit grows real users, add a script under a future `test/` that
-  runs `init.sh` against a throwaway dir and asserts every placeholder was
-  substituted and no file was clobbered on a second run.
+directory (see the commit history / conversation this was built from). If
+this toolkit grows real users, add a script under a future `test/` that
+runs `init.sh` against a throwaway dir and asserts every placeholder was
+substituted and no file was clobbered on a second run.
 - Nothing here validates that a given OpenCode `vendor/model` string is
-  real — `opencode models` is the source of truth and isn't queried by
-  `init.sh` automatically.
+real — `opencode models` is the source of truth and isn't queried by
+`init.sh` automatically.
+

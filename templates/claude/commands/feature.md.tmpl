@@ -63,6 +63,12 @@ calls.
   instead of repeating it a third time — see the "delegate" skill's
   "Simple + recurring" section if it's loaded. `scripts/verify-state.sh`
   and `scripts/promote-findings.sh` exist for exactly this reason.
+- Each role's reply to you is scoped to be short — a verdict line, a
+  pass/fail count, the Latest handoff line — never a second copy of the
+  diff, findings, or test output it already wrote to the state file (see
+  each role's own "Report"/"Output" section). If a reply comes back long
+  anyway, that role's instructions need the same fix, not a summarizing
+  pass on your side.
 
 ## 1 — Spec
 
@@ -205,9 +211,10 @@ it's how a finding stays visible after this task's state file is
 archived.
 
 - **PASS** → go to 4.
-- **CHANGES_REQUESTED** → back to the implementer with the findings.
-  **Maximum two loops.** On a third, stop and bring it to the user — two
-  failed loops means the spec is wrong, not the code.
+- **CHANGES_REQUESTED** → back to the implementer. It reads the findings
+  from *Review verdicts* in the state file directly — you do not need to
+  relay them yourself. **Maximum two loops.** On a third, stop and bring it
+  to the user — two failed loops means the spec is wrong, not the code.
 
 Adjudicate disagreements on the written evidence only. Where the evidence
 does not settle it, escalate rather than casting a tiebreak vote yourself.
