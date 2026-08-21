@@ -69,6 +69,9 @@ calls.
   each role's own "Report"/"Output" section). If a reply comes back long
   anyway, that role's instructions need the same fix, not a summarizing
   pass on your side.
+- If the "status-board" skill is loaded, its rule applies at the end of
+  **every** step below, not only step 5 — update the project's top-level
+  status board table before moving on, every time a task's Status changes.
 
 ## 1 — Spec
 
@@ -236,6 +239,9 @@ implementer as a new loop.
 Run `scripts/promote-findings.sh T-<id>` once more here even if you already
 ran it in step 3 — it's idempotent (already-copied lines are skipped), and
 this is the last point before the task's state file goes quiet.
+
+If this project keeps a top-level status board (see the "status-board"
+skill), update it now, before reporting to the user.
 
 Give the user: acceptance criteria met versus outstanding, the review
 verdict, test results, anything unverified, and the proposed merge.

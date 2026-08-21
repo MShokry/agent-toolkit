@@ -87,6 +87,8 @@ skills/
                           any project's lead session, independent of init.sh
   toolkit-init/SKILL.md  a thin skill wrapping bin/init.sh, so a lead can
                           run this conversationally in a target repo
+  status-board/SKILL.md  keeps a top-level status board in sync with the
+                          per-task state files — independent of init.sh
 ```
 
 
@@ -172,6 +174,20 @@ flowchart TD
 ```
 
 [Read more about agent delegation rules here.](https://mcpmarket.com/tools/skills/claude-agent-delegation-rules)
+
+## The `status-board` skill
+
+Also independent of `init.sh`. A per-task state file stays current on its
+own — each role updates it as it works — but nothing rolls that up into a
+project-wide "what's the state of everything" view unless something forces
+it to happen every time, not just when a task finishes. This skill is that
+rule: update the top-level status board (one row per active task: id,
+title, live `Status:`, which longer-term checklist item it maps to) at the
+end of every pipeline step, and only check off a longer-term checklist box
+once a task's `Status:` actually reaches its terminal "done" value, not
+when review merely passes or implementation merely finishes. `feature.md`'s
+step 5 points at it; load it explicitly for it to apply to every step, not
+only the last one.
 
 ## Known gaps
 
