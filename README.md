@@ -110,6 +110,21 @@ opencode models          # see what's actually configured before picking models
   --test-dir e2e
 ```
 
+
+```bash
+# example
+
+~/PWS/agent-toolkit/bin/init.sh \
+  --target . \
+  --project-name "my-project" \
+  --claude-model sonnet \
+  --builder-model "hcnsec/auto" \
+  --reviewer-model "hcnsec/glm-5.3" \
+  --reviewer-fallback-model sonnet \
+  --tester-model "hcnsec/auto" \
+  --test-dir e2e
+```
+
 `--reviewer-model` and `--reviewer-fallback-model` should be **different
 model families** — the fallback is what the pipeline switches to when
 `builder` implements and would otherwise share a vendor with the default
