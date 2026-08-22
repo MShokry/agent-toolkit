@@ -89,6 +89,11 @@ skills/
                           run this conversationally in a target repo
   status-board/SKILL.md  keeps a top-level status board in sync with the
                           per-task state files — independent of init.sh
+  karpathy-guidelines/    behavioral defaults (surface assumptions, minimum
+    SKILL.md              code, surgical changes, verifiable success
+                          criteria) — senior-dev.md.tmpl and builder.md.tmpl
+                          load it so a target project without its own copy
+                          of these rules doesn't silently miss them
 ```
 
 
