@@ -23,7 +23,11 @@ long-running task — swapping in a 5th agent to double-check the others would
 cost a paid call *and* add a component that can misjudge the same way the
 one it's checking can; a script that only asserts structure (right heading,
 no duplicates, no unfilled placeholder) cannot hallucinate a pass. If the
-"delegate" skill is available, load it now.
+"delegate" skill is available, load it now. Same for "karpathy-guidelines"
+if it's available — it applies to your own orchestration decisions, not
+only to code a role writes; dispatched roles already carry an inlined copy
+of the same behavioral defaults in their own role files (`senior-dev.md` /
+`builder.md`), so this is deliberately not re-taught to them here.
 
 Everything passes through `.agents/T-<id>.md`. Context is never carried
 between roles by memory alone. If it is not written there, the next role

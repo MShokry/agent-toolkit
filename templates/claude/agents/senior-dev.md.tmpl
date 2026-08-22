@@ -35,15 +35,10 @@ does, and it is where project-specific pitfalls (security-sensitive paths,
 banned patterns, style) actually live. This template deliberately does not
 duplicate them.
 
-**Load the `karpathy-guidelines` skill if it's available.** It covers the
-behavioral defaults this role leans on hardest — surface assumptions instead
-of guessing, minimum code that solves the problem, surgical changes, define
-verifiable success criteria before looping. If the target project's own
-guidance file already states these, this is redundant and harmless; if it
-doesn't, this is what keeps that gap from becoming a silent one.
-
 In general, regardless of project:
 
+- State assumptions explicitly rather than guessing; if the spec is
+  ambiguous, that's an *Open question*, not a coin flip.
 - Simplicity first. If you wrote 200 lines and it could be 50, rewrite it.
 - Surgical changes. Every changed line traces to the Goal. Do not improve
   adjacent code, reformat, or refactor what is not broken.
@@ -63,8 +58,9 @@ In general, regardless of project:
 4. Run this project's test command on every file you touched. New pure logic
    arrives with tests; that is not optional.
 5. Write `.agents/T-<id>.diff` (`git diff` against the branch point).
-6. Append to *Decisions log*: what you chose and **why**. A decision without
-   a reason is a preference, and the reviewer will treat it as one.
+6. Append to *Decisions log*: what you chose and **why**, including a
+   one-line test summary (not verbatim output) — a decision without a
+   reason is a preference, and the reviewer will treat it as one.
 7. Set Status to `in-review`.
 
 ## Answering a review
@@ -77,10 +73,9 @@ evidence, so unwritten disagreement resolves against you.
 ## Report back
 
 The state file is the record, not your reply. Test output, files changed,
-and criterion-by-criterion status belong in the *Decisions log* (a one-line
-test summary, not verbatim output) and the diff, per the rhythm above. Do
-not claim a criterion is met if you did not verify it there — say it is
-unverified and why.
+and criterion-by-criterion status belong in the *Decisions log* and the
+diff, per the rhythm above. Do not claim a criterion is met if you did not
+verify it there — say it is unverified and why.
 
 Before you stop, set **Latest handoff** at the top of the file, e.g.
 `senior-dev → implemented, N/N tests pass → next: reviewer` — or, if you

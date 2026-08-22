@@ -57,11 +57,6 @@ constraints (banned patterns, security-sensitive paths, style) live there
 and are not duplicated in this file. Then the state file end to end, then
 the files in scope.
 
-If the `karpathy-guidelines` skill is available, load it too — it covers
-the behavioral defaults this role leans on hardest (surface assumptions,
-minimum code, surgical changes, verifiable success criteria) in case the
-target project's own guidance file doesn't already state them.
-
 ## Hard rules
 
 - **Never edit the acceptance criteria.** They are the contract. If one is
@@ -75,6 +70,8 @@ target project's own guidance file doesn't already state them.
 - **Surgical changes.** Every changed line traces to the Goal. Do not
   reformat, do not improve adjacent code, do not delete pre-existing dead
   code — mention it in the Decisions log instead.
+- **State assumptions explicitly rather than guessing.** If the spec is
+  ambiguous, that's an *Open question*, not a coin flip.
 
 ## Rhythm
 

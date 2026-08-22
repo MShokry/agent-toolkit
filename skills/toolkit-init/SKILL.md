@@ -39,9 +39,10 @@ Ask these up front rather than guessing — they shape every generated file:
 ```
 
 It writes `.claude/agents/`, `.opencode/agent/`, `.claude/commands/feature.md`,
-`.agents/TEMPLATE.md`, and `scripts/{oc.sh,team.sh}` into the target. It does
-**not** overwrite a file that already exists — it prints what it skipped so
-you can diff and merge by hand.
+`.agents/TEMPLATE.md`, and `scripts/{oc.sh,team.sh,verify-state.sh,
+promote-findings.sh}` into the target. It does **not** overwrite a file that
+already exists — it prints what it skipped so you can diff and merge by
+hand.
 
 ## After it runs
 

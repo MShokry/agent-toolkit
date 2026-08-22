@@ -91,9 +91,12 @@ skills/
                           per-task state files — independent of init.sh
   karpathy-guidelines/    behavioral defaults (surface assumptions, minimum
     SKILL.md              code, surgical changes, verifiable success
-                          criteria) — senior-dev.md.tmpl and builder.md.tmpl
-                          load it so a target project without its own copy
-                          of these rules doesn't silently miss them
+                          criteria) — loaded by the lead via feature.md,
+                          same as delegate. Not given to senior-dev/builder:
+                          they'd need Skill-tool access to load it (a bigger
+                          grant than either role needs), so the same content
+                          is inlined directly into each of their own files
+                          instead
 ```
 
 
@@ -163,6 +166,21 @@ documented as a real tradeoff, not a free win.** It saves reload cost but
 feeds the reviewer the implementer's full read/edit trace, which can be
 larger than the diff it's meant to review. Measure it before assuming
 it's cheaper.
+- **Each role's file is self-contained, one full copy per tool — not a
+canonical file with thin per-tool shims.** `senior-dev` (Claude) and
+`builder` (OpenCode) do the identical job for two different vendors, and
+yes, their prose is duplicated by hand. A shared-file-plus-shim version was
+tried and reverted: it meant an extra file open before a role could do
+anything, made "can this role load a skill" depend on plumbing that turned
+out to differ unpredictably per tool, and added structure for a
+generalization (N tools per role) that, in practice, only ever had two
+tools and one duplicated role. Two full files you can read start to finish
+beat one indirection layer for a toolkit this size. The real cost of
+duplication — a fix needing N edits — is real, but it's a one-time,
+occasional cost each time behavior actually changes, not a permanent
+runtime cost every dispatch pays. See `docs/ADDING-A-TOOL.md` for the
+recipe to follow **at the point a role genuinely needs a second or third
+tool** — extract to a shared file then, not preemptively.
 
 
 
@@ -208,6 +226,17 @@ once a task's `Status:` actually reaches its terminal "done" value, not
 when review merely passes or implementation merely finishes. `feature.md`'s
 step 5 points at it; load it explicitly for it to apply to every step, not
 only the last one.
+
+## Adding a new tool, or moving a role to one
+
+Not something `init.sh` does — it's a recipe, not a flag. See
+[`docs/ADDING-A-TOOL.md`](docs/ADDING-A-TOOL.md): how to bring a role like
+`tester` (OpenCode-only today) to a tool it doesn't run under yet, and —
+only once a role is actually duplicated across 2+ tools, not before — how
+to collapse the duplicated prose into one shared file so a future fix is
+one edit instead of N. You can hand that file to an AI directly ("follow
+docs/ADDING-A-TOOL.md to add `<tool>` support for `<role>`") and it has
+enough to act on without re-deriving the pattern from scratch.
 
 ## Known gaps
 
