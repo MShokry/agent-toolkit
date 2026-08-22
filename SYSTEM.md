@@ -80,6 +80,31 @@ means the spec was wrong, not the code — stop and ask the human. Never
 merge without asking. Any new permission or dependency, however reasonable
 it looks, gets asked about too.
 
+## Before you build anything, ask the human
+
+Don't guess these and don't default silently — get them from whoever asked
+you to do this, the same way this toolkit's own scaffolder (`bin/init.sh`)
+takes them as required arguments rather than assuming:
+
+1. **Which model runs each role** — planner, implementer, reviewer,
+   tester, and yourself as lead. If you (the lead) can run multiple
+   models, ask which one for orchestration too, don't assume it's
+   whichever one is reading this file right now.
+2. **Cross-vendor independence for review, specifically.** The reviewer
+   must not share a vendor/model family with whoever implemented — ask for
+   a reviewer model and a *fallback* reviewer model in a different family,
+   the same way `templates/opencode/agent/reviewer.md.tmpl`'s consumer
+   does, for whenever the two would otherwise collide.
+3. **Source directories you're allowed to touch as implementer**, and
+   anything explicitly off-limits without an Open Question first.
+4. **The test command**, and a test directory if one doesn't exist yet.
+
+If you can't actually run more than one model or vendor from where you're
+operating, say that plainly rather than quietly implementing every role
+yourself — a "reviewer" that's the same model as the implementer, with no
+one told, is not cross-vendor independence, it's a missing control wearing
+its label.
+
 ## How to actually become the lead, in your own tool
 
 You don't need to replicate any specific tool's slash-command or subagent
