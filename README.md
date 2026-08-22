@@ -11,6 +11,12 @@ here so the same setup — permissions, session-reuse policy, cross-vendor
 independence rules, the state-file contract — doesn't get re-invented and
 re-debugged from scratch in every new repo.
 
+**Not a Claude Code user, or want a different tool to run the lead itself
+(not just a worker role)?** Read [`SYSTEM.md`](SYSTEM.md) instead of this
+file — one tool-agnostic page meant to be handed to any AI ("recreate this
+system, with yourself as the lead"), pointing into `templates/` for detail
+on demand rather than requiring everything read up front.
+
 ## How it flows
 
 ```mermaid
@@ -293,14 +299,21 @@ SKILL.md`.
 
 ## Adding a new tool, or moving a role to one
 
-Not something `init.sh` does — it's a recipe, not a flag. See
+Not something `init.sh` does on its own for an untemplated tool — it's a
+recipe, not a flag; `skills/toolkit-init/SKILL.md` branches to it when
+asked for a tool with no `templates/<tool>/` directory yet. See
 [`docs/ADDING-A-TOOL.md`](docs/ADDING-A-TOOL.md): how to bring a role like
-`tester` (OpenCode-only today) to a tool it doesn't run under yet, and —
-only once a role is actually duplicated across 2+ tools, not before — how
-to collapse the duplicated prose into one shared file so a future fix is
-one edit instead of N. You can hand that file to an AI directly ("follow
+`tester` to a tool it doesn't run under yet, and — only once a role is
+actually duplicated across 2+ tools, not before — how to collapse the
+duplicated prose into one shared file so a future fix is one edit instead
+of N. You can hand that file to an AI directly ("follow
 docs/ADDING-A-TOOL.md to add `<tool>` support for `<role>`") and it has
 enough to act on without re-deriving the pattern from scratch.
+
+That recipe is for porting a *worker* role to a new tool. If you want a
+*different AI to be the lead itself*, see [`SYSTEM.md`](SYSTEM.md) instead
+— a single tool-agnostic file meant to be handed directly to that AI,
+rather than something `init.sh` generates for it.
 
 ## Known gaps
 

@@ -78,6 +78,17 @@ shared file, so a future behavioral fix is one edit instead of N.
    self-contained file per tool; a role that hits this step is the
    exception, and the exception should be visible, not silent.
 
+## Note: adding an AI tool as the *lead*, not a worker role
+
+Everything above is about porting a worker role (planner/implementer/
+reviewer/tester) to a new tool, dispatched by an existing lead. If you want
+a *different* AI to be the lead itself — the orchestrator, not a dispatched
+role — that's not this recipe. See [`SYSTEM.md`](../SYSTEM.md) at the repo
+root: a single tool-agnostic file meant to be handed directly to that AI
+("recreate this system, with yourself as the lead"), rather than something
+this toolkit generates for it the way `bin/init.sh` generates worker-role
+shims.
+
 **The tradeoff, stated plainly, so it's a real decision and not a reflex:**
 an extra file read before the role can do anything, and content that's
 genuinely tool-specific (not all of it) has to be judgment-called into

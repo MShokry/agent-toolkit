@@ -44,6 +44,34 @@ promote-findings.sh}` into the target. It does **not** overwrite a file that
 already exists — it prints what it skipped so you can diff and merge by
 hand.
 
+## If the user wants a worker role under a tool this doesn't already template
+
+`bin/init.sh` only knows Claude and OpenCode today. If the user asks for a
+*worker* role (planner/implementer/reviewer/tester) under a different tool:
+
+1. **Don't force it into `bin/init.sh`'s shape by guessing.** Different
+   tools genuinely differ in how they read project config, discover custom
+   agents, and scope permissions — check the target tool's real surface
+   before assuming it works like OpenCode.
+2. **Research the tool's real config/discovery surface before writing
+   anything** — see `docs/ADDING-A-TOOL.md`'s Case 1, step 1.
+3. **Ask the model to use for the new role**, the same way step 3 above
+   already asks for builder/reviewer/tester models — this doesn't change
+   just because the tool is new.
+4. **Follow the Case 1 recipe live**: write the role's real content (using
+   an existing role file as a style reference, not a copy-paste target),
+   pick the right mechanism for that tool, and say plainly what guarantees
+   that tool's permission model can and can't give — don't imply a scoping
+   guarantee the tool can't actually enforce.
+5. Offer to add a real `templates/<tool>/` entry to the toolkit itself
+   afterward, so the next project doesn't repeat the research — but do the
+   research-then-build step live for this project regardless of whether
+   that offer is taken.
+
+If instead the user wants a *different AI to be the lead itself* — not a
+worker role dispatched by an existing lead — that's not this skill. Point
+them at `SYSTEM.md` at the toolkit root instead.
+
 ## After it runs
 
 1. Read every generated file with the user before treating the pipeline as
