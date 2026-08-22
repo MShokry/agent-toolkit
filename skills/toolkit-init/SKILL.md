@@ -19,7 +19,11 @@ Ask these up front rather than guessing — they shape every generated file:
    target project and show the user the list rather than assuming what's
    configured. You need three: builder, reviewer, and a reviewer-fallback
    in a *different* model family (used when builder implements, so review
-   stays independent of the implementer).
+   stays independent of the implementer). If they have not chosen yet,
+   offer `docs/MODELS.md` as a starting recommendation (Kimi builder,
+   GLM reviewer, DeepSeek Flash tester, Sonnet fallback; one OpenCode
+   aggregator plus Claude — not a new toolkit tool per lab) and let them
+   confirm or override. Never accept `auto` for the reviewer.
 4. **Source directories** the implementer is allowed to touch, and any
    this project considers off-limits without an Open Question first.
 5. **Test command** and, if applicable, a test directory (default `e2e`).

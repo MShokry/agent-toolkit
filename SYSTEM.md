@@ -89,7 +89,9 @@ takes them as required arguments rather than assuming:
 1. **Which model runs each role** — planner, implementer, reviewer,
    tester, and yourself as lead. If you (the lead) can run multiple
    models, ask which one for orchestration too, don't assume it's
-   whichever one is reading this file right now.
+   whichever one is reading this file right now. A cost/quality starting
+   point (and how to wire providers) is `docs/MODELS.md` in this
+   toolkit — still ask; don't apply it silently.
 2. **Cross-vendor independence for review, specifically.** The reviewer
    must not share a vendor/model family with whoever implemented — ask for
    a reviewer model and a *fallback* reviewer model in a different family,

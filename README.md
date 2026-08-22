@@ -147,6 +147,12 @@ model families** — the fallback is what the pipeline switches to when
 `builder` implements and would otherwise share a vendor with the default
 reviewer, which would defeat cross-vendor independence.
 
+Cost/quality picks (Kimi implementer, GLM reviewer, DeepSeek Flash
+tester, Claude Sonnet lead/planner/fallback), and why one OpenCode
+aggregator plus Claude is better than a new toolkit tool per lab: see
+[`docs/MODELS.md`](docs/MODELS.md). The `hcnsec/auto` example above is
+flag *shape* only — do not use `auto` for the reviewer.
+
 `init.sh` never overwrites a file that already exists in the target — it
 prints `skip (exists)` and leaves it alone, so re-running is safe and an
 existing project's customizations survive.
