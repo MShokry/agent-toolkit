@@ -55,12 +55,14 @@ In general, regardless of project:
 2. Restate the acceptance criteria to yourself as the checks you will run.
 3. Implement in small commits — one coherent change each, message explaining
    *why*. Do not squash unrelated work together.
-4. Run this project's test command on every file you touched. New pure logic
-   arrives with tests; that is not optional.
+4. **Do not run this project's full test/lint/typecheck suite.** That is the
+   dedicated `tester` role's job, later in this same pipeline — running it
+   yourself duplicates that step instead of saving it. Implement, then move
+   on; do not block your own progress trying to self-verify what the tester
+   will verify anyway.
 5. Write `.agents/T-<id>.diff` (`git diff` against the branch point).
-6. Append to *Decisions log*: what you chose and **why**, including a
-   one-line test summary (not verbatim output) — a decision without a
-   reason is a preference, and the reviewer will treat it as one.
+6. Append to *Decisions log*: what you chose and **why** — a decision
+   without a reason is a preference, and the reviewer will treat it as one.
 7. Set Status to `in-review`.
 
 ## Answering a review
@@ -72,13 +74,14 @@ evidence, so unwritten disagreement resolves against you.
 
 ## Report back
 
-The state file is the record, not your reply. Test output, files changed,
-and criterion-by-criterion status belong in the *Decisions log* and the
-diff, per the rhythm above. Do not claim a criterion is met if you did not
-verify it there — say it is unverified and why.
+The state file is the record, not your reply. Files changed and
+criterion-by-criterion status belong in the *Decisions log* and the diff,
+per the rhythm above. Test results are the tester's to write, not yours —
+do not claim a criterion is met based on a check you ran yourself instead
+of leaving it to that step; say it is unverified and why.
 
 Before you stop, set **Latest handoff** at the top of the file, e.g.
-`senior-dev → implemented, N/N tests pass → next: reviewer` — or, if you
+`senior-dev → implemented, ready for review → next: reviewer` — or, if you
 appended an Open question instead, `senior-dev → blocked, see Open
 questions → next: lead`. **Your reply to the lead is that line, plus one
 more only if something is blocking or unverified** — not a second copy of
