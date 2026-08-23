@@ -1,0 +1,32 @@
+# Bash completion for scripts/team.sh. Not sourced automatically — see
+# docs/TEAM.md's "Shell completion" section for how to enable it.
+#
+# zsh users: `autoload -U +X bashcompinit && bashcompinit` before sourcing
+# this, zsh's own completion system doesn't load bash completions directly.
+
+_team_sh_complete() {
+  local cur prev
+  cur="${COMP_WORDS[COMP_CWORD]}"
+  prev="${COMP_WORDS[COMP_CWORD-1]}"
+
+  case "$prev" in
+    --port)
+      COMPREPLY=()
+      return 0
+      ;;
+    --kill)
+      # Complete with currently running tmux session names, if tmux is
+      # available and has any — this is the one place a real value helps.
+      if command -v tmux >/dev/null 2>&1; then
+        COMPREPLY=($(compgen -W "$(tmux list-sessions -F '#{session_name}' 2>/dev/null)" -- "$cur"))
+      fi
+      return 0
+      ;;
+  esac
+
+  COMPREPLY=($(compgen -W "--fresh --port --kill -h --help" -- "$cur"))
+}
+
+complete -F _team_sh_complete team.sh
+complete -F _team_sh_complete ./scripts/team.sh
+complete -F _team_sh_complete scripts/team.sh

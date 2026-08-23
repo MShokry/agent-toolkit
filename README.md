@@ -89,11 +89,14 @@ templates/             every generated file, with __PLACEHOLDER__ tokens
   claude/commands/      feature.md.tmpl — the /feature pipeline command
   opencode/agent/        builder.md.tmpl, reviewer.md.tmpl, tester.md.tmpl
   agents-state/          TEMPLATE.md.tmpl — the T-<id> state file shape
-  scripts/                oc.sh.tmpl (OpenCode CLI wrapper), team.sh.tmpl (tmux layout),
-                          verify-state.sh.tmpl (deterministic structural check —
-                          no LLM call), promote-findings.sh.tmpl (copies tagged
-                          findings into project docs — no LLM call, no agent
-                          write access to docs/)
+  scripts/                oc.sh.tmpl (OpenCode CLI wrapper), team.sh.tmpl (tmux
+                          layout — resumes the lead by default, --port for
+                          running a second project at once, see docs/TEAM.md),
+                          team-completion.bash.tmpl (optional shell completion
+                          for team.sh), verify-state.sh.tmpl (deterministic
+                          structural check — no LLM call), promote-findings.sh.tmpl
+                          (copies tagged findings into project docs — no LLM
+                          call, no agent write access to docs/)
 skills/
   delegate/SKILL.md      context discipline for the lead — load this in
                           any project's lead session, independent of init.sh
@@ -176,7 +179,9 @@ dispatches `planner` first, and walks the flow in "How it flows" above.
 Two things need to be true first:
 
 - `opencode serve` must be reachable — `scripts/team.sh` starts it in a
-tmux layout, or run `opencode serve` yourself. `feature.md`'s own
+tmux layout (and resumes the lead's own conversation by default — see
+[`docs/TEAM.md`](docs/TEAM.md) for that and for running a second project
+at the same time), or run `opencode serve` yourself. `feature.md`'s own
 Preflight step checks this (`curl -sS -m 5 http://localhost:4096`) and
 tells you to start it if it isn't running.
 - The target project needs its own `CLAUDE.md`/`AGENTS.md`. Every

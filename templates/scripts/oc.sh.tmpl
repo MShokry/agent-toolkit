@@ -32,7 +32,12 @@
 # for a human and expensive to paste back into a state file.
 #
 # Env:
-#   OC_SERVER   default http://localhost:4096
+#   OC_SERVER   default http://localhost:4096, or the port scripts/team.sh
+#               last started (read from .agents/.oc-port) if that file
+#               exists and OC_SERVER isn't set — see scripts/team.sh's own
+#               header for why (running two projects at once needs two
+#               ports, and this is what lets oc.sh find the right one
+#               without you exporting OC_SERVER by hand every call).
 #   OC_TIMEOUT  default 600 (seconds)
 #
 # Exit codes:
@@ -42,9 +47,16 @@
 
 set -eu
 
-SERVER="${OC_SERVER:-http://localhost:4096}"
 TIMEOUT_SECS="${OC_TIMEOUT:-600}"
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+
+if [ -n "${OC_SERVER:-}" ]; then
+  SERVER="$OC_SERVER"
+elif [ -f "$REPO_ROOT/.agents/.oc-port" ]; then
+  SERVER="http://localhost:$(cat "$REPO_ROOT/.agents/.oc-port")"
+else
+  SERVER="http://localhost:4096"
+fi
 
 AGENT=""
 MODEL=""

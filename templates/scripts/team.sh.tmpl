@@ -7,17 +7,58 @@
 #   pane 2 (mid right)    .agents/ activity tail
 #   pane 3 (bottom right) free pane
 #
-# Usage:  scripts/team.sh [session-name]
-#         scripts/team.sh --kill
+# Usage:
+#   scripts/team.sh [session-name]        start (or attach to) the team
+#   scripts/team.sh --fresh                start a NEW lead conversation
+#                                          instead of resuming (see below)
+#   scripts/team.sh --port <N>             opencode server port (default 4096)
+#   scripts/team.sh --kill [session-name]
+#
+# Resuming is the default, not an opt-in: pane 0 runs `claude --continue`,
+# which picks up the most recent conversation in this project's directory.
+# That matters because killing this tmux session (the usual way to free up
+# a port so a second project can use scripts/team.sh at the same time) used
+# to also throw away the lead's context — there was no way back into the
+# same conversation short of scrolling terminal history. `--continue` fixes
+# that: kill the session, come back later, run scripts/team.sh again, the
+# lead picks up where it left off. Pass --fresh on the rare run where you
+# actually want a clean slate.
+#
+# Running two projects at once: opencode's server binds one port per
+# process, so two projects both defaulting to --port 4096 collide — the
+# second scripts/team.sh's `opencode serve` fails to bind. Give the second
+# project its own port: `scripts/team.sh --port 4097`. That port is written
+# to .agents/.oc-port in this repo, and scripts/oc.sh reads it automatically
+# (when OC_SERVER isn't set) — so oc.sh calls in this project just work
+# without you having to export OC_SERVER by hand every time. Add
+# .agents/.oc-port to this project's .gitignore; it's local machine state,
+# not something to commit.
+#
+# See docs/TEAM.md for more.
 
 set -eu
 
-SESSION="${1:-__PROJECT_NAME__}"
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PORT="${OC_PORT:-4096}"
+SESSION="__PROJECT_NAME__"
+FRESH=0
+KILL=0
 
-if [ "${1:-}" = "--kill" ]; then
-  tmux kill-session -t "${2:-__PROJECT_NAME__}" 2>/dev/null && echo "killed ${2:-__PROJECT_NAME__}" || echo "no such session"
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --kill)   KILL=1; shift ;;
+    --fresh)  FRESH=1; shift ;;
+    --port)   [ $# -ge 2 ] || { echo "team.sh: --port needs a value" >&2; exit 1; }
+              PORT="$2"; shift 2 ;;
+    -h|--help)
+      sed -n '3,29p' "$0" | sed 's/^# \{0,1\}//'
+      exit 0 ;;
+    *)        SESSION="$1"; shift ;;
+  esac
+done
+
+if [ "$KILL" -eq 1 ]; then
+  tmux kill-session -t "$SESSION" 2>/dev/null && echo "killed $SESSION" || echo "no such session"
   exit 0
 fi
 
@@ -29,6 +70,10 @@ if tmux has-session -t "$SESSION" 2>/dev/null; then
 fi
 
 mkdir -p "$REPO_ROOT/.agents"
+printf '%s' "$PORT" > "$REPO_ROOT/.agents/.oc-port"
+
+CLAUDE_CMD="claude --continue"
+[ "$FRESH" -eq 1 ] && CLAUDE_CMD="claude"
 
 tmux new-session -d -s "$SESSION" -c "$REPO_ROOT" -n team
 
@@ -45,6 +90,6 @@ tmux send-keys -t "$SESSION:team.2" \
 tmux split-window -v -t "$SESSION:team.2" -c "$REPO_ROOT"
 
 tmux select-pane -t "$SESSION:team.0"
-tmux send-keys -t "$SESSION:team.0" "claude" C-m
+tmux send-keys -t "$SESSION:team.0" "$CLAUDE_CMD" C-m
 
 exec tmux attach -t "$SESSION"
