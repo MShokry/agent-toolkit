@@ -12,7 +12,7 @@ independence rules, the state-file contract — doesn't get re-invented and
 re-debugged from scratch in every new repo.
 
 **Not a Claude Code user, or want a different tool to run the lead itself
-(not just a worker role)?** Read [`SYSTEM.md`](SYSTEM.md) instead of this
+(not just a worker role)?** Read `[SYSTEM.md](SYSTEM.md)` instead of this
 file — one tool-agnostic page meant to be handed to any AI ("recreate this
 system, with yourself as the lead"), pointing into `templates/` for detail
 on demand rather than requiring everything read up front.
@@ -35,6 +35,8 @@ flowchart TD
     Report --> Merge{Merge?}
 ```
 
+
+
 Every arrow into or out of a role is really a write to, or a read from,
 `.agents/T-<id>.md` — see below.
 
@@ -54,6 +56,8 @@ sequenceDiagram
     Lead->>File: opens the full file only on a<br/>verify-state.sh failure or a real decision
 ```
 
+
+
 A role's chat reply is a receipt, not the record — the record is always the
 file. That's what keeps the lead's own context flat whether the run has one
 task or twenty: it never accumulates a second copy of every diff, verdict,
@@ -61,12 +65,14 @@ and test log it dispatched.
 
 ### Role permissions at a glance
 
-| Role | Reads | Writes | Notes |
-| --- | --- | --- | --- |
-| Planner | whole repo | `.agents/T-<id>.md` only | never touches source |
-| Implementer (`senior-dev` / `builder`) | whole repo | source + `.agents/T-<id>.diff` + state file | the only roles that edit source |
-| Reviewer | whole repo (read-only) | state file only, or nothing — see below | blanket `edit`/`write: deny` by default in this toolkit |
-| Tester | whole repo (read-only) | `<test-dir>/**` + state file only | never fixes, only reports |
+
+| Role                                   | Reads                  | Writes                                      | Notes                                                   |
+| -------------------------------------- | ---------------------- | ------------------------------------------- | ------------------------------------------------------- |
+| Planner                                | whole repo             | `.agents/T-<id>.md` only                    | never touches source                                    |
+| Implementer (`senior-dev` / `builder`) | whole repo             | source + `.agents/T-<id>.diff` + state file | the only roles that edit source                         |
+| Reviewer                               | whole repo (read-only) | state file only, or nothing — see below     | blanket `edit`/`write: deny` by default in this toolkit |
+| Tester                                 | whole repo (read-only) | `<test-dir>/**` + state file only           | never fixes, only reports                               |
+
 
 The reviewer template ships **safer than it has to be** — blanket deny, not
 scoped-allow on `.agents/**` — because a permission block that reads
@@ -127,7 +133,6 @@ opencode models          # see what's actually configured before picking models
   --test-dir e2e
 ```
 
-
 ```bash
 # example
 
@@ -150,7 +155,7 @@ reviewer, which would defeat cross-vendor independence.
 Cost/quality picks (Kimi implementer, GLM reviewer, DeepSeek Flash
 tester, Claude Sonnet lead/planner/fallback), and why one OpenCode
 aggregator plus Claude is better than a new toolkit tool per lab: see
-[`docs/MODELS.md`](docs/MODELS.md). The `hcnsec/auto` example above is
+`[docs/MODELS.md](docs/MODELS.md)`. The `hcnsec/auto` example above is
 flag *shape* only — do not use `auto` for the reviewer.
 
 `init.sh` never overwrites a file that already exists in the target — it
@@ -171,13 +176,13 @@ dispatches `planner` first, and walks the flow in "How it flows" above.
 Two things need to be true first:
 
 - `opencode serve` must be reachable — `scripts/team.sh` starts it in a
-  tmux layout, or run `opencode serve` yourself. `feature.md`'s own
-  Preflight step checks this (`curl -sS -m 5 http://localhost:4096`) and
-  tells you to start it if it isn't running.
+tmux layout, or run `opencode serve` yourself. `feature.md`'s own
+Preflight step checks this (`curl -sS -m 5 http://localhost:4096`) and
+tells you to start it if it isn't running.
 - The target project needs its own `CLAUDE.md`/`AGENTS.md`. Every
-  generated role file defers project-specific constraints to it (see
-  "Design decisions" below) — without one, a role has nothing binding it
-  beyond this toolkit's generic rules.
+generated role file defers project-specific constraints to it (see
+"Design decisions" below) — without one, a role has nothing binding it
+beyond this toolkit's generic rules.
 
 Read `skills/toolkit-init/SKILL.md`'s "After it runs" checklist before
 trusting the loop unattended, in particular the reviewer's permission
@@ -253,6 +258,8 @@ flowchart TD
     Q3 -- yes --> Skill[Write it up as a Skill]
 ```
 
+
+
 [Read more about agent delegation rules here.](https://mcpmarket.com/tools/skills/claude-agent-delegation-rules)
 
 ## The `status-board` skill
@@ -284,31 +291,31 @@ the relevant role file — a sentence, not a rewrite — so a future run
 doesn't need the same correction twice. It reuses *Findings for docs* +
 `promote-findings.sh` for anything that's a project fact rather than a
 pipeline-orchestration rule, instead of inventing a second memory
-mechanism. Full behavior and guardrails: `skills/self-improvement/
-SKILL.md`.
+mechanism. Full behavior and guardrails: `skills/self-improvement/ SKILL.md`.
 
 **To enable it in a project:**
 
 1. Copy the file in:
-   `cp ~/PWS/agent-toolkit/skills/self-improvement/SKILL.md .claude/skills/self-improvement/SKILL.md`
+  `cp ~/PWS/agent-toolkit/skills/self-improvement/SKILL.md .claude/skills/self-improvement/SKILL.md`
    (or wherever your tool discovers skills from — same as `delegate` and
    `karpathy-guidelines`, this toolkit's skills aren't rendered by
    `init.sh`, they're copied in on request).
 2. Add one line to that project's own `.claude/commands/feature.md`, next
-   to the existing `delegate`/`karpathy-guidelines` line: `If the
-   "self-improvement" skill is available, load it now.`
+  to the existing `delegate`/`karpathy-guidelines` line: `If the  "self-improvement" skill is available, load it now.`
 3. Read the guardrails in the skill file once before relying on it — it's
-   scoped to be conservative (records constraints, never loosens them;
+  scoped to be conservative (records constraints, never loosens them;
    asks rather than guesses; reports every edit it makes in the same
    turn), but it does write to your pipeline's own instruction files,
    which is a different risk than anything else in this toolkit.
+
+
 
 ## Adding a new tool, or moving a role to one
 
 Not something `init.sh` does on its own for an untemplated tool — it's a
 recipe, not a flag; `skills/toolkit-init/SKILL.md` branches to it when
 asked for a tool with no `templates/<tool>/` directory yet. See
-[`docs/ADDING-A-TOOL.md`](docs/ADDING-A-TOOL.md): how to bring a role like
+`[docs/ADDING-A-TOOL.md](docs/ADDING-A-TOOL.md)`: how to bring a role like
 `tester` to a tool it doesn't run under yet, and — only once a role is
 actually duplicated across 2+ tools, not before — how to collapse the
 duplicated prose into one shared file so a future fix is one edit instead
@@ -317,7 +324,7 @@ docs/ADDING-A-TOOL.md to add `<tool>` support for `<role>`") and it has
 enough to act on without re-deriving the pattern from scratch.
 
 That recipe is for porting a *worker* role to a new tool. If you want a
-*different AI to be the lead itself*, see [`SYSTEM.md`](SYSTEM.md) instead
+*different AI to be the lead itself*, see `[SYSTEM.md](SYSTEM.md)` instead
 — a single tool-agnostic file meant to be handed directly to that AI,
 rather than something `init.sh` generates for it.
 
@@ -332,3 +339,8 @@ substituted and no file was clobbered on a second run.
 real — `opencode models` is the source of truth and isn't queried by
 `init.sh` automatically.
 
+
+
+## Other Skills
+
+[https://github.com/anbturki/claude-toolkit](https://github.com/anbturki/claude-toolkit)

@@ -73,23 +73,46 @@ calls.
   each role's own "Report"/"Output" section). If a reply comes back long
   anyway, that role's instructions need the same fix, not a summarizing
   pass on your side.
-- If the "status-board" skill is loaded, its rule applies at the end of
-  **every** step below, not only step 5 — update the project's top-level
-  status board table before moving on, every time a task's Status changes.
+- **Always keep this project's main tracking doc current — not optional,
+  not only when a task finishes.** A top-level status board / `tasks/
+  README.md` / equivalent, one row per active task, updated at the end of
+  **every** step below, every time a task's `Status:` changes — not just
+  step 5. If the "status-board" skill is available, load it for the exact
+  table shape and update rule; if it isn't, do the equivalent by hand. A
+  status board only updated at completion drifts out of sync with
+  in-review/changes-requested/testing work for however long that takes,
+  which defeats the entire point of having one.
 
 ## 1 — Spec
 
 Dispatch the `planner` subagent with the request and the task id. It writes
 `.agents/T-<id>.md` from `.agents/TEMPLATE.md`.
 
-**Skip the planner only for a trivial, already-fully-diagnosed one-liner** —
-use judgment, not as a default. That means one exact file, one exact
-change, no ambiguity about scope. Write the Goal, a single AC, and Files in
-scope into `.agents/T-<id>.md` yourself before dispatching an implementer;
-approval, review, and test below still apply unchanged. When in doubt,
-dispatch the planner — for anything already planned elsewhere in the repo
-it costs one subagent call and returns "already specified, don't re-plan,"
-not a fresh spec.
+**Assess whether this task actually needs the planner — completeness of an
+existing spec is the test, not size or triviality:**
+
+- **Not yet planned, or genuinely ambiguous about scope/files/acceptance
+  criteria** → dispatch the planner. This is the default.
+- **Already fully documented** — an existing `tasks/*/TASKS.md` entry, a
+  prior `.agents/T-<id>.md` covering the same ground, or a request specific
+  enough that you can state the Goal, acceptance criteria, and files in
+  scope yourself with no invention — skip the planner. Write those fields
+  into `.agents/T-<id>.md` yourself before dispatching an implementer;
+  approval, review, and test below still apply unchanged. A large feature
+  with a complete existing spec skips the planner exactly the same way a
+  trivial one-liner does — completeness is what's being tested, not
+  effort.
+- **Not sure which of the two this is** → ask the user rather than
+  guessing either way. Guessing "already documented" when it isn't costs a
+  full loop later; guessing "needs planning" when it's already specified
+  costs one avoidable subagent call, which is cheap but still worth
+  getting right rather than reflexively dispatching every time.
+
+When you do dispatch the planner for something that turns out to already
+be planned elsewhere in the repo, that costs one subagent call and returns
+"already specified, don't re-plan," not a fresh spec — so when genuinely in
+doubt, dispatching is the safe default; the assessment above is for the
+cases where you can actually tell.
 
 **Then stop.** Show the user the Goal, the acceptance criteria, the files
 in scope, and any new permission or dependency requested. Ask for approval.
@@ -244,8 +267,9 @@ Run `scripts/promote-findings.sh T-<id>` once more here even if you already
 ran it in step 3 — it's idempotent (already-copied lines are skipped), and
 this is the last point before the task's state file goes quiet.
 
-If this project keeps a top-level status board (see the "status-board"
-skill), update it now, before reporting to the user.
+Update this project's main tracking doc now, before reporting to the user
+— see the Token discipline section above; this is unconditional, whether
+or not the "status-board" skill happens to be loaded.
 
 Give the user: acceptance criteria met versus outstanding, the review
 verdict, test results, anything unverified, and the proposed merge.

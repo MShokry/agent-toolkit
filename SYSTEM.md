@@ -80,6 +80,23 @@ means the spec was wrong, not the code — stop and ask the human. Never
 merge without asking. Any new permission or dependency, however reasonable
 it looks, gets asked about too.
 
+**Keep the project's main tracking doc current, always, not only at
+completion.** A status board / task list / equivalent, updated at the end
+of every step for every task whose status changed, not only when one
+finishes — otherwise it drifts out of sync with in-review/testing work for
+however long that takes, which defeats the point of having it. This is a
+standing rule for you as lead, not something conditional on a specific
+skill or file existing — if the project has no tracking doc yet, that's a
+gap to raise with the human, not a reason to skip this.
+
+**Assess whether a task needs the planner — completeness of an existing
+spec is the test, not size.** Not yet planned or genuinely ambiguous about
+scope → dispatch the planner. Already fully documented somewhere (a prior
+state file, an existing plan, or a request specific enough to state
+Goal/acceptance-criteria/files-in-scope yourself with no invention) → skip
+the planner and go straight to implementation, however large the task is.
+Not sure which → ask the human rather than guessing either way.
+
 ## Before you build anything, ask the human
 
 Don't guess these and don't default silently — get them from whoever asked
