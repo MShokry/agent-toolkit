@@ -13,7 +13,15 @@
 #     --tester-model <vendor/model> \
 #     [--claude-model sonnet] [--test-dir e2e]
 #
-# Requires: bash, sed. No other dependency — matches the rest of this
+#   bin/init.sh --update (same flags)
+#     Never writes anything. Renders the current templates into a temp file
+#     and diffs each one against the live file in --target, so you can see
+#     what changed upstream since this project was scaffolded, and merge by
+#     hand (or hand the diff to your AI lead to reconcile). Pass the SAME
+#     model/name flags used at the original init — different values would
+#     show up as spurious diff noise on every substituted line.
+#
+# Requires: bash, sed, diff. No other dependency — matches the rest of this
 # toolkit's zero-runtime-dependency stance.
 
 set -eu
@@ -29,11 +37,12 @@ REVIEWER_MODEL=""
 REVIEWER_FALLBACK_MODEL=""
 TESTER_MODEL=""
 TEST_DIR="e2e"
+UPDATE=0
 
 die() { printf '%s\n' "init.sh: $*" >&2; exit 1; }
 
 usage() {
-  sed -n '3,17p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '3,25p' "$0" | sed 's/^# \{0,1\}//'
   exit 1
 }
 
@@ -47,6 +56,7 @@ while [ $# -gt 0 ]; do
     --reviewer-fallback-model)   [ $# -ge 2 ] || die "--reviewer-fallback-model needs a value"; REVIEWER_FALLBACK_MODEL="$2"; shift 2 ;;
     --tester-model)              [ $# -ge 2 ] || die "--tester-model needs a value"; TESTER_MODEL="$2"; shift 2 ;;
     --test-dir)                  [ $# -ge 2 ] || die "--test-dir needs a value"; TEST_DIR="$2"; shift 2 ;;
+    --update)                    UPDATE=1; shift ;;
     -h|--help) usage ;;
     *) die "unknown argument: $1 (try --help)" ;;
   esac
@@ -62,8 +72,38 @@ done
 [ -d "$TARGET" ] || die "target does not exist: $TARGET"
 TARGET="$(cd "$TARGET" && pwd)"
 
+# Captured before any render() call touches the target, so it reflects
+# whether this is the very first scaffold of this project — used below to
+# decide whether to drop the first-run customization marker.
+FRESH_SCAFFOLD=0
+[ -f "$TARGET/.claude/commands/feature.md" ] || FRESH_SCAFFOLD=1
+
 render() {
   # $1 = template file, $2 = destination file
+  if [ "$UPDATE" -eq 1 ]; then
+    tmp="$(mktemp)"
+    sed \
+      -e "s|__PROJECT_NAME__|$PROJECT_NAME|g" \
+      -e "s|__CLAUDE_MODEL__|$CLAUDE_MODEL|g" \
+      -e "s|__BUILDER_MODEL__|$BUILDER_MODEL|g" \
+      -e "s|__REVIEWER_MODEL__|$REVIEWER_MODEL|g" \
+      -e "s|__REVIEWER_FALLBACK_MODEL__|$REVIEWER_FALLBACK_MODEL|g" \
+      -e "s|__TESTER_MODEL__|$TESTER_MODEL|g" \
+      -e "s|__TEST_DIR__|$TEST_DIR|g" \
+      "$1" > "$tmp"
+    if [ ! -f "$2" ]; then
+      printf 'init.sh: %s does not exist yet (new upstream file — re-run without --update to add it)\n' "$2"
+    elif diff -u "$2" "$tmp" > /dev/null 2>&1; then
+      printf 'init.sh: up to date — %s\n' "$2"
+    else
+      printf 'init.sh: upstream changes for %s\n' "$2"
+      diff -u "$2" "$tmp" || true
+      printf '\n'
+    fi
+    rm -f "$tmp"
+    return
+  fi
+
   if [ -f "$2" ]; then
     printf 'init.sh: skip (exists) %s\n' "$2"
     return
@@ -93,10 +133,26 @@ render "$TEMPLATES/scripts/team.sh.tmpl"             "$TARGET/scripts/team.sh"
 render "$TEMPLATES/scripts/team-completion.bash.tmpl" "$TARGET/scripts/team-completion.bash"
 render "$TEMPLATES/scripts/verify-state.sh.tmpl"     "$TARGET/scripts/verify-state.sh"
 render "$TEMPLATES/scripts/promote-findings.sh.tmpl" "$TARGET/scripts/promote-findings.sh"
+
+if [ "$UPDATE" -eq 1 ]; then
+  cat <<MSG
+
+init.sh: --update done. Nothing was written above — those are diffs between
+the current templates and what's already in $TARGET. Merge by hand, or hand
+this output to your AI lead and ask it to reconcile against anything you've
+customized locally.
+
+MSG
+  exit 0
+fi
+
 chmod +x "$TARGET/scripts/oc.sh" "$TARGET/scripts/team.sh" \
          "$TARGET/scripts/verify-state.sh" "$TARGET/scripts/promote-findings.sh" 2>/dev/null || true
 
 mkdir -p "$TARGET/.agents"
+if [ "$FRESH_SCAFFOLD" -eq 1 ]; then
+  touch "$TARGET/.agents/.needs-customization"
+fi
 
 cat <<MSG
 
@@ -116,5 +172,14 @@ Next steps:
   4. Make sure $TARGET has its own CLAUDE.md/AGENTS.md — the generated
      files defer project-specific constraints to it and have nothing to
      say without one.
+  5. On the first /feature run, the lead will notice
+     .agents/.needs-customization and ask whether to fill the role files'
+     generic pitfalls/hard-rules sections with this project's real ones.
+     If your lead isn't Claude Code (that check lives in feature.md, which
+     is Claude-specific), do that pass yourself, once, by hand — and
+     delete the marker file when done.
+  6. Later, once the toolkit itself has moved on: bin/init.sh --update
+     (same flags as above) shows you what changed upstream, without
+     writing anything.
 
 MSG

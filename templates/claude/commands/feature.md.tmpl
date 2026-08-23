@@ -35,11 +35,22 @@ does not know it.
 
 ## Preflight
 
-1. Pick the next free id: `ls .agents/T-*.md`.
-2. Confirm the OpenCode server is up — `curl -sS -m 5 http://localhost:4096`.
+1. **First run only:** if `.agents/.needs-customization` exists, this
+   project was just scaffolded — the role files under `.claude/agents/` and
+   `.opencode/agent/` still carry generic pitfalls/hard-rules text, not this
+   codebase's actual ones. Ask the user: read the real source tree and this
+   project's own CLAUDE.md/AGENTS.md, then fill those sections in with real
+   specifics, now, before starting the requested feature? If yes, do that
+   pass — touch only the prose describing project-specific pitfalls and
+   hard rules; never the permission blocks, the rhythm/report format, or
+   the acceptance-criteria/scope rules, those are structural, not project
+   content. Either answer, delete the marker file once asked — this only
+   happens once.
+2. Pick the next free id: `ls .agents/T-*.md`.
+3. Confirm the OpenCode server is up — `curl -sS -m 5 http://localhost:4096`.
    If not, tell the user to run `scripts/team.sh` (or `opencode serve`) and
    stop.
-3. Confirm the working tree is clean enough to produce a meaningful diff.
+4. Confirm the working tree is clean enough to produce a meaningful diff.
 
 ## Token discipline
 

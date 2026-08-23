@@ -48,6 +48,12 @@ promote-findings.sh}` into the target. It does **not** overwrite a file that
 already exists — it prints what it skipped so you can diff and merge by
 hand.
 
+When the toolkit itself has moved on since this project was scaffolded, add
+`--update` to the same command (same flags) instead of re-running it plain.
+It writes nothing — it renders the current templates and prints a `diff -u`
+against each live file that changed, for the user (or you) to merge by
+hand.
+
 ## If the user wants a worker role under a tool this doesn't already template
 
 `bin/init.sh` only knows Claude and OpenCode today. If the user asks for a

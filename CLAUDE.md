@@ -33,6 +33,11 @@ rm -rf /tmp/toolkit-smoke
 Re-run `init.sh` a second time against the same target to confirm existing
 files are skipped, not clobbered (`render()`'s core guarantee).
 
+To check `--update` mode: re-run with `--update` added against that same
+target — every file should report "up to date" (nothing written). Then
+edit one line in a `.tmpl` file, re-run `--update` again, and confirm it
+prints a `diff -u` for exactly that file and still writes nothing.
+
 ## Architecture
 
 | Path | Role |
@@ -80,7 +85,13 @@ files are skipped, not clobbered (`render()`'s core guarantee).
 - `render()` prints `skip (exists)` and leaves the file alone when the
   destination already exists — if an edit to a `.tmpl` file doesn't show up
   after a re-run against an existing target, that's why, not a bug in
-  `init.sh`.
+  `init.sh`. Use `init.sh --update` to see what changed instead.
+- `.agents/.needs-customization` is written only when `FRESH_SCAFFOLD` was
+  true *before* any `render()` call ran (checked via whether
+  `.claude/commands/feature.md` already existed) — never on `--update`,
+  and never again once deleted. If you add a new marker-gated behavior,
+  keep that "computed once, before any write" ordering or a later
+  non-fresh `init.sh` run will re-trigger it.
 - `templates/opencode/agent/reviewer.md.tmpl` defaults to blanket
   `edit: deny` / `write: deny`, unlike a project that has since widened its
   own copy (e.g. `vivaldi-extension`'s `.opencode/agent/reviewer.md` allows

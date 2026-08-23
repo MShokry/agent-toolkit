@@ -84,6 +84,8 @@ decisions" below).
 
 ```
 bin/init.sh           the scaffolder — copies templates/ into a target repo
+                        (--update: diffs current templates against a target
+                        that's already scaffolded, writes nothing)
 templates/             every generated file, with __PLACEHOLDER__ tokens
   claude/agents/        planner.md.tmpl, senior-dev.md.tmpl
   claude/commands/      feature.md.tmpl — the /feature pipeline command
@@ -165,6 +167,13 @@ flag *shape* only — do not use `auto` for the reviewer.
 prints `skip (exists)` and leaves it alone, so re-running is safe and an
 existing project's customizations survive.
 
+`init.sh --update` (same flags) never writes anything either — it renders
+the current templates into a temp file and diffs each one against what's
+already in `--target`, so you can see what changed upstream since this
+project was scaffolded and merge by hand (or hand the diff to your AI lead
+to reconcile). Pass the same model/name flags used at the original init, or
+every substituted line shows up as spurious diff noise.
+
 ## Using it
 
 The pipeline is a slash command, not a separate program. Once scaffolded,
@@ -193,6 +202,13 @@ Read `skills/toolkit-init/SKILL.md`'s "After it runs" checklist before
 trusting the loop unattended, in particular the reviewer's permission
 block — verify it's actually enforced against your real OpenCode server,
 not just correct-looking YAML.
+
+The first `/feature` run on a freshly-scaffolded project also asks, once,
+whether to fill the generated role files' generic "what this codebase will
+punish you for" sections with real specifics from your actual codebase —
+gated by a `.agents/.needs-customization` marker that `init.sh` drops only
+on a genuinely fresh scaffold, deleted the moment it's asked either way.
+See `feature.md.tmpl`'s Preflight step 1.
 
 ## Design decisions, and why
 
