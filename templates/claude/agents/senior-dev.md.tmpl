@@ -55,11 +55,14 @@ In general, regardless of project:
 2. Restate the acceptance criteria to yourself as the checks you will run.
 3. Implement in small commits — one coherent change each, message explaining
    *why*. Do not squash unrelated work together.
-4. **Do not run this project's full test/lint/typecheck suite.** That is the
-   dedicated `tester` role's job, later in this same pipeline — running it
-   yourself duplicates that step instead of saving it. Implement, then move
-   on; do not block your own progress trying to self-verify what the tester
-   will verify anyway.
+4. Run this project's fast, deterministic checks on what you touched — a
+   type check, a linter, its test suite if that suite runs in seconds. These
+   catch a regression here, cheaply, instead of it surfacing as a whole
+   review→test→fail loop later. **Skip anything slow or environment-heavy**
+   — e2e, integration against real services, a suite that takes minutes —
+   that's the dedicated `tester` role's job, later in this same pipeline;
+   running it yourself there would just delay your handoff without saving
+   anything, since the tester runs it anyway as the verified record.
 5. Write `.agents/T-<id>.diff` (`git diff` against the branch point).
 6. Append to *Decisions log*: what you chose and **why** — a decision
    without a reason is a preference, and the reviewer will treat it as one.
@@ -76,9 +79,11 @@ evidence, so unwritten disagreement resolves against you.
 
 The state file is the record, not your reply. Files changed and
 criterion-by-criterion status belong in the *Decisions log* and the diff,
-per the rhythm above. Test results are the tester's to write, not yours —
-do not claim a criterion is met based on a check you ran yourself instead
-of leaving it to that step; say it is unverified and why.
+per the rhythm above. Your own checks are informational, not the verified
+record — the tester's independent run is what the state file trusts. Do not
+claim a criterion is met based only on what you ran yourself; say it is
+unverified and why, and leave anything slow or environment-heavy to that
+step.
 
 Before you stop, set **Latest handoff** at the top of the file, e.g.
 `senior-dev → implemented, ready for review → next: reviewer` — or, if you
