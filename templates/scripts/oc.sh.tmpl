@@ -37,9 +37,37 @@
 # of hanging on a prompt nothing can answer non-interactively. `deny`
 # entries (e.g. builder.md's `rm -rf /*` / `sudo *` / `curl *`) still
 # block — OpenCode stays in the loop, this isn't "ignore all permissions."
-# OpenCode's own --help calls it "dangerous"; it is off unless passed, and
-# the lead should only pass it for a task the user explicitly confirmed at
-# spec approval (see feature.md's step 1) — not as a standing default.
+# Verified live: a throwaway agent with a deny-listed `curl *` still had
+# that call refused with `--auto` on. OpenCode's own --help calls it
+# "dangerous"; it is off unless passed, and the lead should only pass it
+# for a task the user explicitly confirmed at spec approval (see
+# feature.md's step 1) — not as a standing default.
+#
+# Timeout is a flat wall-clock kill (OC_TIMEOUT, default 600s), not an
+# idle-based one. An idle/no-output watchdog was tried and reverted: it
+# relies on the raw JSON output file growing as the agent works, but
+# `opencode run --format json` (verified against v1.18.18, --attach, both
+# --format json and --format default, with and without `stdbuf -oL`)
+# writes nothing to its own stdout until the *entire turn completes* — the
+# file sits at 0 bytes through 12+ seconds of genuinely active, multi-step
+# work. Polling its size can't tell "stuck" from "working" here; it would
+# kill every run past the idle threshold, successful or not. If opencode
+# ever starts streaming incrementally, or a server-side polling approach
+# (session message state via the HTTP API, not the client's stdout) is
+# worth the added complexity, revisit this — but don't re-introduce
+# file-size polling without re-verifying it against the actual installed
+# opencode version first.
+#
+# Killing the client does NOT cancel the server-side turn (--attach
+# sessions outlive the CLI process) — a killed run can leave an orphaned
+# message with no `completed` timestamp, and reusing that session for a
+# later call can then hang forever behind it. So on a timeout this script
+# calls the server's abort endpoint on whatever session id it can
+# determine (the `--session` it was given, if any — the client rarely has
+# a session id of its own to fall back on, per the buffering note above)
+# before it exits 124 — verified live against a real OpenCode 1.x server
+# (POST /session/<id>/abort returns 200, and no-ops cleanly if the turn
+# had already finished).
 #
 # Env:
 #   OC_SERVER   default http://localhost:4096, or the port scripts/team.sh
@@ -53,8 +81,10 @@
 # Exit codes:
 #   0   ok
 #   1   usage or runtime error
-#   124 timed out — almost always a permission prompt in a non-TTY; widen
-#       the agent's bash allowlist, or pass --auto if the user confirmed it
+#   124 timed out (almost always a permission prompt in a non-TTY, unless
+#       --auto was passed). The server-side session is aborted
+#       automatically when a session id is known; see the note above for
+#       when it isn't.
 
 set -eu
 
@@ -81,7 +111,7 @@ AUTO=0
 die() { printf '%s\n' "oc.sh: $*" >&2; exit 1; }
 
 usage() {
-  sed -n '3,57p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '3,87p' "$0" | sed 's/^# \{0,1\}//'
   exit 1
 }
 
@@ -159,6 +189,7 @@ set -e
 
 # Report the session id actually used, whatever the outcome, so the caller can
 # persist it and continue the same session on the next call for this task.
+# (On a killed run this is usually empty — see the buffering note above.)
 USED_SESSION="$(grep -o '"sessionID":"[^"]*"' "$RAW_TMP" 2>/dev/null | head -1 | cut -d'"' -f4)"
 [ -n "$USED_SESSION" ] && printf '%s\n' "oc.sh: session=$USED_SESSION" >&2
 
@@ -183,9 +214,19 @@ sys.stdout.write("\n")
 }
 
 if [ "$STATUS" -eq 124 ]; then
+  ABORT_SESSION="${SESSION:-$USED_SESSION}"
+  if [ -n "$ABORT_SESSION" ]; then
+    curl -sS -X POST -m 10 "$SERVER/session/$ABORT_SESSION/abort" -o /dev/null 2>/dev/null || true
+    ABORT_NOTE="Aborted server-side session $ABORT_SESSION so it won't orphan the next call — retrying is safe."
+  else
+    ABORT_NOTE="No session id was known to abort (killed before any event reached this client — see the header note on output buffering). If this session gets reused, check it isn't still running server-side before sending the next message."
+  fi
+
   cat >&2 <<MSG
 
 oc.sh: TIMED OUT after ${TIMEOUT_SECS}s (agent=$AGENT model=$MODEL)
+
+  $ABORT_NOTE
 
   The usual cause is a permission prompt with no TTY to answer it: opencode run
   waits forever instead of failing. Two ways to fix it:
@@ -194,6 +235,8 @@ oc.sh: TIMED OUT after ${TIMEOUT_SECS}s (agent=$AGENT model=$MODEL)
     - Pass --auto to this script (only for a task the user has confirmed) —
       it auto-approves anything not explicitly 'deny'd instead of hanging
       on 'ask', without disabling the agent's deny list.
+
+  If neither applies, it may just be a genuinely long run — raise OC_TIMEOUT.
 
   Reproduce interactively to see which prompt it stopped on:
     opencode run --attach $SERVER --agent $AGENT --model $MODEL "<prompt>"

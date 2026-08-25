@@ -226,12 +226,14 @@ the reviewer inherits the full contents of every file the implementer
 read, which can outweigh the saving on a large implementation. Measure it
 on the first task you run this way rather than assuming it's a net win.
 
-On a **timeout** (exit 124), the client-side wait died but the session may
-still be running server-side. Before issuing a new `oc.sh` call against
-that same session id, check whether the prior call is still active rather
-than sending a second message into the same session concurrently — two
-calls racing on the same step is a known cause of provider-side collision
-errors.
+On a **timeout** (exit 124), `oc.sh` already aborted the server-side turn
+before it exited — verified live: the session's message shows a
+`completed` timestamp and `error.name: MessageAbortedError` afterward, not
+a turn hanging open. Retrying the same session immediately is safe; you do
+not need to check whether the prior call is still active first. (This only
+holds when `oc.sh` itself did the killing. If a session was killed some
+other way — you interrupted it by hand, the machine slept — abort it
+yourself before reusing it: `curl -X POST $OC_SERVER/session/<id>/abort`.)
 
 ## 3 — Review
 
