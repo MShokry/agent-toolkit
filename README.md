@@ -104,6 +104,14 @@ skills/
                           any project's lead session, independent of init.sh
   toolkit-init/SKILL.md  a thin skill wrapping bin/init.sh, so a lead can
                           run this conversationally in a target repo
+  dev-team-generator/     self-contained alternative to toolkit-init: asks
+    SKILL.md              first, then generates the team + flow live for
+                          whatever tool(s) are actually available, instead
+                          of stamping out templates/. Reach for this when a
+                          role needs a tool init.sh doesn't already
+                          template, or outside a checkout of this repo
+                          entirely — everything it needs travels in its own
+                          reference/ folder
   status-board/SKILL.md  keeps a top-level status board in sync with the
                           per-task state files — independent of init.sh
   karpathy-guidelines/    behavioral defaults (surface assumptions, minimum
@@ -348,6 +356,13 @@ That recipe is for porting a *worker* role to a new tool. If you want a
 *different AI to be the lead itself*, see `[SYSTEM.md](SYSTEM.md)` instead
 — a single tool-agnostic file meant to be handed directly to that AI,
 rather than something `init.sh` generates for it.
+
+If most or all of the roles need a tool `init.sh` doesn't template — not
+just one role under an otherwise Claude+OpenCode setup —
+`skills/dev-team-generator/SKILL.md` runs this same research-then-write recipe as its default path
+instead of an escape hatch, and does it self-contained (no dependency on
+this repo's own `docs/`/`templates/`), so it also works handed to another
+project on its own.
 
 ## Known gaps
 

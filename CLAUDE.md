@@ -50,6 +50,7 @@ prints a `diff -u` for exactly that file and still writes nothing.
 | `templates/scripts/` | `oc.sh.tmpl` (OpenCode CLI wrapper), `team.sh.tmpl` (tmux layout), `verify-state.sh.tmpl` / `promote-findings.sh.tmpl` (deterministic, no-LLM-call structural checks) |
 | `skills/delegate/` | Context-discipline rules for the lead — usable independently of `init.sh` |
 | `skills/toolkit-init/` | Thin skill wrapping `bin/init.sh`, for running the scaffold conversationally |
+| `skills/dev-team-generator/` | Self-contained, interview-driven alternative to `toolkit-init`: generates the team + flow live for whatever tool(s) are actually available, instead of stamping out `templates/`. Its own `reference/lessons-learned.md` is a generalized, tool-agnostic distillation of this toolkit's hardening history — see the Conventions bullet below |
 
 ## Conventions
 
@@ -79,6 +80,26 @@ prints a `diff -u` for exactly that file and still writes nothing.
   report-back change. They're meant to be the same mechanism, generic vs.
   applied. There is no automated check for this yet; do it by hand and
   `diff` the two sides after any pipeline-mechanism change.
+- **Mirror every new hardening lesson into
+  `skills/dev-team-generator/reference/lessons-learned.md`, in the same
+  turn.** This toolkit's real lessons — a live-verified gotcha, a
+  reliability fix, an incident and what actually fixed it — mostly surface
+  first as a change to one specific template (`oc.sh.tmpl` gaining
+  session-abort-on-timeout, `senior-dev.md.tmpl`'s testing rhythm getting
+  scoped, and so on) or in a project applying this toolkit. Whenever that
+  happens, add or update the corresponding entry in
+  `lessons-learned.md` too, written generalized — the mechanism and the
+  reason, not the originating tool's specific flag/endpoint name (that
+  file already explains why: it exists so a lesson earned once against
+  OpenCode, say, doesn't have to be re-earned by a future project running
+  some other tool entirely). This is a distinct sync step from the bullet
+  above: that one keeps the Claude+OpenCode *mechanism* consistent across
+  `templates/` and its applied copies; this one keeps the *generalized
+  knowledge* available to `dev-team-generator`'s any-tool generation path,
+  which doesn't read `templates/` at all. A change that's purely
+  mechanical (a typo fix, a formatting change) doesn't need this; a change
+  that exists *because* something failed, or because live verification
+  proved or disproved an assumption, does.
 
 ## Gotchas
 
