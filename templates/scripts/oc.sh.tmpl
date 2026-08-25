@@ -31,6 +31,16 @@
 # inlines the full contents of every file the agent reads, so it is unreadable
 # for a human and expensive to paste back into a state file.
 #
+# --auto passes OpenCode's own --auto through to `opencode run`: it
+# auto-approves any permission not explicitly `deny`d in the dispatched
+# agent's own permission block — a bash "ask" catch-all included — instead
+# of hanging on a prompt nothing can answer non-interactively. `deny`
+# entries (e.g. builder.md's `rm -rf /*` / `sudo *` / `curl *`) still
+# block — OpenCode stays in the loop, this isn't "ignore all permissions."
+# OpenCode's own --help calls it "dangerous"; it is off unless passed, and
+# the lead should only pass it for a task the user explicitly confirmed at
+# spec approval (see feature.md's step 1) — not as a standing default.
+#
 # Env:
 #   OC_SERVER   default http://localhost:4096, or the port scripts/team.sh
 #               last started (read from .agents/.oc-port) if that file
@@ -43,7 +53,8 @@
 # Exit codes:
 #   0   ok
 #   1   usage or runtime error
-#   124 timed out  (almost always a permission prompt in a non-TTY)
+#   124 timed out — almost always a permission prompt in a non-TTY; widen
+#       the agent's bash allowlist, or pass --auto if the user confirmed it
 
 set -eu
 
@@ -65,11 +76,12 @@ PROMPT_FILE=""
 TEXT_ONLY=0
 RAW_OUT=""
 SESSION=""
+AUTO=0
 
 die() { printf '%s\n' "oc.sh: $*" >&2; exit 1; }
 
 usage() {
-  sed -n '3,30p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '3,57p' "$0" | sed 's/^# \{0,1\}//'
   exit 1
 }
 
@@ -82,6 +94,7 @@ while [ $# -gt 0 ]; do
     --text)        TEXT_ONLY=1; shift ;;
     --raw-out)     [ $# -ge 2 ] || die "--raw-out needs a value";     RAW_OUT="$2";     shift 2 ;;
     --session)     [ $# -ge 2 ] || die "--session needs a value";     SESSION="$2";     shift 2 ;;
+    --auto)        AUTO=1; shift ;;
     -h|--help)     usage ;;
     *)             die "unknown argument: $1  (try --help)" ;;
   esac
@@ -118,13 +131,16 @@ if ! curl -sS -o /dev/null -m 5 "$SERVER" 2>/dev/null; then
      (or run scripts/team.sh, which starts it in pane 1)"
 fi
 
-printf '%s\n' "oc.sh: agent=$AGENT model=$MODEL timeout=${TIMEOUT_SECS}s server=$SERVER session=${SESSION:-new}" >&2
+printf '%s\n' "oc.sh: agent=$AGENT model=$MODEL timeout=${TIMEOUT_SECS}s server=$SERVER session=${SESSION:-new} auto=$AUTO" >&2
 
 RAW_TMP="$(mktemp "${TMPDIR:-/tmp}/oc-raw.XXXXXX")"
 trap 'rm -f "$RAW_TMP"' EXIT
 
 SESSION_ARGS=()
 [ -n "$SESSION" ] && SESSION_ARGS=(--session "$SESSION")
+
+AUTO_ARGS=()
+[ "$AUTO" -eq 1 ] && AUTO_ARGS=(--auto)
 
 set +e
 printf '%s' "$PROMPT" | "$TIMEOUT_BIN" "$TIMEOUT_SECS" \
@@ -134,6 +150,7 @@ printf '%s' "$PROMPT" | "$TIMEOUT_BIN" "$TIMEOUT_SECS" \
     --agent "$AGENT" \
     --model "$MODEL" \
     ${SESSION_ARGS[@]+"${SESSION_ARGS[@]}"} \
+    ${AUTO_ARGS[@]+"${AUTO_ARGS[@]}"} \
     --format json > "$RAW_TMP"
 STATUS=$?
 set -e
@@ -171,9 +188,12 @@ if [ "$STATUS" -eq 124 ]; then
 oc.sh: TIMED OUT after ${TIMEOUT_SECS}s (agent=$AGENT model=$MODEL)
 
   The usual cause is a permission prompt with no TTY to answer it: opencode run
-  waits forever instead of failing. Check that .opencode/agent/$AGENT.md sets
-  'question: deny' and that its bash permissions cover every command the agent
-  needed, rather than leaving one on "ask".
+  waits forever instead of failing. Two ways to fix it:
+    - Widen .opencode/agent/$AGENT.md's bash permissions to cover the command
+      that stopped it, and set 'question: deny'.
+    - Pass --auto to this script (only for a task the user has confirmed) —
+      it auto-approves anything not explicitly 'deny'd instead of hanging
+      on 'ask', without disabling the agent's deny list.
 
   Reproduce interactively to see which prompt it stopped on:
     opencode run --attach $SERVER --agent $AGENT --model $MODEL "<prompt>"

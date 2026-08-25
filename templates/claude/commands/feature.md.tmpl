@@ -133,6 +133,18 @@ outstanding. If the planner says the feature is already specified
 elsewhere in the repo, say so and ask whether to use that instead of a new
 spec.
 
+**In the same message, also ask whether to enable OpenCode's `--auto` for
+this task** — only relevant if `builder` ends up implementing it below.
+`--auto` auto-approves any permission not explicitly `deny`d in
+`builder.md`'s own permission block (its `deny` entries — `rm -rf /*`,
+`sudo *`, `curl *` — still block; verified live, this is not a blanket
+bypass), which is what ends the "hangs on an un-allowlisted bash command,
+someone notices, widens the allowlist, retries" cycle. It's OpenCode's own
+flag, and its own `--help` calls it "dangerous" — default is off, and stays
+off for this task unless the user says yes here. Record the answer in
+*OpenCode auto mode* in the state file regardless of which implementer is
+actually chosen.
+
 ## 2 — Implement
 
 Once approved, set Status to `spec-approved` and record who implements:
@@ -146,6 +158,11 @@ Once approved, set Status to `spec-approved` and record who implements:
     --raw-out .agents/T-<id>.build.jsonl \
     --prompt "Implement .agents/T-<id>.md. Read this project's own guidance file first."
   ```
+
+  Add `--auto` to that command only if *OpenCode auto mode* in the state
+  file is `on` — i.e. only if the user said yes to it at spec approval
+  above. Never add it on your own judgement mid-task, even after a timeout;
+  go back and ask instead.
 
   This is the task's first `oc.sh` call, so it starts a new session — read
   the `oc.sh: session=ses_...` line from stderr and record it in *OpenCode
