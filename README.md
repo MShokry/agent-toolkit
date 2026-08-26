@@ -92,14 +92,15 @@ bin/init.sh           the scaffolder — copies templates/ into a target repo
                         that's already scaffolded, writes nothing)
 test/smoke.sh         automated smoke test for the guarantees above (run by CI)
 test/invariants.sh    asserts every load-bearing rule is present in each of the
+                        hand-synced copies that must carry it (run by CI) —
+                        catches the omission that hand-syncing keeps producing
 CHANGELOG.md          impact-tagged per-release changes ([contract] › [safety]
                       › [process] › [docs]) — read this before merging an update
 migrations/           hand-appliable notes for [contract] changes only
-                        hand-synced copies that must carry it (run by CI) —
-                        catches the omission that hand-syncing keeps producing
 templates/             every generated file, with __PLACEHOLDER__ tokens
   claude/agents/        planner.md.tmpl, senior-dev.md.tmpl
-  claude/commands/      feature.md.tmpl — the /feature pipeline command
+  claude/commands/      feature.md.tmpl — the /feature pipeline command;
+                          toolkit-update.md.tmpl — the /toolkit-update merge command
   opencode/agent/        builder.md.tmpl, reviewer.md.tmpl, tester.md.tmpl
   agents-state/          TEMPLATE.md.tmpl — the T-<id> state file shape
   scripts/                oc.sh.tmpl (OpenCode CLI wrapper), team.sh.tmpl (tmux
@@ -419,8 +420,12 @@ project on its own.
 
 ## Reviews and upgrading
 
-- [`docs/UPGRADING.md`](docs/UPGRADING.md) — the staged plan for keeping
-  an already-scaffolded project current with this toolkit: a provenance
-  stamp so `--update` needs no remembered flags, tagged releases with an
-  impact-classified changelog, and an AI-assisted merge command. Today's
-  `--update` is the mechanical half of that and nothing else.
+- [`docs/UPGRADING.md`](docs/UPGRADING.md) — how an already-scaffolded
+  project stays current with this toolkit: the provenance stamp, the
+  impact-tagged `CHANGELOG.md`, `--update`'s triage mode, `migrations/`,
+  and `/toolkit-update`. See "Updating a project" above for the commands;
+  this file is the reasoning behind them.
+- [`REVIEW.md`](REVIEW.md) / [`REVIEW-2.md`](REVIEW-2.md) — point-in-time
+  honest reviews of this toolkit's own design, kept rather than deleted so
+  the reasoning behind a fix (and what's still open) isn't lost once the
+  fix lands.

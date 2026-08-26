@@ -28,17 +28,19 @@ bash test/invariants.sh   # every load-bearing rule present in every copy
 
 `smoke.sh` scaffolds into a throwaway directory and asserts the core
 guarantees: every placeholder substituted, no file clobbered on re-run,
-`--update` reports up-to-date when clean and exactly one diff after a
-deliberate drift, the findings-promotion traversal guard holds, the
-loop-cap and budget checks fire, `verify-state.sh` refuses `done` while an
-acceptance criterion is open, and `verify-spec.sh` rejects an unfilled spec
-while accepting a filled one.
+the provenance stamp written once and never touched by `--update`,
+`--update` triage (summary-first, exit 0 clean / 1 drift, hunks behind
+`--diff`/`--only`, flags defaulted from the stamp), the findings-promotion
+traversal guard, the loop-cap and budget checks fire, `verify-state.sh`
+refuses `done` while an acceptance criterion is open, and `verify-spec.sh`
+rejects an unfilled spec while accepting a filled one.
 
 `invariants.sh` is the other half: it greps each load-bearing rule against
 every hand-synced copy that must carry it. Run it after **any** change to
 the pipeline's rules — it is what the "keep the copies in sync" convention
-below finally has behind it. CI runs it plus shellcheck on every push (`.github/workflows/
-ci.yml`). For an eyeball-level pass you can still do the manual version:
+below finally has behind it. CI runs both plus shellcheck on every push
+(`.github/workflows/ci.yml`). For an eyeball-level pass you can still do
+the manual version:
 
 ```bash
 mkdir -p /tmp/toolkit-smoke && bash bin/init.sh \
@@ -52,11 +54,6 @@ rm -rf /tmp/toolkit-smoke
 Re-run `init.sh` a second time against the same target to confirm existing
 files are skipped, not clobbered (`render()`'s core guarantee).
 
-To check `--update` mode: re-run with `--update` added against that same
-target — every file should report "up to date" (nothing written). Then
-edit one line in a `.tmpl` file, re-run `--update` again, and confirm it
-prints a `diff -u` for exactly that file and still writes nothing.
-
 ## Architecture
 
 | Path | Role |
@@ -66,7 +63,7 @@ prints a `diff -u` for exactly that file and still writes nothing.
 | `test/invariants.sh` | Cross-file rule presence check: one grep per (rule, file) pair over the hand-synced copies. Add a rule = one line in its table |
 | `.github/workflows/ci.yml` | Runs `test/smoke.sh` + shellcheck (`bin/init.sh`, the test, and every `templates/scripts/*.tmpl`) |
 | `templates/claude/agents/` | `planner.md.tmpl`, `senior-dev.md.tmpl` — Claude subagent role definitions |
-| `templates/claude/commands/` | `feature.md.tmpl` — the `/feature` pipeline command (the lead's own instructions) |
+| `templates/claude/commands/` | `feature.md.tmpl` — the `/feature` pipeline command (the lead's own instructions); `toolkit-update.md.tmpl` — the `/toolkit-update` merge command for already-scaffolded projects |
 | `templates/opencode/agent/` | `builder.md.tmpl`, `reviewer.md.tmpl`, `tester.md.tmpl` — OpenCode role definitions |
 | `templates/agents-state/` | `TEMPLATE.md.tmpl` — the `T-<id>` state-file shape every role reads and appends to |
 | `templates/scripts/` | `oc.sh.tmpl` (OpenCode CLI wrapper), `team.sh.tmpl` (+ `team-completion.bash.tmpl`; tmux layout), `verify-state.sh.tmpl` (state file) / `verify-spec.sh.tmpl` (spec, before the approval gate) / `promote-findings.sh.tmpl` — all deterministic, no-LLM-call structural checks |
@@ -77,7 +74,10 @@ prints a `diff -u` for exactly that file and still writes nothing.
 | `skills/karpathy-guidelines/` | Behavioral defaults loaded by the lead via `feature.md`; inlined into senior-dev/builder rather than granted Skill access |
 | `skills/self-improvement/` | Optional, off by default: lead-only capture of user corrections into its own instruction files. Never auto-loaded |
 | `SYSTEM.md` | Tool-agnostic one-pager meant to be handed to any AI ("recreate this system with yourself as lead") |
-| `REVIEW.md` | Point-in-time honest review of the toolkit (passes 1 and 2); every heading marked ✅ done / ⬜ open / 🔶 awaiting a decision |
+| `CHANGELOG.md` | Impact-tagged per-release entries (`[contract]` › `[safety]` › `[process]` › `[docs]`). Append an entry in the same commit as any template/script change — this is what lets a downstream project triage an update without reading raw diffs |
+| `migrations/` | Numbered, hand-appliable notes for `[contract]` changes only. No migration runner, by design. Write one in the same commit as the contract change it describes |
+| `docs/UPGRADING.md` | The downstream-update plan (provenance stamp → tags/changelog → `--update` triage → migrations → `/toolkit-update`); stages 1–5 are implemented in `bin/init.sh` + `CHANGELOG.md` + `migrations/` |
+| `REVIEW.md` / `REVIEW-2.md` | Point-in-time honest reviews; see each file's status section for applied vs open items |
 | `REVIEW-2.md` | Third review pass — the delivery contract (acceptance criteria are never marked met by anyone), the status state machine, the missing team-charter layer. Does not repeat `REVIEW.md`; its Part D re-ranks and prunes that file's backlog |
 | `docs/UPGRADING.md` | Staged plan for keeping an already-scaffolded downstream project current: provenance stamp, tagged releases + impact-classified changelog, `--update` triage, AI-assisted merge |
 
@@ -155,9 +155,13 @@ prints a `diff -u` for exactly that file and still writes nothing.
 - `.agents/.needs-customization` is written only when `FRESH_SCAFFOLD` was
   true *before* any `render()` call ran (checked via whether
   `.claude/commands/feature.md` already existed) — never on `--update`,
-  and never again once deleted. If you add a new marker-gated behavior,
-  keep that "computed once, before any write" ordering or a later
-  non-fresh `init.sh` run will re-trigger it.
+  and never again once deleted. The provenance stamp
+  (`.agents/.toolkit-version`) follows the same ordering rule: written
+  exactly once on a fresh scaffold, never by `--update` (that would erase
+  the baseline it exists to record), rewritten only by an explicit
+  `--refresh-stamp` after a merge is accepted. If you add a new
+  marker-gated behavior, keep that "computed once, before any write"
+  ordering or a later non-fresh `init.sh` run will re-trigger it.
 - `templates/opencode/agent/reviewer.md.tmpl` defaults to blanket
   `edit: deny` / `write: deny`, unlike a project that has since widened its
   own copy (e.g. an applied copy's reviewer allows
