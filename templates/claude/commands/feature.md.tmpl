@@ -266,6 +266,12 @@ family with `__REVIEWER_MODEL__`, switch to `__REVIEWER_FALLBACK_MODEL__`
 instead, and note the substitution in the Decisions log. A reviewer that
 shares the author's blind spots is not a second eye.
 
+Write whichever model you actually dispatched — `__REVIEWER_MODEL__` or
+the fallback — into *Reviewer for this task* in the state file. This is a
+separate record from the Decisions-log substitution note above: that's a
+one-time entry explaining *why*, this field is the durable answer to
+*who*, for anyone reading the task later.
+
 If the reviewer's permission block allows writing `.agents/**`, it writes
 its own verdict into *Review verdicts*. Either way, **verify with the
 script, not by eye:** run `scripts/verify-state.sh T-<id>` — it fails
@@ -290,6 +296,9 @@ Adjudicate disagreements on the written evidence only. Where the evidence
 does not settle it, escalate rather than casting a tiebreak vote yourself.
 
 ## 4 — Test
+
+Write `__TESTER_MODEL__` into *Tester for this task* in the state file
+before dispatching, same as the reviewer's field above.
 
 ```bash
 scripts/oc.sh --agent tester --model __TESTER_MODEL__ --text \
