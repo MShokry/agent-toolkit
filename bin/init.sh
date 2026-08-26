@@ -14,16 +14,32 @@
 #     --tester-model <vendor/model> \
 #     [--claude-model sonnet] [--test-dir e2e]
 #
-#   bin/init.sh --update (same flags)
-#     Never writes anything. Renders the current templates into a temp file
-#     and diffs each one against the live file in --target, so you can see
-#     what changed upstream since this project was scaffolded, and merge by
-#     hand (or hand the diff to your AI lead to reconcile). Pass the SAME
-#     model/name flags used at the original init — different values would
-#     show up as spurious diff noise on every substituted line.
+# On a fresh scaffold this also writes .agents/.toolkit-version — a stamp
+# recording the toolkit SHA/tag and every flag used. It is committed (it
+# describes the project, not the laptop); never written again by --update.
 #
-# Requires: bash, sed, diff. No other dependency — matches the rest of this
-# toolkit's zero-runtime-dependency stance.
+#   bin/init.sh --update [--target <path>] [flags] [--diff] [--only <path>]
+#     Triage mode. Renders the current templates (flags default from the
+#     provenance stamp, so usually just --target is needed) and compares
+#     against the live files WITHOUT writing anything:
+#
+#       exit 0   everything matches the current toolkit
+#       exit 1   drift — differing and/or new upstream files, listed in a
+#                summary first; full hunks only with --diff, one file with
+#                --only <path-substring>. Merge deliberately (or run the
+#                generated /toolkit-update command and let the lead do it),
+#                then refresh the stamp:
+#
+#   bin/init.sh --refresh-stamp [--target <path>] [flags]
+#     Rewrites .agents/.toolkit-version after you have accepted a merge.
+#     This is the ONLY thing that updates the stamp besides a fresh scaffold.
+#
+# See docs/UPGRADING.md for the full workflow, CHANGELOG.md for what changed
+# per release (impact-tagged: contract > safety > process > docs).
+#
+# Requires: bash, sed, diff, git (for the stamp's SHA/tag; falls back to
+# "unknown"). Matches the rest of this toolkit's zero-runtime-dependency
+# stance.
 # END USAGE
 
 set -eu
@@ -33,13 +49,16 @@ TEMPLATES="$TOOLKIT_ROOT/templates"
 
 TARGET=""
 PROJECT_NAME=""
-CLAUDE_MODEL="sonnet"
+CLAUDE_MODEL=""
 BUILDER_MODEL=""
 REVIEWER_MODEL=""
 REVIEWER_FALLBACK_MODEL=""
 TESTER_MODEL=""
-TEST_DIR="e2e"
+TEST_DIR=""
 UPDATE=0
+SHOW_DIFF=0
+ONLY=""
+REFRESH_STAMP=0
 
 die() { printf '%s\n' "init.sh: $*" >&2; exit 1; }
 
@@ -59,26 +78,125 @@ while [ $# -gt 0 ]; do
     --tester-model)              [ $# -ge 2 ] || die "--tester-model needs a value"; TESTER_MODEL="$2"; shift 2 ;;
     --test-dir)                  [ $# -ge 2 ] || die "--test-dir needs a value"; TEST_DIR="$2"; shift 2 ;;
     --update)                    UPDATE=1; shift ;;
+    --diff)                      SHOW_DIFF=1; shift ;;
+    --only)                      [ $# -ge 2 ] || die "--only needs a value"; ONLY="$2"; shift 2 ;;
+    --refresh-stamp)             REFRESH_STAMP=1; UPDATE=1; shift ;;
     -h|--help) usage ;;
     *) die "unknown argument: $1 (try --help)" ;;
   esac
 done
 
 [ -n "$TARGET" ] || die "--target is required"
-[ -n "$PROJECT_NAME" ] || die "--project-name is required"
-[ -n "$BUILDER_MODEL" ] || die "--builder-model is required"
-[ -n "$REVIEWER_MODEL" ] || die "--reviewer-model is required"
-[ -n "$REVIEWER_FALLBACK_MODEL" ] || die "--reviewer-fallback-model is required"
-[ -n "$TESTER_MODEL" ] || die "--tester-model is required"
-
 [ -d "$TARGET" ] || die "target does not exist: $TARGET"
 TARGET="$(cd "$TARGET" && pwd)"
 
 [ "$TARGET" != "$TOOLKIT_ROOT" ] || die "refusing to scaffold into the toolkit's own checkout — pick another --target"
 
+STAMP="$TARGET/.agents/.toolkit-version"
+
+# Keep in sync with the number of check_pair/render lines below.
+RENDER_TOTAL=14
+
+write_stamp() {
+  local sha tag
+  sha="$(git -C "$TOOLKIT_ROOT" rev-parse --short HEAD 2>/dev/null || echo unknown)"
+  tag="$(git -C "$TOOLKIT_ROOT" describe --tags --always --dirty 2>/dev/null || echo unknown)"
+  {
+    printf 'toolkit_sha:   %s\n' "$sha"
+    printf 'toolkit_tag:   %s\n' "$tag"
+    printf 'scaffolded:    %s\n' "$(date +%F)"
+    printf 'project_name:  %s\n' "$PROJECT_NAME"
+    printf 'claude_model:  %s\n' "$CLAUDE_MODEL"
+    printf 'builder_model: %s\n' "$BUILDER_MODEL"
+    printf 'reviewer_model: %s\n' "$REVIEWER_MODEL"
+    printf 'reviewer_fallback_model: %s\n' "$REVIEWER_FALLBACK_MODEL"
+    printf 'tester_model:  %s\n' "$TESTER_MODEL"
+    printf 'test_dir:      %s\n' "$TEST_DIR"
+  } > "$STAMP.tmp"
+  mv "$STAMP.tmp" "$STAMP"
+}
+
+# --- resolve flag values -----------------------------------------------------
+# Fresh scaffolds take values from flags (with two long-standing defaults).
+# --update / --refresh-stamp prefer explicit flags, then fall back to the
+# provenance stamp — that is what lets "init.sh --update --target ." run
+# without re-typing the original flags and without spurious diff noise.
+
+apply_defaults() {
+  [ -n "$CLAUDE_MODEL" ] || CLAUDE_MODEL="sonnet"
+  [ -n "$TEST_DIR" ] || TEST_DIR="e2e"
+}
+
+load_stamp_value() { # $1 = key, sets REPLY
+  REPLY="$(sed -n "s/^$1: *//p" "$STAMP" | head -1)"
+}
+
+if [ "$UPDATE" -eq 1 ]; then
+  if [ -f "$STAMP" ]; then
+    for spec in \
+      "project_name|PROJECT_NAME" \
+      "claude_model|CLAUDE_MODEL" \
+      "builder_model|BUILDER_MODEL" \
+      "reviewer_model|REVIEWER_MODEL" \
+      "reviewer_fallback_model|REVIEWER_FALLBACK_MODEL" \
+      "tester_model|TESTER_MODEL" \
+      "test_dir|TEST_DIR"; do
+      key="${spec%%|*}"; var="${spec##*|}"
+      if [ -z "${!var}" ]; then
+        load_stamp_value "$key"
+        # printf -v: portable indirect assignment (bash's ${!var:=x} does
+        # not actually assign on the macOS-shipped bash 3.2).
+        [ -n "$REPLY" ] && printf -v "$var" '%s' "$REPLY"
+      fi
+    done
+  else
+    # No stamp (pre-provenance scaffold): fall back to the old defaults so
+    # --update still works; passing the original flags explicitly avoids any
+    # spurious noise on substituted lines.
+    apply_defaults
+  fi
+
+  missing=""
+  for spec in \
+    "project_name|--project-name" \
+    "builder_model|--builder-model" \
+    "reviewer_model|--reviewer-model" \
+    "reviewer_fallback_model|--reviewer-fallback-model" \
+    "tester_model|--tester-model"; do
+    key="${spec%%|*}"; flag="${spec##*|}"
+    val=""
+    case "$key" in
+      project_name)             val="$PROJECT_NAME" ;;
+      builder_model)            val="$BUILDER_MODEL" ;;
+      reviewer_model)           val="$REVIEWER_MODEL" ;;
+      reviewer_fallback_model)  val="$REVIEWER_FALLBACK_MODEL" ;;
+      tester_model)             val="$TESTER_MODEL" ;;
+    esac
+    [ -n "$val" ] || missing="$missing $flag"
+  done
+  [ -z "$missing" ] || die "no provenance stamp at $STAMP and these flags are unset:$missing
+  (pass them once, exactly as at the original init, or scaffold freshly to get a stamp)"
+
+  if [ "$REFRESH_STAMP" -eq 1 ]; then
+    apply_defaults
+    mkdir -p "$(dirname "$STAMP")"
+    write_stamp
+    printf 'init.sh: refreshed %s\n' "$STAMP"
+    exit 0
+  fi
+else
+  apply_defaults
+  [ -n "$PROJECT_NAME" ] || die "--project-name is required"
+  [ -n "$BUILDER_MODEL" ] || die "--builder-model is required"
+  [ -n "$REVIEWER_MODEL" ] || die "--reviewer-model is required"
+  [ -n "$REVIEWER_FALLBACK_MODEL" ] || die "--reviewer-fallback-model is required"
+  [ -n "$TESTER_MODEL" ] || die "--tester-model is required"
+fi
+
 # Captured before any render() call touches the target, so it reflects
 # whether this is the very first scaffold of this project — used below to
-# decide whether to drop the first-run customization marker.
+# decide whether to drop the first-run customization marker and write the
+# provenance stamp.
 FRESH_SCAFFOLD=0
 [ -f "$TARGET/.claude/commands/feature.md" ] || FRESH_SCAFFOLD=1
 
@@ -94,24 +212,95 @@ SED_ARGS=(
   -e "s|__TEST_DIR__|$TEST_DIR|g"
 )
 
-render() {
-  # $1 = template file, $2 = destination file
-  if [ "$UPDATE" -eq 1 ]; then
+if [ "$UPDATE" -eq 1 ]; then
+  # --- triage mode -------------------------------------------------------
+  # Summary first, hunks on demand (docs/UPGRADING.md Stage 3). A wall of
+  # raw diff is why nobody merged updates; a list of files plus the
+  # changelog's impact tags is what makes merging a decision instead of a
+  # chore.
+  DIFFS=()
+  NEW_UPSTREAM=()
+  MATCHED=0
+  TOTAL=0
+
+  note_result() { # $1 = status (same|differ|new), $2 = dest
+    TOTAL=$((TOTAL + 1))
+    case "$1" in
+      differ) DIFFS+=("$2") ;;
+      new)    NEW_UPSTREAM+=("$2") ;;
+      same)   MATCHED=$((MATCHED + 1)) ;;
+    esac
+  }
+
+  check_pair() { # $1 = template, $2 = destination
+    if [ -n "$ONLY" ]; then
+      case "$2" in *"$ONLY"*) ;; *) return ;; esac
+    fi
     tmp="$(mktemp)"
     sed "${SED_ARGS[@]}" "$1" > "$tmp"
     if [ ! -f "$2" ]; then
-      printf 'init.sh: %s does not exist yet (new upstream file — re-run without --update to add it)\n' "$2"
+      note_result new "$2"
     elif diff -u "$2" "$tmp" > /dev/null 2>&1; then
-      printf 'init.sh: up to date — %s\n' "$2"
+      note_result same "$2"
     else
-      printf 'init.sh: upstream changes for %s\n' "$2"
-      diff -u "$2" "$tmp" || true
-      printf '\n'
+      note_result differ "$2"
+      if [ "$SHOW_DIFF" -eq 1 ]; then
+        printf 'init.sh: upstream changes for %s\n' "$2"
+        diff -u "$2" "$tmp" || true
+        printf '\n'
+      fi
     fi
     rm -f "$tmp"
-    return
+  }
+
+  check_pair "$TEMPLATES/claude/agents/planner.md.tmpl"    "$TARGET/.claude/agents/planner.md"
+  check_pair "$TEMPLATES/claude/agents/senior-dev.md.tmpl" "$TARGET/.claude/agents/senior-dev.md"
+  check_pair "$TEMPLATES/claude/commands/feature.md.tmpl"  "$TARGET/.claude/commands/feature.md"
+  check_pair "$TEMPLATES/claude/commands/toolkit-update.md.tmpl" "$TARGET/.claude/commands/toolkit-update.md"
+  check_pair "$TEMPLATES/opencode/agent/builder.md.tmpl"   "$TARGET/.opencode/agent/builder.md"
+  check_pair "$TEMPLATES/opencode/agent/reviewer.md.tmpl"  "$TARGET/.opencode/agent/reviewer.md"
+  check_pair "$TEMPLATES/opencode/agent/tester.md.tmpl"    "$TARGET/.opencode/agent/tester.md"
+  check_pair "$TEMPLATES/agents-state/TEMPLATE.md.tmpl"    "$TARGET/.agents/TEMPLATE.md"
+  check_pair "$TEMPLATES/scripts/oc.sh.tmpl"               "$TARGET/scripts/oc.sh"
+  check_pair "$TEMPLATES/scripts/team.sh.tmpl"             "$TARGET/scripts/team.sh"
+  check_pair "$TEMPLATES/scripts/team-completion.bash.tmpl" "$TARGET/scripts/team-completion.bash"
+  check_pair "$TEMPLATES/scripts/verify-state.sh.tmpl"     "$TARGET/scripts/verify-state.sh"
+  check_pair "$TEMPLATES/scripts/verify-spec.sh.tmpl"      "$TARGET/scripts/verify-spec.sh"
+  check_pair "$TEMPLATES/scripts/promote-findings.sh.tmpl" "$TARGET/scripts/promote-findings.sh"
+
+  CUR_SHA="$(git -C "$TOOLKIT_ROOT" rev-parse --short HEAD 2>/dev/null || echo unknown)"
+  printf 'init.sh: toolkit is at %s; checking %s rendered file(s)%s\n' \
+    "$CUR_SHA" "$TOTAL" "${ONLY:+ (filtered by --only '$ONLY'; full set is $RENDER_TOTAL)}"
+  if [ -f "$STAMP" ]; then
+    load_stamp_value toolkit_sha
+    STAMPED_SHA="$REPLY"
+    load_stamp_value scaffolded
+    printf 'init.sh: this project scaffolded from %s (%s)\n' "${STAMPED_SHA:-unknown}" "${REPLY:-unknown date}"
   fi
 
+  DRIFT=0
+  if [ "${#NEW_UPSTREAM[@]}" -gt 0 ]; then
+    DRIFT=1
+    printf 'init.sh: %s new upstream file(s) — re-run without --update to add:\n' "${#NEW_UPSTREAM[@]}"
+    for f in "${NEW_UPSTREAM[@]}"; do printf '  new      %s\n' "$f"; done
+  fi
+  if [ "${#DIFFS[@]}" -gt 0 ]; then
+    DRIFT=1
+    printf 'init.sh: %s of %s files differ from the current toolkit:\n' "${#DIFFS[@]}" "$TOTAL"
+    for f in "${DIFFS[@]}"; do printf '  differs  %s\n' "$f"; done
+    printf 'init.sh: triage against CHANGELOG.md impact tags (contract > safety > process > docs).\n'
+    printf 'init.sh: hunks suppressed — re-run with --diff, or --only <path-substring> [--diff] for one file.\n'
+  fi
+  if [ "$DRIFT" -eq 0 ]; then
+    printf 'init.sh: up to date — all %s checked files match the current toolkit.\n' "$TOTAL"
+  fi
+  printf 'init.sh: nothing was written. After merging, refresh the stamp: bin/init.sh --refresh-stamp --target %s\n' "$TARGET"
+  exit "$DRIFT"
+fi
+
+# --- normal scaffold ---------------------------------------------------------
+render() {
+  # $1 = template file, $2 = destination file
   if [ -f "$2" ]; then
     printf 'init.sh: skip (exists) %s\n' "$2"
     return
@@ -124,6 +313,7 @@ render() {
 render "$TEMPLATES/claude/agents/planner.md.tmpl"    "$TARGET/.claude/agents/planner.md"
 render "$TEMPLATES/claude/agents/senior-dev.md.tmpl" "$TARGET/.claude/agents/senior-dev.md"
 render "$TEMPLATES/claude/commands/feature.md.tmpl"  "$TARGET/.claude/commands/feature.md"
+render "$TEMPLATES/claude/commands/toolkit-update.md.tmpl" "$TARGET/.claude/commands/toolkit-update.md"
 render "$TEMPLATES/opencode/agent/builder.md.tmpl"   "$TARGET/.opencode/agent/builder.md"
 render "$TEMPLATES/opencode/agent/reviewer.md.tmpl"  "$TARGET/.opencode/agent/reviewer.md"
 render "$TEMPLATES/opencode/agent/tester.md.tmpl"    "$TARGET/.opencode/agent/tester.md"
@@ -135,18 +325,6 @@ render "$TEMPLATES/scripts/verify-state.sh.tmpl"     "$TARGET/scripts/verify-sta
 render "$TEMPLATES/scripts/verify-spec.sh.tmpl"      "$TARGET/scripts/verify-spec.sh"
 render "$TEMPLATES/scripts/promote-findings.sh.tmpl" "$TARGET/scripts/promote-findings.sh"
 
-if [ "$UPDATE" -eq 1 ]; then
-  cat <<MSG
-
-init.sh: --update done. Nothing was written above — those are diffs between
-the current templates and what's already in $TARGET. Merge by hand, or hand
-this output to your AI lead and ask it to reconcile against anything you've
-customized locally.
-
-MSG
-  exit 0
-fi
-
 chmod +x "$TARGET/scripts/oc.sh" "$TARGET/scripts/team.sh" \
          "$TARGET/scripts/verify-state.sh" "$TARGET/scripts/verify-spec.sh" \
          "$TARGET/scripts/promote-findings.sh" 2>/dev/null || true
@@ -154,6 +332,15 @@ chmod +x "$TARGET/scripts/oc.sh" "$TARGET/scripts/team.sh" \
 mkdir -p "$TARGET/.agents"
 if [ "$FRESH_SCAFFOLD" -eq 1 ]; then
   touch "$TARGET/.agents/.needs-customization"
+fi
+
+# Provenance stamp — written exactly once, on a genuine fresh scaffold,
+# never by --update (that would erase the baseline it exists to record).
+# Same "computed before any render()" ordering rule as .needs-customization.
+# Committed, unlike .oc-port: it describes the project, not this laptop.
+if [ "$FRESH_SCAFFOLD" -eq 1 ] && [ ! -f "$STAMP" ]; then
+  write_stamp
+  printf 'init.sh: wrote %s\n' "$STAMP"
 fi
 
 # .agents/.oc-port is local machine state (which port scripts/team.sh last
@@ -196,7 +383,8 @@ Next steps:
      is Claude-specific), do that pass yourself, once, by hand — and
      delete the marker file when done.
   6. Later, once the toolkit itself has moved on: bin/init.sh --update
-     (same flags as above) shows you what changed upstream, without
-     writing anything.
+     --target $TARGET shows a drift summary (exit 1 = something to merge),
+     and /toolkit-update walks your lead through the merge. Refresh the
+     stamp afterwards: bin/init.sh --refresh-stamp --target $TARGET.
 
 MSG

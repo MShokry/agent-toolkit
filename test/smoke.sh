@@ -46,15 +46,23 @@ leftovers="$(grep -rl '__[A-Z_]*__' "$TMP" || true)"
 ok "no unsubstituted __PLACEHOLDER__ tokens"
 
 wrote="$(grep -c '^init.sh: wrote ' "$TMP/run1.log" || true)"
-# Exclude this log and the customization marker — only rendered files should
-# pair 1:1 with "wrote" lines.
+# Exclude this log and the customization marker; the provenance stamp is
+# counted separately since it is written once, not rendered per-template.
+stamp_written=0; [ -f "$TMP/.agents/.toolkit-version" ] && stamp_written=1
 files="$(find "$TMP" -type f -not -name run1.log \
-  -not -name .needs-customization | wc -l | tr -d ' ')"
-[ "$wrote" = "$files" ] || fail "claimed $wrote writes but $files files exist"
-ok "every reported write produced exactly one file ($files files)"
+  -not -name .needs-customization -not -name .toolkit-version | wc -l | tr -d ' ')"
+[ "$wrote" = "$((files + stamp_written))" ] || fail "claimed $wrote writes but $((files + stamp_written)) files exist"
+ok "every reported write produced exactly one file ($files rendered + stamp)"
 
 [ -f "$TMP/.agents/.needs-customization" ] || fail ".needs-customization marker missing on fresh scaffold"
 ok "first-run customization marker dropped"
+
+STAMP="$TMP/.agents/.toolkit-version"
+[ -f "$STAMP" ] || fail "provenance stamp missing on fresh scaffold"
+grep -q '^toolkit_sha:' "$STAMP" || fail "stamp lacks toolkit_sha"
+grep -q '^builder_model: a/b' "$STAMP" || fail "stamp does not record the init flags"
+cp "$STAMP" "$TMP/stamp.bak"
+ok "fresh scaffold wrote the provenance stamp with flags + toolkit SHA"
 
 # --- 2. second run skips, never clobbers ------------------------------------
 cp "$TMP/.claude/commands/feature.md" "$TMP/feature.sentinel"
@@ -68,26 +76,60 @@ skips="$(grep -c '^init.sh: skip (exists)' "$TMP/run2.log" || true)"
 grep -q 'LOCAL CUSTOMIZATION' "$TMP/.claude/commands/feature.md" \
   || fail "second run clobbered a customized file"
 [ ! -f "$TMP/.agents/.needs-customization" ] || fail "marker recreated on non-fresh run"
-ok "re-run skipped all $files files, preserved local edits, marker stayed deleted"
+cmp -s "$TMP/stamp.bak" "$TMP/.agents/.toolkit-version" 2>/dev/null \
+  || fail "second run touched the provenance stamp"
+ok "re-run skipped all $files files, preserved local edits, marker + stamp untouched"
 # restore the pristine render so the --update checks below start clean
 mv "$TMP/feature.sentinel" "$TMP/.claude/commands/feature.md"
 
-# --- 3. --update: clean target is all up-to-date ----------------------------
-upd="$(bash "$ROOT/bin/init.sh" --update "${INIT_ARGS[@]}" 2>&1)"
-n_up2date="$(printf '%s\n' "$upd" | grep -c '^init.sh: up to date — ' || true)"
-[ "$n_up2date" = "$files" ] || fail "--update: $n_up2date up-to-date, expected $files"
-printf '%s\n' "$upd" | grep -q '^init.sh: upstream changes' && fail "--update reported changes on a clean target"
-printf '%s\n' "$upd" | grep -q 'does not exist yet' && fail "--update thinks a live file is missing"
-ok "--update: all $files files report up to date, nothing written"
+# --- 3. provenance stamp ------------------------------------------------------
 
-# --- 4. --update: drifted file produces exactly one diff ---------------------
+# --- 4. --update (triage mode): clean target, flags defaulted from stamp ------
+rc=0
+bash "$ROOT/bin/init.sh" --update --target "$TMP" > "$TMP/upd1.log" 2>&1 || rc=$?
+[ "$rc" = "0" ] || { cat "$TMP/upd1.log"; fail "--update exited $rc on a clean target, expected 0"; }
+grep -q "all $files checked files match" "$TMP/upd1.log" || fail "--update summary missing on a clean target"
+ok "--update: flag-free run defaults from the stamp; clean target exits 0"
+
+# --- 5. --update: drift is summarized, exit 1, hunks only behind --diff -------
 printf '\n' >> "$TMP/.agents/TEMPLATE.md"
-upd="$(bash "$ROOT/bin/init.sh" --update "${INIT_ARGS[@]}" 2>&1)"
-changes="$(printf '%s\n' "$upd" | grep -c '^init.sh: upstream changes for ' || true)"
-[ "$changes" = "1" ] || fail "--update: $changes diffs after drifting one file, expected 1"
-printf '%s\n' "$upd" | grep -q '^init.sh: upstream changes for .*TEMPLATE.md$' \
-  || fail "--update flagged the wrong file"
-ok "--update: drifted file reported as exactly one upstream diff"
+rc=0
+bash "$ROOT/bin/init.sh" --update --target "$TMP" > "$TMP/upd2.log" 2>&1 || rc=$?
+[ "$rc" = "1" ] || fail "--update exited $rc on a drifted target, expected 1"
+differ="$(grep -c '^  differs  ' "$TMP/upd2.log" || true)"
+[ "$differ" = "1" ] || fail "--update summary listed $differ differing files after drifting one, expected 1"
+grep -q 'differs  .*TEMPLATE.md' "$TMP/upd2.log" || fail "--update flagged the wrong file"
+! grep -q '^--- \|^+++ \|^@@ ' "$TMP/upd2.log" || fail "--update leaked hunks without --diff"
+cmp -s "$STAMP" "$TMP/stamp.bak" || fail "--update modified the provenance stamp"
+rc=0
+bash "$ROOT/bin/init.sh" --update --target "$TMP" --only TEMPLATE.md --diff > "$TMP/upd3.log" 2>&1 || rc=$?
+[ "$rc" = "1" ] || fail "--only --diff exited $rc, expected 1"
+grep -q '^@@ ' "$TMP/upd3.log" || fail "--diff mode printed no hunks"
+grep -q "filtered by --only" "$TMP/upd3.log" || fail "--only filter not reported"
+ok "--update: drift → exit 1, summary-only by default, hunks behind --diff/--only, stamp untouched"
+
+# --- 5b. --refresh-stamp rewrites the baseline --------------------------------
+printf '\n# touched\n' >> "$STAMP"
+rc=0
+bash "$ROOT/bin/init.sh" --refresh-stamp --target "$TMP" > /dev/null 2>&1 || rc=$?
+[ "$rc" = "0" ] || fail "--refresh-stamp failed"
+! grep -q '^# touched' "$STAMP" || fail "--refresh-stamp did not rewrite the stamp"
+grep -q '^toolkit_sha:' "$STAMP" || fail "rewritten stamp lost its fields"
+ok "--refresh-stamp rewrites the provenance stamp (the only post-scaffold writer)"
+
+# --- 5c. --update without a stamp falls back to flags -------------------------
+mv "$STAMP" "$TMP/stamp.hold"
+rc=0
+bash "$ROOT/bin/init.sh" --update "${INIT_ARGS[@]}" > "$TMP/upd5.log" 2>&1 || rc=$?
+[ "$rc" = "1" ] || fail "stamp-less --update with explicit flags exited $rc, expected 1 (known drift)"
+grep -q 'scaffolded from' "$TMP/upd5.log" && fail "claimed a stamp baseline without a stamp"
+if bash "$ROOT/bin/init.sh" --update --target "$TMP" >/dev/null 2>&1; then
+  fail "--update without a stamp or flags should fail loudly, not guess defaults silently"
+fi
+mv "$TMP/stamp.hold" "$STAMP"
+ok "--update without a stamp requires explicit flags and says so"
+
+# leave the deliberate TEMPLATE.md drift in place; later sections don't read it
 
 # --- 5. self-target guard ---------------------------------------------------
 if bash "$ROOT/bin/init.sh" --target "$ROOT" --project-name x \

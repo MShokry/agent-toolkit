@@ -1,5 +1,13 @@
 # Keeping a scaffolded project up to date with this toolkit
 
+> **Status: implemented.** Stages 1–5 below are live as of v0.3.0:
+> `init.sh` writes the provenance stamp and defaults `--update` flags from
+> it; `--update` is a triage tool (summary-first, `--diff`/`--only`,
+> exit 0/1); `CHANGELOG.md` carries impact-tagged entries; the first real
+> migration lives in `migrations/01-delivery-contract.md`; and
+> `/toolkit-update` is rendered into scaffolded projects. This file is now
+> reference documentation for how it works and why.
+
 `bin/init.sh --update` already does the mechanical half: render the
 current templates, `diff -u` each one against the live file in the target,
 write nothing. What is missing is everything *around* it — which is why

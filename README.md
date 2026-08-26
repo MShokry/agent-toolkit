@@ -92,6 +92,9 @@ bin/init.sh           the scaffolder — copies templates/ into a target repo
                         that's already scaffolded, writes nothing)
 test/smoke.sh         automated smoke test for the guarantees above (run by CI)
 test/invariants.sh    asserts every load-bearing rule is present in each of the
+CHANGELOG.md          impact-tagged per-release changes ([contract] › [safety]
+                      › [process] › [docs]) — read this before merging an update
+migrations/           hand-appliable notes for [contract] changes only
                         hand-synced copies that must carry it (run by CI) —
                         catches the omission that hand-syncing keeps producing
 templates/             every generated file, with __PLACEHOLDER__ tokens
@@ -142,10 +145,12 @@ skills/
 ## Quick start
 
 ```bash
+git clone https://github.com/MShokry/agent-toolkit ~/tools/agent-toolkit
+
 cd /path/to/some/other/project
 opencode models          # see what's actually configured before picking models
 
-/path/to/agent-toolkit/bin/init.sh \
+~/tools/agent-toolkit/bin/init.sh \
   --target . \
   --project-name "my-project" \
   --claude-model sonnet \
@@ -172,12 +177,42 @@ aggregator plus Claude is better than a new toolkit tool per lab: see
 prints `skip (exists)` and leaves it alone, so re-running is safe and an
 existing project's customizations survive.
 
-`init.sh --update` (same flags) never writes anything either — it renders
-the current templates into a temp file and diffs each one against what's
-already in `--target`, so you can see what changed upstream since this
-project was scaffolded and merge by hand (or hand the diff to your AI lead
-to reconcile). Pass the same model/name flags used at the original init, or
-every substituted line shows up as spurious diff noise.
+`init.sh --update` never writes anything either — it renders the current
+templates into a temp file and compares each one against what's already in
+`--target`, printing a drift **summary** first (`exit 0` = clean, `exit 1`
+= something to merge; full hunks behind `--diff`, one file via
+`--only <path>`). On any scaffold after v0.3.0, flags default from
+`.agents/.toolkit-version` — the provenance stamp written at init — so
+usually just `--update --target .` is needed. Merge deliberately (or run
+the generated `/toolkit-update` command and let your lead reconcile,
+triaging against the impact-tagged `CHANGELOG.md`), then refresh the
+baseline: `bin/init.sh --refresh-stamp --target .`. Full workflow:
+[`docs/UPGRADING.md`](docs/UPGRADING.md).
+
+### Updating a project scaffolded before v0.3.0
+
+Older scaffolds have no `.agents/.toolkit-version` stamp. One-time
+migration — in the *target* project:
+
+1. **Get the latest toolkit on disk** (this is what you update against):
+   `git -C <toolkit-checkout> pull`, or
+   `git clone https://github.com/MShokry/agent-toolkit` if it isn't
+   cloned yet.
+2. Run `/toolkit-update` and give it the checkout path — or by hand,
+   `bin/init.sh --update --target .` plus the ORIGINAL init flags
+   (`--project-name`, `--builder-model`, …). Without a stamp they are
+   required; this prints the drift summary.
+3. Merge in `CHANGELOG.md` impact order. Coming from ≤ v0.2.x also apply
+   `migrations/01-delivery-contract.md` to `.agents/TEMPLATE.md` and any
+   in-flight `.agents/T-*.md` (bare `blocked` still validates; nothing
+   breaks if you skip it — you just don't get the new guarantees).
+4. Run one plain, flag-free `bin/init.sh --target .` — skip-if-exists
+   makes this safe — to add the files your scaffold predates
+   (`/toolkit-update`, `scripts/verify-spec.sh`).
+5. Create the baseline: `bin/init.sh --refresh-stamp --target .`.
+
+Every later update is then just: pull the toolkit → `/toolkit-update` →
+done.
 
 ## Using it
 

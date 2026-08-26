@@ -1,0 +1,69 @@
+---
+description: Merge upstream agent-toolkit changes into this project — triaged by impact tag, never silently overwriting local customizations. Run at a task boundary, never mid-task.
+---
+
+Update this project's copy of the agent pipeline from the toolkit checkout
+(the repo `bin/init.sh` was originally run from; ask the user for its path
+if you can't find it).
+
+You are reconciling, not upgrading blindly. Every generated file here is
+meant to have been customized locally — that is the whole point of this
+project's own copies.
+
+## Hard gates
+
+- **Task boundary only.** If any `.agents/T-*.md` is in flight (Status not
+  `done`), stop and tell the user to finish or park it first — changing
+  the state-file contract under a running task is how an in-flight task
+  ends up half on each contract.
+- **Permission blocks are never auto-applied.** Any hunk touching a
+  `permission:` or `tools:` block is shown to the user and applied only on
+  their explicit yes — and carries the standing rule: verify it live
+  against the real OpenCode server before trusting it.
+- **Never overwrite a local customization silently.** Where upstream and
+  local both changed, present three options: take upstream, keep local, or
+  hand-merge. The user picks.
+
+## Steps
+
+1. Locate the toolkit checkout (the repo this project was scaffolded from;
+   ask the user for its path if you can't find it) and bring it to its
+   latest version — that is what you will update *against*:
+   `git -C <toolkit-path> pull` — or clone it first if it isn't on disk:
+   `git clone https://github.com/MShokry/agent-toolkit`. Report the
+   SHA/branch you landed on.
+2. Read `.agents/.toolkit-version` — note `toolkit_sha`/`toolkit_tag` and
+   `scaffolded`. This is your baseline — the diff is always *current
+   toolkit templates vs your live files*, and the changelog entries that
+   matter are those added after this baseline. If it doesn't exist, this
+   is a pre-v0.3.0 scaffold: ask the user for the original init flags
+   before going further, and expect to create the stamp at step 6.
+3. Run `bin/init.sh --update --target .` (from the toolkit checkout path).
+   Exit 0 means nothing to do — report that and stop. Exit 1 lists the
+   differing/new files.
+4. Read `CHANGELOG.md` in the toolkit checkout for every entry after the
+   baseline SHA/tag.
+5. Work the list in impact order: **`[contract]` first** (state-file
+   contract, role authority, script interfaces — check `migrations/` for a
+   numbered note applying to this change), then **`[safety]`**, then
+   **`[process]`**, then **`[docs]`**. Structural scripts
+   (`verify-state.sh`, `verify-spec.sh`, `promote-findings.sh`) count as
+   safety: an old script against a new template silently loses guarantees
+   rather than failing loudly.
+6. For each file: run
+   `bin/init.sh --update --target . --only <path-substring> --diff`
+   to see exactly that file's hunks. Show the user what changed upstream,
+   what this project customized locally (git diff/log on the file helps),
+   and propose the merge. Apply with their chosen option. New upstream
+   files (ones this project doesn't have at all) are added by one plain,
+   flag-free `bin/init.sh --target .` run — skip-if-exists makes that
+   safe: it writes only the missing files and touches nothing else.
+7. **After all merges are applied**, create or refresh the baseline:
+   `bin/init.sh --refresh-stamp --target .` (on a pre-v0.3.0 project this
+   writes the stamp for the first time — future updates then need no
+   flags).
+8. Re-run `bin/init.sh --update --target .` — it must now exit 0. Then run
+   `scripts/verify-state.sh` on the most recent task's state file as a
+   smoke check that the contract still parses.
+9. Report: merged / kept-local / deferred (with reasons), and record one
+   line in the project's tracking doc noting the new toolkit version.

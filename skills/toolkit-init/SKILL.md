@@ -7,8 +7,8 @@ description: Scaffold the multi-agent pipeline (planner/implementer/reviewer/tes
 
 Bootstraps the current project with the same planner → implement → review →
 test pipeline used elsewhere, backed by `bin/init.sh` in the toolkit repo
-(wherever it's cloned — ask the user for the path if you can't find a
-checkout; nothing in this skill assumes a fixed location).
+(https://github.com/MShokry/agent-toolkit — clone it if it isn't on disk,
+and ask the user for the path of an existing checkout).
 
 ## What you need from the user before running it
 
@@ -32,6 +32,7 @@ Ask these up front rather than guessing — they shape every generated file:
 ## Run it
 
 ```bash
+# e.g. ~/tools/agent-toolkit/bin/init.sh after cloning the repo
 /path/to/agent-toolkit/bin/init.sh \
   --target . \
   --project-name "<name>" \
@@ -43,17 +44,20 @@ Ask these up front rather than guessing — they shape every generated file:
   --test-dir "<e2e or similar>"
 ```
 
-It writes `.claude/agents/`, `.opencode/agent/`, `.claude/commands/feature.md`,
-`.agents/TEMPLATE.md`, and `scripts/{oc.sh,team.sh,verify-state.sh,
-verify-spec.sh,promote-findings.sh}` into the target. It does **not** overwrite a file that
-already exists — it prints what it skipped so you can diff and merge by
-hand.
+It writes `.claude/agents/`, `.opencode/agent/`, `.claude/commands/{feature.md,
+toolkit-update.md}`, `.agents/{TEMPLATE.md,.toolkit-version}`, and
+`scripts/{oc.sh,team.sh,verify-state.sh,verify-spec.sh,promote-findings.sh}`
+into the target. It does **not** overwrite a file that already exists — it
+prints what it skipped so you can diff and merge by hand.
 
-When the toolkit itself has moved on since this project was scaffolded, add
-`--update` to the same command (same flags) instead of re-running it plain.
-It writes nothing — it renders the current templates and prints a `diff -u`
-against each live file that changed, for the user (or you) to merge by
-hand.
+When the toolkit itself has moved on since this project was scaffolded,
+run the same command with `--update` instead (flags default from
+`.agents/.toolkit-version`, so `--update --target .` is usually enough).
+It writes nothing — it prints a drift summary and exits 1 when files
+differ; add `--diff`/`--only <path>` for hunks. Triage against the
+toolkit's impact-tagged `CHANGELOG.md`, merge deliberately, then refresh
+the baseline with `--refresh-stamp`. In a scaffolded project your lead can
+do all of this via the generated `/toolkit-update` command.
 
 ## If the user wants a worker role under a tool this doesn't already template
 
