@@ -26,10 +26,14 @@ without reading prose:
 | ⬜ | `[OPEN]` — remains, by design or by choice |
 | 🔶 | `[REC]` — recommendation awaiting your call |
 
-**Where this file stands:** 15 ✅ done · 1 ✅⬜ done-with-a-step-owed ·
-4 ⬜ open by choice · 5 🔶 awaiting your decision. Everything in Part 1
-except §3.3 and the two editorial calls in §4 is closed; the live backlog
-is Part 2's O1–O4, O7 and the owed live verification in §1.3.
+**Where this file stands:** 19 ✅ done · 1 ✅⬜ done-with-a-step-owed ·
+4 ⬜ open by choice · 2 🔶 awaiting your decision. Part 1 is closed except
+§3.3 and the two editorial calls in §4. Part 2's **O2, O4, O6 and O7's free
+half are now applied** (see each finding's *Applied* note). What is left:
+**O1 and O3**, which REVIEW-2 recommends folding into one task-class
+mechanism rather than shipping as two conditional rules — that needs your
+decision, not more code — and the owed live permission verification in
+§1.3, which needs a real server.
 
 ---
 
@@ -193,7 +197,13 @@ session for review/test whenever the diff touches permission blocks,
 sensitive; session reuse stays the default for routine diffs. One sentence
 in `feature.md` step 3 plus a Decisions-log note when deviating.
 
-### 🔶 O2 — Organizational memory needs two opt-ins to fire `[REC]`
+### ✅ O2 — Organizational memory needs two opt-ins to fire — **DONE**
+
+> **Applied.** `feature.md` step 5 now ends with one unconditional ask —
+> "is there anything about *how this ran* worth writing down?" — and the
+> lead adds the sentence itself in the same turn, saying what it changed.
+> The manual, consented version, with no skill granted standing edit rights.
+> Mirrored into `flow-example.md`.
 
 Project facts need the lead to remember `promote-findings.sh`;
 orchestration lessons need self-improvement, which is off by default;
@@ -219,7 +229,15 @@ stronger reviewer instead of the default, recorded like the vendor-
 substitution note. Cheap, mechanical, closes the gap where it actually
 opens.
 
-### 🔶 O4 — Test-failure loops have no budget `[REC]` *(the one real org bug)*
+### ✅ O4 — Test-failure loops have no budget — **DONE** *(was the one real org bug)*
+
+> **Applied**, generalized past the original recommendation. Three separate
+> counters now live in the state file — *Review loop count* (2), *Test-fix
+> loops* (2), *Spec bounces* (1) — and `verify-state.sh` parses and enforces
+> each numerically, plus a run-count guard for a file whose counter was never
+> updated. Blowing any budget is an escalation to you, and all three are on
+> the stop-and-ask list. Smoke-covered. See also REVIEW-2 D5, which shipped
+> the spec-bounce path this budget counts.
 
 Review loops are capped at two, structurally enforced by `verify-state.sh`
 (Pass 3 fails loudly). Test failures route "back to the implementer as a
@@ -243,7 +261,12 @@ loud somewhere: one task at a time per lead/session, parallel work means
 parallel projects (port-per-project already supported), not parallel tasks
 inside one pipeline.
 
-### ⬜ O6 — Team onboarding fires once, Claude-only `[OPEN]` (minor)
+### ✅ O6 — Team onboarding fires once, Claude-only — **DONE**
+
+> **Applied.** `SYSTEM.md`'s "how to become the lead" checklist gained a
+> step 0: if the first-run customization marker exists, do that pass with
+> the human before running anything, then delete it — closing the hole where
+> a non-Claude lead never executes the Claude-specific check that owns it.
 
 `.needs-customization` gives the team its project-specific induction
 exactly once, via `feature.md` — which only a Claude Code lead executes.
@@ -252,7 +275,14 @@ hand. Easy to skip. A line in SYSTEM.md's "become the lead" checklist
 ("if `.agents/.needs-customization` exists, do the customization pass
 first") would close it for free.
 
-### 🔶 O7 — No health metrics anywhere `[REC]` (low priority)
+### ✅🔶 O7 — No health metrics anywhere — **free half DONE**
+
+> **Free half applied.** Step 5's report now includes loops used — review
+> R/2, test-fix T/2, spec bounces S/1 — read straight from the state file.
+> O4's counters gave it a home, exactly as this finding predicted. The rest
+> (wall-clock per phase, retries) stays unbuilt on purpose: D2 made statuses
+> actually transition, so phase timing is now *derivable* if you ever want
+> it, but nothing here instruments it.
 
 Loops used, wall-clock per phase, retries hit — none of it is rolled up.
 You can't manage (or tune model picks for) a team whose only observable
@@ -268,12 +298,106 @@ is the final report. Cheapest version: have step 5's report include
 
 ---
 
-# Remaining work (both parts)
+# Part 3 — Operating instructions (derived from real usage)
 
-1. 🔶 `[REC]` Decide O4 (loop budget) — say go and it's a ~20-line change incl. smoke coverage
+Context: the intended operating model was verified against the templates —
+small–medium features only; the human approves once at spec time and again
+at merge; worker roles run in bounded minutes-long bursts while only the
+lead's session spans the whole feature; oversized tasks get split before
+implementation. These instructions encode that model for both parties.
+
+## For the human running the system
+
+**Task selection**
+
+- Feed it small–medium features: roughly ≤7 checkable acceptance criteria
+  against a handful of files. Anything broader — say "split it" when the
+  lead asks, and let each piece run through the pipeline separately.
+- Wrong tool for: one-line fixes (pipeline ceremony exceeds the work),
+  exploratory/unknown-scope work (spec-first fights discovery), anything
+  needing several features in flight at once (one task per lead).
+
+**With mid-tier worker models** (Kimi/GLM/DeepSeek-class builder/reviewer/
+tester):
+
+- Keep tasks *small* — one concern per task. Mid models' instruction-
+  following degrades on long multi-goal runs faster than their coding does.
+- Spot-check **one** acceptance criterion yourself before approving any
+  merge. The state file says a criterion passed; you are the only floor
+  under a same-session, cheap-model reviewer.
+- For sensitive diffs (permissions, auth, data handling, scaffolder
+  mechanics), have the lead fork a fresh session for review instead of
+  reusing the implementer's — independence in context, not just vendor.
+- Before trusting "builder can't commit/push" or "reviewer can't edit,"
+  run the live verification **once**: dispatch the agent, make it try,
+  confirm refusal. YAML ≠ enforcement until proven otherwise.
+
+**With strong/frontier worker models:**
+
+- The band widens somewhat — larger diffs and fewer splits are survivable
+  because comprehension and instruction-following hold longer.
+- Nothing else changes. Loop caps, approval gates, and spot-checks exist
+  because of failure modes model strength does not fix (flaky suites,
+  anchoring bias, silent scope drift). Do not trade gates for confidence.
+
+**Always**
+
+- Expect exactly two routine interruptions per feature: spec approval and
+  merge approval. Silence between them is normal. The other stop-and-ask
+  points (open question, new dependency, third loop, disagreement) are
+  emergency brakes — being asked there means something surprising
+  happened; read what it is rather than rubber-stamping.
+- The system cannot run unattended to a merge. If nobody is at the gates,
+  it stalls by design — that is the safety working, not a bug.
+
+## For the lead agent
+
+These are standing rules; they describe your job, not suggestions:
+
+1. **Ask once, up front.** Bundle every setup question (approval,
+   auto-mode, split-vs-single) into the single spec-time message. After
+   that, carry the task to the merge gate without re-asking unless an
+   emergency gate fires — and never turn a mid-task judgment call into a
+   silent decision instead.
+2. **You remove blockers to the end.** Your job between gates is
+   unblocking, not implementing: route open questions to the user only
+   when the repository genuinely can't settle them; retry usage-cap
+   failures on schedule; keep every role moving from its handoff line to
+   the next dispatch.
+3. **You are the only long-lived session.** Workers run bounded bursts;
+   your context must stay flat across all of them — receipt-not-record,
+   Latest-handoff reads, scripts over eyeballing, no raw event streams.
+4. **Keep the loop counters honest.** O4 is fixed structurally now —
+   *Review loop count*, *Test-fix loops* and *Spec bounces* live in the
+   state file and `verify-state.sh` fails loudly when any is exceeded. Your
+   remaining job: increment them at the moment you route work back (not
+   later), and treat a blown budget as an escalation, never as a reason for
+   one more lap.
+5. **Never add `--auto`, a dependency, or scope mid-task** — those are
+   emergency-gate decisions belonging to the human, even after a timeout,
+   even when the fix looks obvious.
+6. **Size honestly.** Judge tasks by scope breadth, not effort; propose
+   the split when breadth says so, and let the human decide.
+
+## Residual risks (what remains even in correct usage)
+
+| # | Risk | Why it survives correct usage | Mitigation |
+| --- | --- | --- | --- |
+| R1 | ~~Uncapped test↔fix loops~~ **fixed** (O4 done) | Was: nothing counted test-driven returns | *Test-fix loops* 0/2 + *Spec bounces* 0/1 counters, enforced by `verify-state.sh`; smoke-covered |
+| R2 | **Weak verdict passes shaped perfectly** | `verify-state.sh` checks placement, not correctness; same-session cheap reviewer anchors on the author's framing | Human spot-checks one AC pre-merge; fork review session on sensitive diffs — pending H1 task-class decision |
+| R3 | **Permissions unverified live** | Enforcement lives in the runtime, not the YAML; this exact assumption failed once before | One-time manual verification per project |
+| R4 | **Instruction-following is probabilistic** | All behavioral rules are prose; long contexts erode compliance silently, especially on mid models | Small tasks, strong models where stakes warrant, gates as backstop |
+| R5 | **Band mismatch** | Ceremony on trivial tasks; spec-first hurts exploration; no intra-pipeline parallelism | Route such work outside the pipeline deliberately |
+
+---
+
+# Remaining work (all parts)
+
+1. ✅ O4 (loop budget) — **DONE**: *Test-fix loops* 0/2, *Spec bounces* 0/1, enforced in `verify-state.sh`, smoke-covered
 2. ⬜ `[OPEN]` Live permission verification on a real server (builder denies under `--auto`; reviewer blanket-deny) — manual by design
-3. 🔶 `[REC]` O1/O2/O3/O6 wording changes pending approval
-4. ⬜ `[OPEN]` MODELS.md trim, team-completion.bash removal — editorial calls
+3. 🔶 `[REC]` O1/O3 now folded into REVIEW-2's H1 "task classes" — **NEEDS YOUR CALL**; O2/O6 done, O7's free half done (loops-used in the step-5 report)
+4. 🔶 `[REC]` Part 3's lead rules currently live only in this file — a review doc no generated agent reads. On approval, promote rules 1–6 into `feature.md.tmpl` (and one-line versions into `SYSTEM.md` / `flow-example.md`) so every scaffolded lead actually carries them — note the budget rules already made it there via O4; what's still missing is "ask once up front" and "remove blockers to the end" as named duties
+5. ⬜ `[OPEN]` MODELS.md trim, team-completion.bash removal — editorial calls
 
 ## Then the third pass
 

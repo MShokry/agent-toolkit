@@ -22,14 +22,22 @@ No build step, no dependencies, no LLM calls in the test path. Verify a
 change with the automated smoke run:
 
 ```bash
-bash test/smoke.sh
+bash test/smoke.sh        # scaffolder guarantees + the two structural scripts
+bash test/invariants.sh   # every load-bearing rule present in every copy
 ```
 
-It scaffolds into a throwaway directory and asserts the core guarantees:
-every placeholder substituted, no file clobbered on re-run, `--update`
-reports up-to-date when clean and exactly one diff after a deliberate
-drift, the findings-promotion traversal guard holds, and the loop-cap
-check fires. CI runs it plus shellcheck on every push (`.github/workflows/
+`smoke.sh` scaffolds into a throwaway directory and asserts the core
+guarantees: every placeholder substituted, no file clobbered on re-run,
+`--update` reports up-to-date when clean and exactly one diff after a
+deliberate drift, the findings-promotion traversal guard holds, the
+loop-cap and budget checks fire, `verify-state.sh` refuses `done` while an
+acceptance criterion is open, and `verify-spec.sh` rejects an unfilled spec
+while accepting a filled one.
+
+`invariants.sh` is the other half: it greps each load-bearing rule against
+every hand-synced copy that must carry it. Run it after **any** change to
+the pipeline's rules — it is what the "keep the copies in sync" convention
+below finally has behind it. CI runs it plus shellcheck on every push (`.github/workflows/
 ci.yml`). For an eyeball-level pass you can still do the manual version:
 
 ```bash
@@ -55,12 +63,13 @@ prints a `diff -u` for exactly that file and still writes nothing.
 | --- | --- |
 | `bin/init.sh` | The scaffolder. `render()` copies a `.tmpl` file to a destination with `sed` placeholder substitution, skipping any file that already exists |
 | `test/smoke.sh` | The automated smoke run (see Commands). CI runs it plus shellcheck on every push |
+| `test/invariants.sh` | Cross-file rule presence check: one grep per (rule, file) pair over the hand-synced copies. Add a rule = one line in its table |
 | `.github/workflows/ci.yml` | Runs `test/smoke.sh` + shellcheck (`bin/init.sh`, the test, and every `templates/scripts/*.tmpl`) |
 | `templates/claude/agents/` | `planner.md.tmpl`, `senior-dev.md.tmpl` — Claude subagent role definitions |
 | `templates/claude/commands/` | `feature.md.tmpl` — the `/feature` pipeline command (the lead's own instructions) |
 | `templates/opencode/agent/` | `builder.md.tmpl`, `reviewer.md.tmpl`, `tester.md.tmpl` — OpenCode role definitions |
 | `templates/agents-state/` | `TEMPLATE.md.tmpl` — the `T-<id>` state-file shape every role reads and appends to |
-| `templates/scripts/` | `oc.sh.tmpl` (OpenCode CLI wrapper), `team.sh.tmpl` (+ `team-completion.bash.tmpl`; tmux layout), `verify-state.sh.tmpl` / `promote-findings.sh.tmpl` (deterministic, no-LLM-call structural checks) |
+| `templates/scripts/` | `oc.sh.tmpl` (OpenCode CLI wrapper), `team.sh.tmpl` (+ `team-completion.bash.tmpl`; tmux layout), `verify-state.sh.tmpl` (state file) / `verify-spec.sh.tmpl` (spec, before the approval gate) / `promote-findings.sh.tmpl` — all deterministic, no-LLM-call structural checks |
 | `skills/delegate/` | Context-discipline rules for the lead — usable independently of `init.sh` |
 | `skills/toolkit-init/` | Thin skill wrapping `bin/init.sh`, for running the scaffold conversationally |
 | `skills/dev-team-generator/` | Self-contained, interview-driven alternative to `toolkit-init`: generates the team + flow live for whatever tool(s) are actually available, instead of stamping out `templates/`. Its own `reference/lessons-learned.md` is a generalized, tool-agnostic distillation of this toolkit's hardening history — see the Conventions bullet below |
@@ -99,17 +108,23 @@ prints a `diff -u` for exactly that file and still writes nothing.
   `.agents/TEMPLATE.md`) when one side gets a
   structural fix — a new state-file field, a new script, a report-back
   change. They're meant to be the same mechanism, generic vs. applied.
-  There is no automated check for this yet; do it by hand and `diff` the
-  two sides after any pipeline-mechanism change.
+  `test/invariants.sh` covers the state-file contract's two copies; the
+  rest is still by hand — `diff` the two sides after any pipeline-mechanism
+  change.
 - **The lead's flow exists in three hand-synced copies — re-diff all
   three when the pipeline sequence changes:**
   `templates/claude/commands/feature.md.tmpl`, `SYSTEM.md`, and
   `skills/dev-team-generator/reference/flow-example.md`. They serve three
   audiences (generated project / any-AI-as-lead / generate-anything skill)
   but must carry the same sequence and stop-and-ask rules. These have
-  diverged silently before (the non-actionable-findings routing existed in
-  one copy only); check all three plus `lessons-learned.md` per the next
-  bullet.
+  diverged silently before — twice, on consecutive commits, *after* this
+  bullet was written, which is why the rule alone was never enough.
+  **`test/invariants.sh` now enforces it**: add the rule to its table in the
+  same turn you add it to a flow copy, and CI fails when a copy is missing
+  it. The table is presence-only (it cannot catch wording drift), so still
+  read the sibling copies — but omission, the failure that actually keeps
+  happening, is now caught for you. Check all three plus
+  `lessons-learned.md` per the next bullet.
 - **Mirror every new hardening lesson into
   `skills/dev-team-generator/reference/lessons-learned.md`, in the same
   turn.** This toolkit's real lessons — a live-verified gotcha, a
@@ -159,7 +174,8 @@ prints a `diff -u` for exactly that file and still writes nothing.
 ## Status
 
 Actively developed; history in git. The scaffolder's core guarantees are
-covered by `test/smoke.sh` (CI: smoke + shellcheck). What's *not*
+covered by `test/smoke.sh`, and cross-copy rule presence by
+`test/invariants.sh` (CI: both + shellcheck). What's *not*
 automated: a live end-to-end pipeline run against a real OpenCode server,
 and live permission-enforcement verification — those stay manual per
 README's "Design decisions". Treat README.md's "Known gaps" and

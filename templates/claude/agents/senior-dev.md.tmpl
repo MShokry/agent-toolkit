@@ -26,8 +26,16 @@ was wrong. Append to *Open questions* and stop rather than widening scope
 silently.
 
 **Stop when you are unsure.** A written question costs minutes; a wrong
-assumption discovered in review costs a full loop. Append to *Open
-questions*, set Status to `blocked`, and stop.
+assumption discovered in review costs a full loop. Append to *Open questions*
+prefixed `[human]`, set Status to `blocked:question`, fill in *Blocked
+since* with today's date, and stop. That last field is what lets a session
+resumed tomorrow tell what the pipeline is parked on without the lead's
+conversation.
+
+**Never tick an acceptance criterion.** The *Acceptance criteria ledger* is
+the lead's to fill, from the reviewer's and tester's evidence, at the end.
+Claiming a criterion met is not your call to make about your own work —
+that is the whole reason there are other roles.
 
 **Follow this project's own guidance file first.** Read `CLAUDE.md` /
 `AGENTS.md` / equivalent, every run — it binds you harder than this file
@@ -51,10 +59,15 @@ In general, regardless of project:
 ## Working rhythm
 
 1. Read the project's own guidance file, then the state file end to end,
-   then the files in scope.
+   then the files in scope. Set Status to `in-progress` before you start
+   changing anything.
 2. Restate the acceptance criteria to yourself as the checks you will run.
-3. Implement in small commits — one coherent change each, message explaining
-   *why*. Do not squash unrelated work together.
+3. Implement incrementally — one coherent change at a time, recording each
+   decision in the Decisions log as you make it, never squashing unrelated
+   work together. **Do not commit.** The diff file in step 5 is your
+   deliverable; only the lead commits, and only once the user has said so.
+   (`builder` is hard-denied this at the permission layer; you are trusted
+   with it instead, which means the rule has to hold here by discipline.)
 4. Run this project's fast, deterministic checks on what you touched — a
    type check, a linter, its test suite if that suite runs in seconds. These
    catch a regression here, cheaply, instead of it surfacing as a whole
@@ -70,10 +83,37 @@ In general, regardless of project:
 
 ## Answering a review
 
-When the reviewer returns CHANGES_REQUESTED, address each numbered finding.
-For any you disagree with, say so in the Decisions log with your reasoning
-rather than silently ignoring it — the lead adjudicates on the written
-evidence, so unwritten disagreement resolves against you.
+When the reviewer returns CHANGES_REQUESTED, address **each numbered
+finding, by number**, in the Decisions log — `finding 3: fixed at
+src/x.js:88` / `finding 4: disputed, because …`. The reviewer's next pass is
+required to close each one by that number, so a response it cannot find is a
+response that does not exist.
+
+For any finding you disagree with, say so with your reasoning rather than
+silently ignoring it — the lead adjudicates on the written evidence, so
+unwritten disagreement resolves against you. Written disagreement now has a
+reader: the reviewer must answer it on the next pass, and the lead records
+which way it went.
+
+Increment *Review loop count* when you start a review-driven pass, and
+*Test-fix loops* when you start a test-driven one. They are capped, and
+`scripts/verify-state.sh` fails loudly when a cap is exceeded — that is an
+escalation to the user, not a reason to keep going.
+
+## When the spec itself is the problem
+
+Sometimes the fault is not in the code you would write but in what you were
+asked to write: two acceptance criteria contradict, the scope omits a file
+the work cannot avoid, the Goal describes something the codebase cannot
+support. That is not an implementation question and no amount of care in
+the code fixes it.
+
+Append your objection to the *Decisions log* — concretely, naming which
+criterion or scope line is unbuildable and why — set Status to
+`blocked:spec`, increment *Spec bounces*, fill in *Blocked since*, and stop.
+The lead sends it back to the planner once. Budget is one bounce per task;
+after that it goes to the user. Use it for a genuinely broken spec, not for
+a spec you would have written differently.
 
 ## Report back
 

@@ -1,0 +1,103 @@
+#!/usr/bin/env bash
+#
+# Deterministic structural checks on a *spec*, run by the lead at the end of
+# step 1 — before the spec is shown to the user for approval.
+#
+# Why this exists: code gets two mandatory review passes; the spec that every
+# downstream role treats as the contract got one glance from the human least
+# equipped to spot a missing acceptance criterion, an over-wide file scope, or
+# an unfilled permissions table — because all they see is the planner's own
+# summary of the planner's own work. A spec defect found here costs one
+# planner call; found after implementation it costs a full implement->review
+# loop.
+#
+# Same principle as verify-state.sh, and the same deliberate limit: this
+# asserts *structure*, never quality. It cannot tell you an acceptance
+# criterion is wrong — only that it is missing, unmeasurable on its face, or
+# still template boilerplate. Judging whether the spec is *right* is the
+# human's job at the approval gate; this just makes sure the human is
+# looking at a finished spec.
+#
+# Usage: scripts/verify-spec.sh T-01
+# Exit 0 = structurally complete, prints one OK line.
+# Exit 1 = specific problems printed to stderr, one per line.
+
+set -eu
+
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$REPO_ROOT"
+
+ID="${1:?usage: verify-spec.sh <task-id, e.g. T-01>}"
+FILE=".agents/${ID}.md"
+
+[ -f "$FILE" ] || { echo "verify-spec.sh: no such file: $FILE" >&2; exit 1; }
+
+FAIL=0
+fail() { printf 'verify-spec.sh: %s\n' "$1" >&2; FAIL=1; }
+
+# Lines of one "## <name>" section, up to the next "## " heading.
+section() { awk -v h="^## $1\$" '$0 ~ h {f=1;next} /^## /{f=0} f' "$FILE"; }
+
+# --- Goal ------------------------------------------------------------------
+GOAL="$(section 'Goal' | grep -v '^\*\*' | grep -v '^$' || true)"
+[ -n "$GOAL" ] || fail "Goal is empty"
+printf '%s' "$GOAL" | grep -q '<One paragraph' && \
+  fail "Goal is still the template placeholder"
+
+# --- Planner's minimalism fields ------------------------------------------
+# The cheapest place to remove work is before anyone implements it, so the
+# planner has to have visibly considered a smaller version and stated what
+# this can break. Both are things a good planner already reasons about; the
+# fields make that reasoning reviewable at the approval gate.
+for f in "Simplest version considered" "Blast radius"; do
+  line="$(grep -m1 "^\*\*$f:\*\*" "$FILE" || true)"
+  [ -n "$line" ] || { fail "missing '$f' — the planner states it, the user gets to push back on it"; continue; }
+  printf '%s' "$line" | grep -q '<' && fail "'$f' is still the template placeholder"
+done
+
+# --- Acceptance criteria ---------------------------------------------------
+ACS="$(grep -c '^- \[[ x]\] AC[0-9]' "$FILE" || true)"
+FILLED="$(grep '^- \[[ x]\] AC[0-9]' "$FILE" 2>/dev/null | grep -cv -- '— *$' || true)"
+[ "$ACS" -ge 1 ] || fail "no acceptance criteria — the spec has no contract"
+[ "$ACS" -le 7 ] || fail "$ACS acceptance criteria — over the 7 the planner is told to split at; this is more than one task"
+[ "$FILLED" = "$ACS" ] || fail "$((ACS - FILLED)) acceptance criteria are still empty stubs (e.g. '- [ ] AC2 —')"
+
+# An acceptance criterion built on an adjective is not checkable by someone
+# who has not read the code, which is the planner's own stated bar.
+VAGUE="$(grep '^- \[[ x]\] AC[0-9]' "$FILE" 2>/dev/null \
+  | grep -iE 'works well|properly|robust|gracefully|appropriately|as expected|correctly handles|user-friendly' || true)"
+if [ -n "$VAGUE" ]; then
+  printf '%s\n' "$VAGUE" | while IFS= read -r l; do
+    printf 'verify-spec.sh: acceptance criterion is not checkable as written (names a quality, not an observable): %s\n' "$l" >&2
+  done
+  FAIL=1
+fi
+
+# --- Ledger rows match the criteria ---------------------------------------
+# The ledger is what closes the contract at step 5; a criterion with no row
+# has nowhere for its evidence to land.
+LEDGER_ROWS="$(awk '/^### Acceptance criteria ledger/{f=1;next} /^## /{f=0} f && /^\| *AC[0-9]/' "$FILE" | wc -l | tr -d ' ')"
+[ "$LEDGER_ROWS" = "$ACS" ] || \
+  fail "$ACS acceptance criteria but $LEDGER_ROWS ledger rows — every AC needs a row to record its evidence in"
+
+# --- Files in scope --------------------------------------------------------
+# A table row counts only if its first cell actually has content — the
+# template ships an all-empty "| | |" row, which is not a filled scope.
+row_has_content() { awk -F'|' 'NF>1 && $2 ~ /[^ \t-]/ && $2 !~ /^ *(File|Permission)/ {c++} END{exit c?0:1}'; }
+SCOPE=0; section 'Files in scope' | row_has_content && SCOPE=1
+[ "$SCOPE" = 1 ] || fail "Files in scope is empty — the implementer has no boundary, so nothing can be 'outside scope'"
+
+# --- New permissions -------------------------------------------------------
+# Empty is the expected answer, but it has to be *said*: a silent addition is
+# an automatic CHANGES_REQUESTED downstream, and an unfilled table is
+# indistinguishable from a forgotten one.
+PERMS=0; section 'New permissions required' | row_has_content && PERMS=1
+if [ "$PERMS" = 0 ]; then
+  section 'New permissions required' | grep -qi 'none' || \
+    fail "New permissions required is an empty table — write 'none' explicitly, so silence isn't mistaken for an oversight"
+fi
+
+if [ "$FAIL" -eq 0 ]; then
+  echo "verify-spec.sh: $FILE OK ($ACS acceptance criteria, scope stated, permissions stated)"
+fi
+exit "$FAIL"

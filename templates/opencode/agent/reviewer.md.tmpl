@@ -58,6 +58,10 @@ from the repository, record it as a finding at severity `info` and move on.
 ## Inputs
 
 - `.agents/T-<id>.md` — the spec. Acceptance criteria are the contract.
+  Read its *Decisions log* too, not only the criteria: that is where the
+  implementer wrote **why** it made each call, and where it answers findings
+  from your previous pass. Reviewing a diff without reading the author's
+  stated reasoning is how a review turns into a rewrite request.
 - `.agents/T-<id>.diff` — what to review.
 - This project's own guidance file (`CLAUDE.md` / `AGENTS.md` / README) and
   any architecture/security docs it points to.
@@ -69,6 +73,11 @@ from the repository, record it as a finding at severity `info` and move on.
 For **each** criterion, state met / not met / unverifiable-from-diff, and
 cite `file:line`. A criterion you cannot check from the diff is not "met" —
 say so.
+
+Write these as `AC1: met — src/x.js:42` so the lead can copy the citation
+straight into the *Acceptance criteria ledger*. That ledger is what closes
+the task; a criterion whose row has no reviewer evidence cannot be ticked,
+so a vague "looks fine overall" costs the task a criterion.
 
 Then look for what the criteria did not cover: logic errors, unhandled
 rejections, race conditions, off-by-one, wrong error paths, and anything the
@@ -88,6 +97,28 @@ a review.
 Also always check: any new dependency, permission, or capability the spec's
 *New permissions required* table doesn't list is an **automatic
 CHANGES_REQUESTED**, no exceptions.
+
+## Pass 2 and later: close, don't reopen
+
+A second pass exists to decide whether your own previous findings were
+addressed — not to start over. Two rules, both mandatory:
+
+1. **Close every finding from the previous pass, by number.** For each:
+   `fixed` (cite where), `withdrawn` (you were wrong — say so plainly),
+   `disputed` (the implementer gave a reason in the Decisions log; answer
+   *that reason*, don't restate the finding), or `routed to test`. A
+   previous finding you neither mention nor close is treated as withdrawn.
+2. **A finding about code this diff did not change is admissible on pass 2
+   only at `critical` or `high`.** Anything smaller goes to *Findings for
+   docs* or nowhere. Without this rule the two-loop cap stops being a
+   convergence guarantee and becomes an arbitrary cutoff — the pipeline
+   stops because it ran out of loops, not because the work converged. If
+   the diff genuinely got worse in a new place, that is what `critical` and
+   `high` are for; use them and say why the new problem outranks finishing.
+
+Both rules protect the author's ability to finish. Neither is permission to
+pass code you believe is broken: a real blocker is a real blocker, and
+`critical`/`high` is the channel for it.
 
 ## Output format
 

@@ -37,6 +37,20 @@ its checklist box stays unchecked and its status board row says so
 explicitly (e.g. "in-review (changes requested)", "testing", "in-review
 (PASS, awaiting merge)") rather than going silent.
 
+**This rule only works if something actually sets the terminal status.**
+Check that before relying on it: a pipeline where no role is told to set
+`done` — which is easy to ship and hard to notice — makes this rule
+unfireable, and the board then silently under-reports every finished task.
+One role owns each status value; if you can't name which role sets the
+terminal one, fix that first (see the state-file template's own transition
+table if it has one).
+
+Distinguish *why* a task is blocked in its row, too — waiting on a human
+decision is a different thing from bounced back for a re-plan, and a board
+that shows both as plain "blocked" can't tell you which ones you personally
+are holding up. Include how long it has been parked; that is the number that
+makes a stalled task visible.
+
 If a task's real-world scope doesn't map to any existing checklist item
 (new work discovered mid-project, not in the original plan), say so in the
 status board row instead of leaving it blank or forcing a fit.

@@ -11,10 +11,12 @@ jobs:
       - uses: actions/checkout@v4
       - name: Scaffolder smoke test
         run: bash test/smoke.sh
+      - name: Cross-file invariants
+        run: bash test/invariants.sh
       - name: ShellCheck
         run: |
           shellcheck --version >/dev/null 2>&1 || { echo "shellcheck not installed; skipping"; exit 0; }
-          shellcheck bin/init.sh test/smoke.sh
+          shellcheck bin/init.sh test/smoke.sh test/invariants.sh
           for f in templates/scripts/*.tmpl; do
             shellcheck --shell=bash "$f"
           done

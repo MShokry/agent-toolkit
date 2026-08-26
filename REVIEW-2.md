@@ -19,7 +19,16 @@ act on, what to neglect.
 greps to test each claim before writing it down. Every finding below cites
 the evidence that proves it. Nothing here is a style opinion.
 
-Legend: ⬜ `[OPEN]` · ✅ `[DONE]` · 🔶 `[REC]` awaiting your call.
+Legend: ✅ `[DONE]` applied and test-covered · ⬜ `[OPEN]` · 🔶 `[REC]`
+awaiting your call.
+
+**Status:** D1–D5, H2, H3 and S1 are **done** — applied, mirrored into every
+hand-synced copy, and covered by `test/smoke.sh` (15 checks) and the new
+`test/invariants.sh` (76 rule/file pairs). Each carries an *Applied* note
+saying exactly what shipped. **H1 and C1 remain open on purpose**: both need
+policy answers that are yours to give, not mine to assume — which paths
+count as sensitive, what your definition of done is, who may approve a
+merge, what happens when you are away.
 
 ---
 
@@ -53,11 +62,26 @@ So on the "100% accurate" ambition, the honest read is this:
 That is the whole of D1–D3 below, and it is where the leverage is. Adding
 roles, models or loops will not move accuracy. Closing the contract will.
 
+> **Since this was written, the contract is closed.** The ledger exists, only
+> the lead fills it, a tick requires both a reviewer citation and a test
+> citation, and `verify-state.sh` refuses `done` while any criterion is open.
+> The paragraph above is left standing as the diagnosis it was — the fix is
+> recorded in D1's *Applied* note.
+
 ---
 
 # Part A — the delivery gap
 
-## ⬜ D1 — Nobody closes the contract *(the headline finding)*
+## ✅ D1 — Nobody closes the contract — **DONE**
+
+> **Applied.** `TEMPLATE.md.tmpl` gained an *Acceptance criteria ledger*
+> (AC | Met? | Reviewer evidence | Test evidence) that only the lead fills,
+> at step 5, with a tick requiring both evidence cells. `verify-state.sh`
+> refuses `Status: done` while any criterion is unticked and unwaived, or
+> while no pass recorded PASS. Both implementers and the planner are
+> explicitly barred from ticking. Smoke-covered (open criterion refused,
+> explicit waiver accepted); mirrored into `SYSTEM.md`, `flow-example.md`,
+> `state-file-example.md`, `role-examples.md` and `lessons-learned.md` #12.
 
 **Evidence.** `templates/agents-state/TEMPLATE.md.tmpl:36` defines
 acceptance criteria as `- [ ] AC1 —`. A repo-wide grep for `- [x]`, "check
@@ -99,7 +123,17 @@ nobody ever moves to Done.
 
 **Cost:** ~15 lines of template, ~8 lines of shell, one smoke case.
 
-## ⬜ D2 — Eight statuses, three of them ever set
+## ✅ D2 — Eight statuses, three of them ever set — **DONE**
+
+> **Applied.** A status transition table (status | who sets it | when) now
+> lives in the state-file template itself, with a matching line in every
+> role file: planner sets `draft`, implementers `in-progress`/`in-review`/
+> `blocked:*`, tester `testing`, lead `spec-approved`/`changes-requested`/
+> `done`. `verify-state.sh` checks the consistencies (test runs recorded ⇒
+> status at least `testing`; `done` ⇒ contract closed). The
+> senior-dev/builder asymmetry is gone — and a second one surfaced while
+> fixing it (senior-dev said "implement in small commits" while builder is
+> hard-denied from committing), now aligned. `lessons-learned.md` #13.
 
 **Evidence.** The status enum has 8 values
 (`TEMPLATE.md.tmpl:10`). Grepping every template and skill for an
@@ -144,7 +178,14 @@ file, and one consistency check in `verify-state.sh`:
 **Cost:** a table plus five one-line edits. Fixes O7's metric problem for
 free too — once statuses are actually set, phase timing is derivable.
 
-## ⬜ D3 — Verification inherits the author's definition of correct
+## ✅ D3 — Verification inherits the author's definition of correct — **DONE**
+
+> **Applied.** The tester now reads the acceptance criteria before running
+> anything, fills an *AC → covering test → result* table, states explicitly
+> which criteria **no** test covers, and records **Tests authored by**
+> (`implementer this task` / `pre-existing` / `tester`) so a reader can tell
+> how much the green is worth. It is also told never to edit a test to make
+> it pass. `lessons-learned.md` #17.
 
 **Evidence.** `tester.md.tmpl` never contains the string "acceptance
 criteria" (verified by grep). It is told to run "this project's own test
@@ -178,7 +219,15 @@ confidence.
 **Cost:** ~12 lines in one role file. Note it also gives D1's ledger its
 "Test evidence" column for free — D1 and D3 are one change, done together.
 
-## ⬜ D4 — The review loop has no convergence rule
+## ✅ D4 — The review loop has no convergence rule — **DONE**
+
+> **Applied.** The reviewer's Inputs now name the *Decisions log* (it was
+> never told to read the author's reasoning), and a new "Pass 2 and later:
+> close, don't reopen" section requires every earlier finding closed by
+> number — fixed / withdrawn / disputed / routed to test — with findings
+> about untouched code admissible on a later pass only at `critical` or
+> `high`. Both implementers answer findings by number; the lead now records
+> each adjudication in the Decisions log. `lessons-learned.md` #18.
 
 **Evidence.** `reviewer.md.tmpl` never mentions Pass 1, prior findings, or
 the Decisions log (grep: zero hits). Its Inputs are the spec, the diff and
@@ -218,7 +267,16 @@ pathologies from human code review:
 **Cost:** three sentences across two files. Makes the existing two-loop cap
 mean something.
 
-## ⬜ D5 — Two structural dead ends: no way back, no way to wait
+## ✅ D5 — Two structural dead ends: no way back, no way to wait — **DONE**
+
+> **Applied.** `blocked` split into `blocked:question` (needs the human) and
+> `blocked:spec` (bounced to the planner, capped at 1 via *Spec bounces*),
+> with a **Blocked since** field and `[human]`/`[planner]` prefixes on open
+> questions so a resumed session can tell what a task is parked on. Bare
+> `blocked` still validates, as the pre-split legacy value. Shipped together
+> with `REVIEW.md`'s **O4**: *Test-fix loops* is now a real counter, and
+> `verify-state.sh` enforces all three budgets numerically plus a run-count
+> guard. `lessons-learned.md` #14 and #15.
 
 **Evidence.** `feature.md.tmpl:133` — "Do not proceed on silence" (correct)
 — with no notion of a pending-decision queue: no timestamp, no
@@ -255,7 +313,7 @@ Do them as one edit.
 
 # Part B — team harmony
 
-## ⬜ H1 — Define task classes; stop making staffing an ad-hoc judgment
+## 🔶 H1 — Define task classes; stop making staffing an ad-hoc judgment — **NEEDS YOUR CALL**
 
 `REVIEW.md`'s **O1** (fork the session for high-stakes review) and **O3**
 (bump the reviewer model on a big diff) are both correct, and both are
@@ -279,7 +337,14 @@ This resolves O1 and O3 together, gives the "measure it before assuming"
 tradeoff a home other than good intentions, and turns two rules a lead
 must remember into one field it must fill.
 
-## ⬜ H2 — The role that decides scope is the least constrained
+## ✅ H2 — The role that decides scope is the least constrained — **DONE**
+
+> **Applied.** The planner now carries the same behavioral defaults as the
+> implementers (simplicity first, surgical scope, state assumptions,
+> verifiable criteria), phrased for scope rather than code, plus two new
+> spec fields the user reads at the approval gate: **Simplest version
+> considered** and **Blast radius**. `verify-spec.sh` fails if either is
+> left as boilerplate. `lessons-learned.md` #20.
 
 **Evidence.** `karpathy-guidelines` — simplicity first, surgical changes,
 surface assumptions, minimum code — is loaded by the lead and **inlined
@@ -307,7 +372,16 @@ Both are things a good planner already reasons about; the fields make the
 reasoning reviewable and give the human something to push back on at the
 approval gate other than the planner's own framing.
 
-## ⬜ H3 — Nobody reviews the spec, and it is the cheapest place to catch a defect
+## ✅ H3 — Nobody reviews the spec — **DONE**
+
+> **Applied.** `scripts/verify-spec.sh` ships as a sibling of
+> `verify-state.sh` and runs at the end of step 1, before the user sees the
+> spec: no boilerplate left in, 1–7 criteria with no empty stubs, no
+> criterion built on an adjective ("works well", "robust", "properly"), a
+> ledger row per criterion, scope stated, permissions filled or explicitly
+> `none`. Structure only, never quality. Smoke-covered three ways (raw
+> template rejected, filled spec accepted, vague criterion caught).
+> `lessons-learned.md` #19.
 
 Code gets two mandatory review passes. The spec — which every downstream
 role treats as the contract — gets one glance from the human least
@@ -443,7 +517,16 @@ this pass are the interim fix.)
 
 # Part E — sync debt is failing again, right now
 
-## ⬜ S1 — Two live divergences, both introduced by the last two commits
+## ✅ S1 — Live divergences from hand-syncing — **DONE**
+
+> **Applied — and it immediately caught a third.** `test/invariants.sh`
+> checks one grep per (rule, file) pair across the hand-synced copies; CI
+> runs it. It found both divergences named below, and then a third nobody
+> knew about: the non-actionable-findings routing rule that `REVIEW.md`
+> §2.1 records as applied to `feature.md.tmpl` was **not in that file** —
+> not in HEAD, not in the working copy. Restored from the two copies that
+> did carry it. 76 (rule, file) pairs now pass. Adding a rule costs one line
+> in its table.
 
 `CLAUDE.md` names the three hand-synced flow copies and says "these have
 diverged silently before." They have diverged silently again — verified by
@@ -486,6 +569,10 @@ narrow, deterministic, free, and cannot forget.
 ---
 
 # Priority
+
+All of D1–D5, H2, H3 and S1 below are **done** — the table is kept as the
+record of what was shipped and in what order. What remains is H1/C1, which
+need policy answers only you can give.
 
 | # | Item | Size | Why here |
 | --- | --- | --- | --- |

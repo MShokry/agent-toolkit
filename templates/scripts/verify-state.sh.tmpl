@@ -6,8 +6,8 @@
 # lead context on every single hop, and a verifier agent costs a paid call
 # per hop *and* can misjudge the same way the role it's checking can. A
 # script that only asserts structural facts (right heading, no duplicates,
-# no unfilled placeholder) can't hallucinate a pass — it either matches or
-# it doesn't.
+# no unfilled placeholder, a budget not exceeded) can't hallucinate a pass —
+# it either matches or it doesn't.
 #
 # This is deliberately narrow: it catches shape problems (the T-01 incident
 # this exists because of — a verdict landed as a duplicate heading outside
@@ -35,17 +35,27 @@ fail() { printf 'verify-state.sh: %s\n' "$1" >&2; FAIL=1; }
 
 STATUS="$(grep -m1 '^\*\*Status:\*\*' "$FILE" | sed 's/.*Status:\*\* *//')"
 case "$STATUS" in
-  draft|spec-approved|in-progress|blocked|in-review|changes-requested|testing|done) ;;
+  # `blocked` (unqualified) is the pre-split legacy value, still accepted so
+  # a state file written before blocked:question/blocked:spec existed stays
+  # valid. New files should use a qualified form — it is what lets the
+  # status board say whether a task waits on a human or on a re-plan.
+  draft|spec-approved|in-progress|blocked|blocked:question|blocked:spec|in-review|changes-requested|testing|done) ;;
   *) fail "unrecognised Status: '$STATUS'" ;;
 esac
+
+# Statuses that mean "nothing has been reviewed or run yet". Used below to
+# decide when an unfilled placeholder is still fine.
+is_early() {
+  case "$STATUS" in
+    draft|spec-approved|in-progress|blocked|blocked:question|blocked:spec) return 0 ;;
+    *) return 1 ;;
+  esac
+}
 
 # An unfilled "### Pass N ... verdict: <PASS | CHANGES_REQUESTED>" placeholder
 # is fine while still drafting/implementing, but not once review has run.
 if grep -q '^### Pass .*verdict: <PASS | CHANGES_REQUESTED>$' "$FILE"; then
-  case "$STATUS" in
-    draft|spec-approved|in-progress|blocked) ;;
-    *) fail "a Review verdicts pass heading still has the unfilled placeholder verdict, but Status is '$STATUS'" ;;
-  esac
+  is_early || fail "a Review verdicts pass heading still has the unfilled placeholder verdict, but Status is '$STATUS'"
 fi
 
 # The loop cap is structural, not advisory: a Pass 3 heading means a third
@@ -66,6 +76,58 @@ DUPES="$(grep -o '^### Pass [0-9]*' "$FILE" | sort | uniq -d || true)"
 IN_SECTION="$(awk '/^## Review verdicts/{f=1;next} /^## /{f=0} f' "$FILE" | grep -c '^### Pass ' || true)"
 TOTAL="$(grep -c '^### Pass ' "$FILE" || true)"
 [ "$IN_SECTION" = "$TOTAL" ] || fail "a '### Pass' heading exists outside the Review verdicts section ($TOTAL total, $IN_SECTION inside it)"
+
+# --- Budget counters -------------------------------------------------------
+# Every re-engagement of the implementer is capped, and the cap is enforced
+# here rather than left to whoever is counting. A blown budget means the
+# spec is wrong or the suite is flaky — either way it is an escalation to
+# the user, not another lap. Review loops had this guarantee via the Pass 3
+# check above; test-fix loops and spec bounces had no budget at all, which
+# let a flaky suite cycle fix->test indefinitely with nothing noticing.
+check_budget() {
+  # $1 = field label as it appears in the file, $2 = human name
+  line="$(grep -m1 "^\*\*$1:\*\*" "$FILE" || true)"
+  [ -n "$line" ] || return 0   # field absent (older state file) — not an error
+  used="$(printf '%s' "$line" | sed -n 's/.*:\*\* *\([0-9][0-9]*\) *\/ *\([0-9][0-9]*\).*/\1/p')"
+  cap="$(printf '%s' "$line"  | sed -n 's/.*:\*\* *\([0-9][0-9]*\) *\/ *\([0-9][0-9]*\).*/\2/p')"
+  if [ -z "$used" ] || [ -z "$cap" ]; then
+    fail "$2 is not in 'N / M' form: $line"
+    return 0
+  fi
+  [ "$used" -le "$cap" ] || fail "$2 budget exceeded ($used / $cap) — escalate to the user instead of looping again"
+}
+check_budget "Review loop count" "review loop"
+check_budget "Test-fix loops"    "test-fix loop"
+check_budget "Spec bounces"      "spec bounce"
+
+# A run count well past the test-fix budget is the same failure seen from
+# the other side, for a file whose counter was never updated.
+# Only *filled* run headings count: a fresh state file still carries the
+# template's own "### Run 1 — <date>" placeholder, which is not a run.
+RUNS="$(grep '^### Run [0-9]' "$FILE" 2>/dev/null | grep -cv -- '— <date>$' || true)"
+TESTCAP="$(grep -m1 '^\*\*Test-fix loops:\*\*' "$FILE" | sed -n 's/.*\/ *\([0-9][0-9]*\).*/\1/p' || true)"
+if [ -n "$TESTCAP" ] && [ "$RUNS" -gt "$((TESTCAP + 1))" ]; then
+  fail "$RUNS test runs recorded but the test-fix budget is $TESTCAP — that is more fix->test laps than the budget allows"
+fi
+
+# --- Status consistency ----------------------------------------------------
+# A status field nobody keeps current is worse than none: the status board,
+# this script's own early-status relaxations, and the human's glance at the
+# top of the file all key off it. These two checks are the cheap half of
+# keeping it honest.
+if [ "$RUNS" -gt 0 ] && is_early; then
+  fail "test runs are recorded but Status is still '$STATUS' — the tester sets 'testing' when it starts"
+fi
+
+# --- Definition of done ----------------------------------------------------
+# The acceptance criteria are the contract. Marking a task done while one is
+# unticked and unwaived means the contract closed on someone's recollection
+# rather than on the evidence in this file.
+if [ "$STATUS" = "done" ]; then
+  UNMET="$(awk '/^### Acceptance criteria ledger/{f=1;next} /^## /{f=0} f && /^\| *AC[0-9]/ && /\[ \]/ && !/waived/' "$FILE" | wc -l | tr -d ' ')"
+  [ "$UNMET" = "0" ] || fail "Status is 'done' but $UNMET acceptance criteria are unticked and unwaived in the ledger"
+  grep -q '^### Pass .*verdict: PASS' "$FILE" || fail "Status is 'done' but no review pass records a PASS verdict"
+fi
 
 if [ "$FAIL" -eq 0 ]; then
   echo "verify-state.sh: $FILE OK (Status: $STATUS)"

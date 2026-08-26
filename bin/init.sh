@@ -132,6 +132,7 @@ render "$TEMPLATES/scripts/oc.sh.tmpl"               "$TARGET/scripts/oc.sh"
 render "$TEMPLATES/scripts/team.sh.tmpl"             "$TARGET/scripts/team.sh"
 render "$TEMPLATES/scripts/team-completion.bash.tmpl" "$TARGET/scripts/team-completion.bash"
 render "$TEMPLATES/scripts/verify-state.sh.tmpl"     "$TARGET/scripts/verify-state.sh"
+render "$TEMPLATES/scripts/verify-spec.sh.tmpl"      "$TARGET/scripts/verify-spec.sh"
 render "$TEMPLATES/scripts/promote-findings.sh.tmpl" "$TARGET/scripts/promote-findings.sh"
 
 if [ "$UPDATE" -eq 1 ]; then
@@ -147,7 +148,8 @@ MSG
 fi
 
 chmod +x "$TARGET/scripts/oc.sh" "$TARGET/scripts/team.sh" \
-         "$TARGET/scripts/verify-state.sh" "$TARGET/scripts/promote-findings.sh" 2>/dev/null || true
+         "$TARGET/scripts/verify-state.sh" "$TARGET/scripts/verify-spec.sh" \
+         "$TARGET/scripts/promote-findings.sh" 2>/dev/null || true
 
 mkdir -p "$TARGET/.agents"
 if [ "$FRESH_SCAFFOLD" -eq 1 ]; then

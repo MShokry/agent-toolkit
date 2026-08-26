@@ -235,3 +235,191 @@ write-scoping the pipeline set up everywhere else.
 - Anchor the script itself to the repo root (the way dispatch wrappers
   do) so relative paths have exactly one meaning no matter the caller's
   CWD.
+
+## 12. A contract nobody closes is a pipeline that can't say what it delivered
+
+Acceptance criteria are the whole point of the spec — and it is startlingly
+easy to build a pipeline where **nobody ever records whether one was met.**
+This toolkit shipped exactly that: the planner wrote criteria as checkboxes,
+one rule said no other role may edit them, no role was told to tick one, the
+tester never read them, and the final report asked the lead for "criteria met
+versus outstanding" with no artifact behind that answer. Every role did its
+job and the contract still never closed.
+
+- Give the criteria a **ledger**: one row each, with the reviewer's citation
+  (`file:line`) and the tester's (which test) in **separate** columns.
+- **Split ownership of text and outcome.** The planner owns the criterion's
+  wording and may not record outcomes; the lead owns the outcome and writes
+  nothing but what the reviewer and tester already put in the file; the
+  implementer may never mark its own work met.
+- **A tick requires both evidence cells.** No evidence, no tick —
+  "unverified" is a true, useful answer, and a tick that hides it is the
+  exact failure this prevents.
+- Have the structural check **refuse the terminal status** while any
+  criterion is unticked and unwaived. That single check is the difference
+  between a pipeline that produces work and one that can tell you what it
+  produced.
+
+## 13. Every status needs exactly one owner, or the field rots silently
+
+A status enum is cheap to write and easy to leave half-wired. This toolkit
+shipped **eight** status values of which only **three** were ever set by any
+role — including the terminal `done`, which nothing set at all, while a
+separate status-board rule said "only check off a task once its status
+reaches done." That rule could never fire. Worse, the two implementers
+disagreed: one set a blocked status on an open question, the other just
+stopped, so the same event left the ledger in two different states depending
+on which vendor ran.
+
+- Write a **transition table** into the state-file template itself: status,
+  who sets it, on what event. One row per value, no exceptions.
+- Then check the obvious consistencies in the structural script (test
+  results present ⇒ status is at least "testing"; terminal status ⇒ the
+  contract is closed). Cheap greps, and they catch the drift that makes
+  every downstream reader — board, script, human — inherit a stale value.
+- **Duplicated roles must transition identically.** If two tools run "the
+  same role," diff their instructions for status handling specifically; it
+  is the first thing to diverge and the last thing anyone notices.
+
+## 14. Budget every path back to the implementer, not just the one you thought of
+
+A review-loop cap is the obvious anti-thrash rule and most designs have it.
+The paths that get forgotten are the other ways the same implementer gets
+re-engaged: **test failures** (fix → test → fail → fix …) and **spec
+defects**. This toolkit capped review loops structurally — a script failed
+loudly on a third review pass — while test failures routed back "as a new
+loop" with no cap, no counter, and no check. A flaky suite plus an eager
+implementer could cycle forever and nothing in the system would notice,
+because the only budget in the file counted review passes.
+
+- Enumerate **every** edge that re-engages the implementer and give each one
+  a counter in the state file, with the cap written next to the count
+  (`0 / 2`) so the reader needs no outside knowledge.
+- Have the structural script parse and enforce them. A budget with nothing
+  counting it is not a budget, it is a sentence in a document.
+- Blowing a budget is an **escalation to the human**, never a reason to keep
+  looping — two failed laps means the spec is wrong, the suite is wrong, or
+  the environment is, and none of those are fixed by a third lap.
+
+## 15. Give a bad spec a way back to the planner, not only up to the human
+
+If the implementer's only options are "comply" or "stop the world," every
+spec defect — including trivially mechanical ones — costs a human
+interruption. Real teams return the ticket to whoever wrote it.
+
+- Add a **bounce**: the implementer records concretely which criterion or
+  scope line is unbuildable and why, sets a distinct blocked status, and the
+  lead re-dispatches the **planner** once with that objection.
+- **Cap it at one.** A second rejection is no longer a planning problem, it
+  is a "we don't agree what this task is" problem, and that is the human's
+  to settle.
+- Keep the two blocked states distinct (waiting-on-human vs bounced-to-
+  planner). One undifferentiated "blocked" cannot tell a status board — or
+  tomorrow's session — which of the two it is looking at.
+
+## 16. A stopped task needs to say what it is waiting on, and since when
+
+"Do not proceed on silence" is the right rule at an approval gate, and it
+quietly assumes the human is about to answer. When they are not — overnight,
+next week — the pipeline just stops, and if the pending question lives only
+in the lead's conversation, a resumed or fresh session cannot tell what the
+task is parked on. The state file is the only thing that survives; the
+conversation is not.
+
+- Record **what** it waits on (prefix the open question `[human]` /
+  `[planner]`) and **since when** (a dated field), in the state file and the
+  status board, at the moment you stop.
+- This costs one line and is the difference between a task that resumes and
+  a task that silently dies at a gate nobody remembers opening.
+
+## 17. Independence of *opinion* is not independence of *evidence*
+
+Switching the reviewer to a different model family is a real control, and it
+is the one everyone implements — this toolkit put it on its own front page.
+It buys an independent **opinion** about the diff. It buys **nothing** about
+the tests: if the implementer wrote them, a green run confirms only that the
+code matches its author's own idea of correct. That is a weaker claim than
+the pass count implies, and no reader can tell the difference unless the file
+says so.
+
+- Make the tester **read the acceptance criteria** — a suite that exercises
+  none of them is not evidence, however green.
+- Require an **AC → covering test → result** table, and an explicit list of
+  criteria **no** test covers. An uncovered criterion is a finding, not a
+  silence.
+- Require a **test-authorship line** (`implementer this task` /
+  `pre-existing` / `tester`). One field, and it tells every later reader how
+  much the green is worth.
+- Never let the tester edit a test to make it pass. If a test looks wrong,
+  that is a finding for someone else to act on.
+
+## 18. A second review pass must close the first, not restart it
+
+A loop cap only guarantees convergence if each pass is *about* the previous
+one. Nothing stops a reviewer from returning an entirely new set of findings
+about untouched code on pass 2 — and when that happens the cap stops being a
+convergence guarantee and becomes an arbitrary cutoff: the pipeline stops
+because it ran out of loops, not because the work converged. This is the
+oldest pathology in human code review (moving goalposts) and it transfers
+intact.
+
+- Require each later pass to **close every earlier finding by number**:
+  fixed / withdrawn / disputed / routed elsewhere. An unmentioned finding is
+  treated as withdrawn.
+- Admit findings about **code the diff didn't change** on a later pass only
+  at the top severities. Smaller ones go to the findings-for-docs path.
+- Point the reviewer at the implementer's **decisions/reasoning log**, not
+  only the diff. If the implementer is told that unwritten disagreement
+  resolves against it, something must actually read what it writes —
+  otherwise the disagreement channel is theatre, and the author learns to
+  stop using it.
+- Have the lead **write down each adjudication** (finding number, which way,
+  why). An adjudication living only in the lead's context cannot be
+  appealed or audited, and does not survive a compaction.
+
+## 19. Check the spec with a script too, not just the code
+
+Code gets review passes; the spec that every downstream role treats as the
+contract typically gets one glance from the human least equipped to notice a
+missing criterion, an over-wide file scope, or an empty permissions table —
+because all they see is the planner's own summary of the planner's own work.
+
+Most spec defects are **structural**, which means they are greppable and do
+not need an LLM: boilerplate left unfilled, zero criteria (or more than the
+role's own splitting threshold), a criterion built on an adjective
+("robust", "works well", "properly") rather than an observable, an empty
+scope table, a permissions table that is neither filled nor explicitly
+"none", a ledger row missing for some criterion.
+
+- Write the spec-checker as a sibling of the state-checker and run it before
+  the human sees the spec. Same principle as "verification is a script, not
+  a sixth agent," applied one step earlier in the pipeline.
+- Keep it to **structure, never quality** — it cannot tell you a criterion is
+  wrong, only that it is missing or unmeasurable on its face. Judging whether
+  the spec is *right* stays the human's job at the approval gate; the script
+  just guarantees they are looking at a finished spec.
+- A spec defect caught here costs one planner call. The same defect caught
+  after implementation costs a full implement→review loop.
+
+## 20. The role that decides scope needs the minimalism rules most
+
+Behavioral defaults — simplicity first, surgical changes, state assumptions,
+verifiable success criteria — get inlined into the implementer, because that
+is where code gets written. This toolkit did exactly that for both its
+implementers and gave the **planner** none of them. But the planner decides
+*what gets built at all* and *how wide the file scope is*: work never scoped
+costs nothing to implement, review, or test, and removing a file from scope
+during planning is free where discovering it was unnecessary in review costs
+a loop.
+
+That is a leverage inversion — the cheapest place to remove work had the
+fewest rules about removing it.
+
+- Inline the same behavioral defaults into the planner, phrased for scope
+  rather than code.
+- Add two fields the human reads at the approval gate: **the simplest
+  version considered** (and why the spec is bigger), and **the blast
+  radius** (what breaks if this is wrong). Both are things a good planner
+  already reasons about; the fields make that reasoning reviewable instead
+  of internal, and give the human something concrete to push back on other
+  than the planner's own framing.

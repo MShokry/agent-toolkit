@@ -127,8 +127,20 @@ be planned elsewhere in the repo, that costs one subagent call and returns
 doubt, dispatching is the safe default; the assessment above is for the
 cases where you can actually tell.
 
+**Then run `scripts/verify-spec.sh T-<id>`.** It is the spec's equivalent of
+`verify-state.sh` — structure only, no LLM call: no boilerplate left in, no
+empty acceptance-criterion stubs, criteria that name an observable rather
+than an adjective, a ledger row per criterion, scope and permissions
+actually stated. If it fails, send it back to the planner to fix before the
+user sees it. A spec defect caught here costs one planner call; the same
+defect caught after implementation costs a full implement→review loop.
+
 **Then stop.** Show the user the Goal, the acceptance criteria, the files
-in scope, and any new permission or dependency requested. Ask for approval.
+in scope, the planner's *Simplest version considered* and *Blast radius*,
+and any new permission or dependency requested. Ask for approval. Those two
+planner fields are there for the user to push back on — a spec bigger than
+its simplest version is the cheapest thing in this whole pipeline to
+shrink, and this is the only moment it is free.
 
 Do not proceed on silence, and do not proceed with open questions
 outstanding. If the planner says the feature is already specified
@@ -187,9 +199,32 @@ Never run both on one task. Write the choice into *Implementer for this
 task* — the reviewer needs it to know whether cross-vendor independence
 holds.
 
-If the implementer appends an **Open question** and stops, bring it to the
-user. Do not answer it yourself unless the repository settles it
-unambiguously.
+If the implementer appends an **Open question** and stops (Status
+`blocked:question`), bring it to the user. Do not answer it yourself unless
+the repository settles it unambiguously.
+
+**If the implementer stops with Status `blocked:spec`,** it is saying the
+spec itself is unbuildable — contradictory criteria, a scope that omits a
+file the work cannot avoid, a Goal the codebase cannot support. Read its
+objection in the *Decisions log* and re-dispatch the **planner** with it,
+once. Approval, review and test below then run unchanged against the
+corrected spec.
+
+**Budget: one bounce per task** (*Spec bounces*, capped at 1 —
+`verify-state.sh` enforces it). A second rejection is not a planning problem
+any more, it is a "we don't agree on what this task is" problem: stop and
+bring both the spec and the objection to the user. This path exists so a
+mechanical spec defect costs one cheap planner call instead of a human
+interruption — it is not a way to renegotiate a spec the implementer merely
+disagrees with.
+
+**Whenever a task stops at any `blocked:*` status,** fill in *Blocked since*
+with the date and one line, prefix the *Open questions* entry with `[human]`
+or `[planner]`, and put it in the status board that way. This session may
+not be the one that picks the task back up — `scripts/team.sh` resumes the
+lead's conversation by default, but tomorrow's resume may be a fresh one,
+and the state file is the only thing that survives it. A task parked with no
+record of what it is parked on is a task that silently dies.
 
 ### OpenCode usage limits
 
@@ -293,9 +328,31 @@ archived.
   from *Review verdicts* in the state file directly — you do not need to
   relay them yourself. **Maximum two loops.** On a third, stop and bring it
   to the user — two failed loops means the spec is wrong, not the code.
+- **CHANGES_REQUESTED, but the finding names no concrete code defect** —
+  e.g. "confirm this platform API against the real target; the docs
+  reachable here don't settle it" — do **not** spend a review loop on it: a
+  code change can't address it, so routing it back only burns one of the two
+  loops on an implementer with no action to take. Route it into step 4's
+  test dispatch instead, as an explicit thing to check against the real
+  target, and log the routing decision in the Decisions log so the user can
+  see and disagree with the call. The bar is "no code change could address
+  this finding," never "this finding seems minor."
+
+**Count the loop.** Increment *Review loop count* when you route a
+CHANGES_REQUESTED back. `verify-state.sh` fails loudly when a budget is
+exceeded, so keeping the counter current is what makes the cap real rather
+than advisory.
 
 Adjudicate disagreements on the written evidence only. Where the evidence
 does not settle it, escalate rather than casting a tiebreak vote yourself.
+
+**Write the adjudication down.** When the implementer disputed a finding in
+the *Decisions log* and you decide between them, append your own line:
+finding number, which way it went, and why. An adjudication that lives only
+in your context is one nobody can appeal, audit, or learn from — and after a
+compaction, one you no longer have either. The reviewer's next pass is
+required to answer disputes by number; your line is what tells it, and the
+user, how the last one resolved.
 
 ## 4 — Test
 
@@ -310,7 +367,20 @@ scripts/oc.sh --agent tester --model __TESTER_MODEL__ --text \
 ```
 
 The tester reports; it never fixes. Real failures go back to the
-implementer as a new loop.
+implementer as a new loop — **increment *Test-fix loops*, capped at 2**,
+the same way review loops are counted in step 3.
+
+This budget exists because a flaky suite plus an eager implementer will
+otherwise cycle fix→test indefinitely with nothing noticing: before this
+counter, the only budget in the state file counted *review* passes, so a
+test-driven loop was structurally unbounded. On the third, stop and bring it
+to the user — two failed test loops means the failure is environmental, the
+suite is wrong, or the spec is, and none of those are fixed by another lap.
+
+**Check the coverage table the tester filled in.** An acceptance criterion
+with no covering test is not a pass and not a failure — it is unverified,
+and it must reach the user as unverified in step 5. Do not let a green
+suite that exercises none of the criteria read as "criteria met."
 
 ## 5 — Report
 
@@ -322,10 +392,53 @@ Update this project's main tracking doc now, before reporting to the user
 — see the Token discipline section above; this is unconditional, whether
 or not the "status-board" skill happens to be loaded.
 
-Give the user: acceptance criteria met versus outstanding, the review
-verdict, test results, anything unverified, and the proposed merge.
+**Close the ledger — this is the step that says what was delivered.** Fill
+in the *Acceptance criteria ledger*: for each criterion, the reviewer's
+citation (`Pass 1 — src/x.js:42`) and the tester's (`Run 1 — "parses null"`),
+both copied from what is already in this file. Tick a box **only when both
+cells are filled**. A criterion the reviewer called unverifiable, or that no
+test covers, stays `[ ]` — that is a true and useful answer, and hiding it
+behind a tick is the one failure mode this ledger exists to prevent. A
+criterion the user explicitly agreed to drop gets `waived by user <date>` in
+its row, never a tick.
+
+**Only the lead fills this in.** The planner owns the criteria's *text*, you
+own their *outcome*. An implementer marking its own work met is not a
+verdict, and a reviewer or tester doing it is outside its write scope.
+
+Then set **Status** to `done` — you are the only role that sets it, and only
+here. `scripts/verify-state.sh T-<id>` refuses `done` while a criterion is
+unticked and unwaived, or while no pass recorded a PASS verdict; run it once
+more after you set it and fix what it names rather than arguing with it.
+
+Give the user:
+
+- acceptance criteria met versus outstanding, **read from the ledger**, not
+  from memory;
+- anything unverified, named as unverified — including any criterion no
+  test covered;
+- the review verdict and test results;
+- **loops used**: review R/2, test-fix T/2, spec bounces S/1. Three numbers,
+  straight from the state file. It is the only signal anyone gets about
+  whether this task went smoothly or fought back the whole way, and it costs
+  nothing to include;
+- the proposed merge.
 
 **Then stop and ask before merging.** Never merge on your own judgement.
+
+**Then ask, once: is there anything about *how this ran* worth writing
+down?** Not about the code — that is the reviewer's job and *Findings for
+docs* already carries it. About the pipeline: a dispatch order that was
+wrong, a stop-and-ask that should have happened earlier, a judgement call of
+yours the user corrected. If the user names something, add a sentence to
+this file (or the relevant role file) yourself, in this turn, and say what
+you changed. If they say no, drop it and don't ask again this task.
+
+This is deliberately a manual, consented step rather than a skill with
+standing edit rights on your own instructions — the "self-improvement" skill
+does the automatic version, and it is off by default for that reason. But
+asking exactly once, at the one moment the whole run is fresh, is what keeps
+a project from re-running its early mistakes forever.
 
 ## Stop and ask at
 
@@ -334,4 +447,7 @@ verdict, test results, anything unverified, and the proposed merge.
 - Any reviewer/implementer disagreement the evidence does not settle.
 - Any new permission or dependency, however reasonable it looks.
 - A third review loop.
+- A third test-fix loop.
+- A second spec bounce.
+- Any budget in the state file that `verify-state.sh` reports as exceeded.
 - Before any merge.

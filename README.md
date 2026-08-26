@@ -68,7 +68,8 @@ and test log it dispatched.
 
 | Role                                   | Reads                  | Writes                                      | Notes                                                   |
 | -------------------------------------- | ---------------------- | ------------------------------------------- | ------------------------------------------------------- |
-| Planner                                | whole repo             | `.agents/T-<id>.md` only                    | never touches source                                    |
+| Lead                                   | state file             | the acceptance-criteria ledger, Status      | the only role that records whether a criterion was met  |
+| Planner                                | whole repo             | `.agents/T-<id>.md` only                    | never touches source; owns criteria *text*, not outcome |
 | Implementer (`senior-dev` / `builder`) | whole repo             | source + `.agents/T-<id>.diff` + state file | the only roles that edit source                         |
 | Reviewer                               | whole repo (read-only) | state file only, or nothing — see below     | blanket `edit`/`write: deny` by default in this toolkit |
 | Tester                                 | whole repo (read-only) | `<test-dir>/**` + state file only           | never fixes, only reports                               |
@@ -87,6 +88,9 @@ bin/init.sh           the scaffolder — copies templates/ into a target repo
                         (--update: diffs current templates against a target
                         that's already scaffolded, writes nothing)
 test/smoke.sh         automated smoke test for the guarantees above (run by CI)
+test/invariants.sh    asserts every load-bearing rule is present in each of the
+                        hand-synced copies that must carry it (run by CI) —
+                        catches the omission that hand-syncing keeps producing
 templates/             every generated file, with __PLACEHOLDER__ tokens
   claude/agents/        planner.md.tmpl, senior-dev.md.tmpl
   claude/commands/      feature.md.tmpl — the /feature pipeline command
@@ -96,8 +100,10 @@ templates/             every generated file, with __PLACEHOLDER__ tokens
                           layout — resumes the lead by default, --port for
                           running a second project at once, see docs/TEAM.md),
                           team-completion.bash.tmpl (optional shell completion
-                          for team.sh), verify-state.sh.tmpl (deterministic
-                          structural check — no LLM call), promote-findings.sh.tmpl
+                          for team.sh), verify-state.sh.tmpl (structural check on
+                          a task's state file — no LLM call), verify-spec.sh.tmpl
+                          (the same, on a spec, before the human approves it),
+                          promote-findings.sh.tmpl
                           (copies tagged findings into project docs — no LLM
                           call, no agent write access to docs/)
 skills/

@@ -12,8 +12,12 @@
 #   5. --update against a drifted file reports exactly that one diff
 #   6. init.sh refuses to scaffold into its own checkout
 #   7. verify-state.sh: valid state file passes; 'blocked' Status is known;
-#      a third review pass (loop-cap breach) fails loudly
-#   8. promote-findings.sh: copies findings into docs, is idempotent, and
+#      a third review pass (loop-cap breach) fails loudly; a blown budget
+#      counter fails; 'done' is refused while an acceptance criterion is
+#      unticked and unwaived
+#   8. verify-spec.sh: the raw template fails (it is boilerplate), a filled
+#      spec passes, and an unmeasurable acceptance criterion is caught
+#   9. promote-findings.sh: copies findings into docs, is idempotent, and
 #      refuses doc paths that escape the repo
 #
 # Zero dependencies beyond bash/sed/awk/diff — same stance as init.sh.
@@ -113,7 +117,124 @@ if "$VS" T-01 > /dev/null 2>&1; then
 fi
 ok "verify-state fails loudly on a third review pass"
 
-# --- 7. promote-findings.sh --------------------------------------------------
+# --- 6b. verify-state.sh: budgets and definition-of-done --------------------
+# The budget counters and the done-gate are the structural half of the
+# anti-thrash and delivery-contract rules; if they are advisory only, they
+# are not rules. Each is checked on a file that is otherwise valid, so a
+# failure here names exactly one cause.
+cat > "$TMP/.agents/T-03.md" <<'EOF'
+**Status:** in-review
+**Review loop count:** 1 / 2
+**Test-fix loops:** 5 / 2
+**Spec bounces:** 0 / 1
+
+## Review verdicts
+
+### Pass 1 — 2026-08-26 — verdict: CHANGES_REQUESTED
+
+1. [high] a.js:1 — finding
+EOF
+"$VS" T-03 2>&1 | grep -q 'test-fix loop budget exceeded'   || fail "verify-state did not catch a blown test-fix budget"
+sed -i.bak 's|^\*\*Test-fix loops:\*\* 5 / 2|**Test-fix loops:** 1 / 2|' "$TMP/.agents/T-03.md"
+"$VS" T-03 > /dev/null 2>&1 || fail "verify-state rejected a file with in-budget counters"
+ok "verify-state enforces the loop budgets and passes when they are in range"
+
+cat > "$TMP/.agents/T-04.md" <<'EOF'
+**Status:** done
+**Review loop count:** 1 / 2
+**Test-fix loops:** 0 / 2
+**Spec bounces:** 0 / 1
+
+## Acceptance criteria
+
+- [ ] AC1 — something checkable
+- [ ] AC2 — something else checkable
+
+### Acceptance criteria ledger
+
+| AC | Met? | Reviewer evidence | Test evidence |
+| --- | --- | --- | --- |
+| AC1 | [x] | Pass 1 — a.js:42 | Run 1 — "parses null" |
+| AC2 | [ ] | Pass 1 — unverifiable from diff | no covering test |
+
+## Review verdicts
+
+### Pass 1 — 2026-08-26 — verdict: PASS
+
+none
+EOF
+if "$VS" T-04 > /dev/null 2>&1; then
+  fail "verify-state accepted 'done' with an unticked, unwaived criterion"
+fi
+"$VS" T-04 2>&1 | grep -q "acceptance criteria are unticked"   || fail "verify-state's done-gate failed for the wrong reason"
+python3 - "$TMP/.agents/T-04.md" <<'PY'
+import sys
+p=sys.argv[1]; s=open(p).read()
+s=s.replace('| AC2 | [ ] | Pass 1 — unverifiable from diff | no covering test |',
+            '| AC2 | [ ] | waived by user 2026-08-26 | n/a |')
+open(p,'w').write(s)
+PY
+"$VS" T-04 > /dev/null 2>&1 || fail "verify-state rejected 'done' with a properly waived criterion"
+ok "verify-state refuses 'done' on an open criterion, accepts an explicit waiver"
+
+# --- 7. verify-spec.sh -------------------------------------------------------
+# The spec-side equivalent: structure only, run before the human sees a spec.
+VSPEC="$TMP/scripts/verify-spec.sh"
+cp "$TMP/.agents/TEMPLATE.md" "$TMP/.agents/T-05.md"
+if "$VSPEC" T-05 > /dev/null 2>&1; then
+  fail "verify-spec passed the raw template, which is entirely boilerplate"
+fi
+"$VSPEC" T-05 2>&1 | grep -q 'still the template placeholder'   || fail "verify-spec did not identify template boilerplate"
+ok "verify-spec rejects an unfilled spec"
+
+python3 - "$TMP/.agents/T-05.md" <<'PY'
+import sys
+NL = chr(10)
+p = sys.argv[1]
+out, skip = [], False
+for line in open(p).read().split(NL):
+    if skip:
+        # placeholder fields wrap over several lines; drop until the blank one
+        if line.strip() == "":
+            skip = False
+            out.append(line)
+        continue
+    if line.startswith("**Simplest version considered:**"):
+        out.append("**Simplest version considered:** strip at the call site; rejected, three callers need it.")
+        skip = True
+    elif line.startswith("**Blast radius:**"):
+        out.append("**Blast radius:** every importer path; a wrong rule silently rewrites user URLs.")
+        skip = True
+    elif line.startswith("<One paragraph."):
+        out.append("Trailing slashes in imported URLs 404 instead of resolving.")
+        skip = True
+    elif line.startswith("- [ ] AC1 "):
+        out.append('- [ ] AC1 — importing "https://x.test/a/" resolves identically to "https://x.test/a"')
+    elif line.startswith("- [ ] AC2 "):
+        out.append('- [ ] AC2 — importing "https://x.test/" returns the root document, not a 404')
+    elif line.startswith("- [ ] AC3 "):
+        out.append("- [ ] AC3 — a URL without a trailing slash is byte-identical after normalisation")
+    elif line == "| | |":
+        out.append("| filled | filled |")
+    else:
+        out.append(line)
+open(p, "w").write(NL.join(out))
+PY
+"$VSPEC" T-05 > /dev/null 2>&1 || { "$VSPEC" T-05; fail "verify-spec rejected a properly filled spec"; }
+ok "verify-spec accepts a filled spec"
+
+python3 - "$TMP/.agents/T-05.md" <<'PY'
+import sys
+p=sys.argv[1]; s=open(p).read()
+s=s.replace('resolves identically to "https://x.test/a"','works well')
+open(p,'w').write(s)
+PY
+if "$VSPEC" T-05 > /dev/null 2>&1; then
+  fail "verify-spec accepted an acceptance criterion that names a quality, not an observable"
+fi
+ok "verify-spec catches an unmeasurable acceptance criterion"
+
+# --- 8. promote-findings.sh --------------------------------------------------
 PF="$TMP/scripts/promote-findings.sh"
 mkdir -p "$TMP/docs"
 cat > "$TMP/.agents/T-02.md" <<'EOF'

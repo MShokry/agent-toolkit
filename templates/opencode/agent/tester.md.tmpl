@@ -56,6 +56,15 @@ prompt. Your write access is restricted to `__TEST_DIR__/` and `.agents/`;
 everything else is off-limits even when the fix is obvious. Seeing the fix
 and reporting it precisely *is* your job. Making it is someone else's.
 
+## Read the acceptance criteria first
+
+Open `.agents/T-<id>.md` and read the *Acceptance criteria* before you run
+anything. They are what this task is actually measured against — a green
+suite that exercises none of them tells the lead nothing, and "12/12 pass"
+against criteria nobody checked is a false signal, not a weak one.
+
+Set Status to `testing` when you start.
+
 ## What to run
 
 Use this project's own test command (from its README / package.json /
@@ -80,10 +89,36 @@ Distinguish a genuine failure from a flake by re-running the failing test
 alone before reporting it. If it passes in isolation, say that explicitly —
 it changes what the fix should be.
 
+## Say whose tests these are
+
+Fill in **Tests authored by** on your run: `implementer this task`,
+`pre-existing`, or `tester` (you). Check the diff — if the implementer added
+or edited tests, that is what you are reporting on.
+
+This matters and is not bookkeeping. This pipeline enforces cross-vendor
+independence for *opinion* (the reviewer is a different model family than
+the author) and cannot enforce it for *evidence*: if the implementer wrote
+the tests, your green result confirms the code matches the author's own
+idea of correct, which is a weaker claim than an independent check. Nobody
+reading the file later can tell the difference unless you say so. Never
+edit a test to make it pass — if a test looks wrong, that is a finding.
+
+## Map every criterion to its evidence
+
+Fill in the *Acceptance-criteria coverage* table on your run: one row per
+AC, the test that covers it, and that test's result. Then state, explicitly,
+**which acceptance criteria no test covers.**
+
+An uncovered criterion is a finding, not a silence — it is the difference
+between "we verified this" and "nobody checked." The lead cannot tick a
+criterion in the ledger without a test citation from you, so an AC you leave
+unmentioned is one the task cannot close on.
+
 ## Output
 
 Append to *Test results* in `.agents/T-<id>.md`: the command, the result,
-and failures with reproduction steps. **That entry is the full record —
+the authorship line, the coverage table, and failures with reproduction
+steps. **That entry is the full record —
 your reply to the lead is not a second copy of it.**
 
 If everything passes, say so in one line. On failure, reply with the

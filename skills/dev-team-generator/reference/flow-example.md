@@ -70,10 +70,29 @@ yourself if the request is already fully documented elsewhere — see
 `SKILL.md` step 1's note on this). It produces a filled state file with
 checkable acceptance criteria and file-level scope.
 
+**Then check the spec with a script before the user sees it** — the same
+principle as the structural check in step 3, applied one step earlier. Most
+spec defects are structural: boilerplate left in, an acceptance criterion
+that names a quality ("works well") instead of an observable, an empty
+scope or permissions table, a ledger row missing for some criterion. A
+defect caught here costs one planner call; the same defect caught after
+implementation costs a full implement→review loop. Code gets two review
+passes — the spec every downstream role treats as the contract should not
+get zero.
+
 **Then stop.** Show the user the Goal, the acceptance criteria, the files
-in scope, and any new permission/dependency requested. Ask for approval.
+in scope, the planner's stated *simplest version considered* and *blast
+radius*, and any new permission/dependency requested. Ask for approval.
 Do not proceed on silence, and do not proceed with open questions
-outstanding.
+outstanding. Those last two fields exist for the user to push back on: a
+spec bigger than its simplest version is the cheapest thing in the whole
+pipeline to shrink, and this is the only moment shrinking it is free.
+
+**If the task looks very large** — many files or subsystems touched, several
+unrelated acceptance criteria — ask the user, before the auto-approve
+question below, whether to split it into smaller tasks run through this same
+pipeline one at a time, or proceed as a single task. Judge by scope breadth,
+not effort. The user decides; you only size it.
 
 **If any implementer this task might use has an opt-in wide-auto-approve
 flag** (see `lessons-learned.md` entry 1), ask about it in this same
@@ -92,6 +111,20 @@ file so the reviewer knows whether cross-vendor independence holds.
 If the implementer appends an open question and stops, bring it to the
 user. Do not answer it yourself unless the project's own record settles it
 unambiguously.
+
+**If the implementer stops saying the *spec* is unbuildable** — contradictory
+criteria, a scope omitting a file the work cannot avoid, a goal the codebase
+cannot support — send it back to the **planner**, once, with the objection.
+That is a bounce, not an escalation: a mechanical spec defect should cost one
+cheap planner call, not a human interruption. Budget it at one per task and
+record it in the state file; a second rejection means the humans and the
+agents don't agree on what the task is, which is the user's to settle.
+
+**Whenever a task stops at any blocked status,** record *what* it waits on
+(a human, or a re-plan) and *since when*, in the state file and the status
+board — not only in your own conversation. The session that picks the task
+back up may not be this one, and a task parked with no record of what it is
+parked on silently dies.
 
 ### Dispatch-tool usage limits
 
@@ -147,13 +180,44 @@ findings-promotion script before moving on.
   real target instead, and log the reasoning in the state file so the user
   can see and disagree with the call.
 
+**A later review pass closes the earlier one; it does not restart it.**
+Require the reviewer to mark every previous finding fixed / withdrawn /
+disputed (answering the implementer's written reason) / routed to test, and
+to admit a finding about code the diff didn't change only at the top two
+severities. Without that rule a loop cap stops being a convergence
+guarantee and becomes an arbitrary cutoff — the pipeline stops because it
+ran out of loops, not because the work converged. For the same reason, the
+reviewer must read the implementer's decisions/reasoning log, not only the
+diff: otherwise written disagreement has no reader and recording it is
+theatre.
+
 Adjudicate disagreements on the written evidence only. Where the evidence
 doesn't settle it, escalate rather than casting a tiebreak vote yourself.
+**Write down how you adjudicated** — finding number, which way it went, why.
+An adjudication that lives only in your context can't be appealed, audited,
+or learned from, and after a compaction you no longer have it either.
+
+**Count every loop.** Increment the state file's counter each time you
+re-engage the implementer, whichever direction it came from. A budget with
+no counter is not a budget.
 
 ## 4 — Test
 
 The tester reports; it never fixes. Real failures go back to the
-implementer as a new loop. Check whether the project already has a real
+implementer as a new loop — **budgeted the same way review loops are**
+(this toolkit uses 2). A flaky suite plus an eager implementer will
+otherwise cycle fix→test indefinitely with nothing noticing, because the
+only budget anyone thinks to add is the one counting review passes.
+
+**Independence of evidence, not only of opinion.** Switching the reviewer's
+model family buys an independent *opinion*; it buys nothing about the
+tests. If the implementer wrote them, a green run confirms only that the
+code matches its author's own idea of correct. So require the tester to
+read the acceptance criteria, map each one to the test covering it, name
+every criterion **no** test covers, and record who authored the tests it
+ran. A criterion with no covering test is unverified — which is a true and
+useful answer, and must reach the user as unverified rather than being
+absorbed into a green suite's pass count. Check whether the project already has a real
 automated way to verify the kind of thing under test (see
 `lessons-learned.md` entry 6) before defaulting to "this needs the user's
 own hands" — a narrower prompt or a fresh dispatch may simply not have
@@ -164,11 +228,36 @@ discovered infrastructure that already exists.
 Run the findings-promotion script once more here even if it already ran in
 step 3 — it should be idempotent (already-copied lines skipped).
 
+**Close the acceptance-criteria ledger.** For each criterion, copy the
+reviewer's citation and the tester's into its row, and mark it met **only
+when both are present**. This is the step that says what was actually
+delivered; without it the pipeline's final claim rests on the lead's
+recollection, which is the one thing every other rule here exists to avoid.
+Only the lead fills it — the implementer may never mark its own work met,
+and the planner owns the criteria's text, not their outcome. A criterion the
+user agreed to drop is waived explicitly, never ticked.
+
+Only then set the terminal status. Your structural check should refuse
+`done` while any criterion is unticked and unwaived.
+
 Update the status board. Give the user: acceptance criteria met versus
-outstanding, the review verdict, test results, anything unverified, and the
-proposed next action (commit/merge/etc).
+outstanding **read from the ledger**, anything unverified named as
+unverified, the review verdict, test results, **the loop counts used**
+(they're free, they're in the file, and they're the only signal anyone gets
+about whether the task fought back), and the proposed next action
+(commit/merge/etc).
 
 **Then stop and ask before merging.** Never merge on your own judgement.
+
+**Then ask once whether anything about *how the pipeline ran* is worth
+recording** — not about the code (that's the reviewer's job, and the
+findings-promotion path already carries it), but about orchestration: a
+dispatch order that was wrong, a stop-and-ask that should have come
+earlier, a judgement call the user corrected. If they name something, add a
+sentence to your own flow file in that turn and say what you changed.
+Asking exactly once, while the run is fresh, is what stops a project
+re-running its early mistakes forever — and doing it by consent beats
+granting anything standing edit rights over its own instructions.
 
 ## Stop and ask at
 
@@ -178,5 +267,6 @@ proposed next action (commit/merge/etc).
 - Any reviewer/implementer disagreement the evidence doesn't settle.
 - Any new permission, dependency, or capability, however reasonable it
   looks.
-- A third review loop.
+- A third review loop, a third test-fix loop, or a second spec bounce.
+- Any budget the structural check reports as exceeded.
 - Before any merge.

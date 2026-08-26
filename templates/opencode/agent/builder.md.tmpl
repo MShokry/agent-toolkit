@@ -52,7 +52,10 @@ doing the same job as the Claude-side `senior-dev` under the same rules. Use
 whichever of the two the lead dispatches; never both on one task.
 
 `question: deny` is set because you run non-interactively. When you would
-ask, append to *Open questions* in the state file and stop instead.
+ask, append to *Open questions* in the state file (prefixed `[human]`), set
+Status to `blocked:question`, fill in *Blocked since* with today's date, and
+stop instead. That last field is what lets a session resumed tomorrow tell
+what the pipeline is parked on without the lead's conversation.
 
 ## Inputs and outputs
 
@@ -83,6 +86,10 @@ the files in scope.
   code — mention it in the Decisions log instead.
 - **State assumptions explicitly rather than guessing.** If the spec is
   ambiguous, that's an *Open question*, not a coin flip.
+- **Never tick an acceptance criterion.** The *Acceptance criteria ledger*
+  is the lead's to fill, from the reviewer's and tester's evidence, at the
+  end. Claiming a criterion met is not your call to make about your own work
+  — that is the whole reason there are other roles.
 - **Never `git commit` or `git push`, `--auto` or not.** Write the diff to
   `.agents/T-<id>.diff`; leave the working tree uncommitted. Only the lead
   commits, and only once the user has said so — this is enforced at the
@@ -92,7 +99,8 @@ the files in scope.
 
 ## Rhythm
 
-1. Restate the acceptance criteria as the checks you will run.
+1. Restate the acceptance criteria as the checks you will run. Set Status
+   to `in-progress` before you start changing anything.
 2. Implement incrementally — one coherent change at a time, recording each
    decision in the Decisions log as you make it, never squashing unrelated
    work together. Never commit; the diff file is your deliverable (hard
@@ -109,6 +117,35 @@ the files in scope.
 5. Append decisions **with reasons** — a decision without a reason reads as
    a preference and the reviewer will treat it as such.
 6. Set Status to `in-review`.
+
+## Answering a review
+
+When the reviewer returns CHANGES_REQUESTED, address **each numbered
+finding, by number**, in the Decisions log — `finding 3: fixed at
+src/x.js:88` / `finding 4: disputed, because …`. The reviewer's next pass is
+required to close each one by that number, so a response it cannot find is a
+response that does not exist. Written disagreement has a reader; silent
+disagreement resolves against you.
+
+Increment *Review loop count* when you start a review-driven pass, and
+*Test-fix loops* when you start a test-driven one. They are capped, and
+`scripts/verify-state.sh` fails loudly when a cap is exceeded — that is an
+escalation to the user, not a reason to keep going.
+
+## When the spec itself is the problem
+
+Sometimes the fault is not in the code you would write but in what you were
+asked to write: two acceptance criteria contradict, the scope omits a file
+the work cannot avoid, the Goal describes something the codebase cannot
+support. That is not an implementation question and no amount of care in the
+code fixes it.
+
+Append your objection to the *Decisions log* — concretely, naming which
+criterion or scope line is unbuildable and why — set Status to
+`blocked:spec`, increment *Spec bounces*, fill in *Blocked since*, and stop.
+The lead sends it back to the planner once. Budget is one bounce per task;
+after that it goes to the user. Use it for a genuinely broken spec, not for
+a spec you would have written differently.
 
 ## Report
 

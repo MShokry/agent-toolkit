@@ -57,13 +57,45 @@ run — see `templates/claude/commands/feature.md.tmpl`'s "Token discipline"
 section for the reasoning in full, even though that file's own format is
 Claude-Code-specific.
 
+**Nobody may declare their own work done — and someone must declare it.**
+The acceptance criteria are the contract; a criterion nobody records an
+outcome for means the pipeline stopped one step short of saying what it
+delivered. Keep a **ledger** in the state file: one row per criterion, with
+the reviewer's citation (`file:line`) and the tester's (which test) in
+separate columns. Rules that make it worth having:
+
+- Only the **lead** fills it, at the report step. The planner owns the
+  criteria's *text* and may not record outcomes; the implementer may never
+  mark its own work met; the reviewer and tester supply evidence, not
+  verdicts on the contract.
+- A criterion is met **only when both evidence cells are filled.** No
+  evidence, no tick — "unverified" is a true and useful answer, and hiding
+  it behind a tick is exactly what this prevents.
+- A structural check should refuse a `done` status while any criterion is
+  unticked and unwaived. That is the difference between a pipeline that
+  produces work and one that can tell you what it produced.
+
+**Every status has exactly one owner.** Write down which role sets each
+value of your status field and on what event, or the field silently rots:
+this toolkit shipped eight statuses of which only three were ever set by
+anyone — including `done`, which nothing set, while the status-board rule
+keyed off exactly that value. A status nobody owns is a status that lies,
+and everything downstream that reads it inherits the lie.
+
 **Verification is a script, not a sixth agent.** Checking whether a
 verdict landed in the right heading, or whether a finding needs promoting
 to project docs, needs no judgment — `templates/scripts/verify-state.sh.tmpl`
 and `templates/scripts/promote-findings.sh.tmpl` do it deterministically,
-for free, and can't hallucinate a pass. Dispatching another agent to check
-an agent's structural output is a paid call that adds a component that can
-misjudge the same way the one it's checking can. Prefer the script.
+for free, and can't hallucinate a pass. The same applies *before*
+implementation: most spec defects are structural (an empty scope table, a
+criterion that names a quality instead of an observable, boilerplate left
+in), so check the spec with a script too — see
+`templates/scripts/verify-spec.sh.tmpl`. Code gets two review passes; the
+spec every role treats as the contract should not get zero.
+
+Dispatching another agent to check an agent's structural output is a paid
+call that adds a component that can misjudge the same way the one it's
+checking can. Prefer the script.
 
 **Permission is least-privilege per role, verified live, not assumed.**
 Whatever your tool's capability model actually is, give the reviewer
@@ -75,8 +107,42 @@ than implying a scoping guarantee that isn't real — don't trust a
 permission block just because it reads correctly; dispatch it once and try
 to make it do the disallowed thing before relying on it.
 
+**Ask before running a very large task as one task.** Many files or
+subsystems touched, several unrelated acceptance criteria → ask the human
+whether to split it into smaller tasks run through this pipeline one at a
+time, or proceed as one. Judge by scope breadth, not effort. The human
+decides; you size it. A large task run unsplit compounds two risks at once —
+a wide, hard-to-review diff, and (if any implementer has a wide
+auto-approve flag) unattended permission approval across all of it.
+
 **Loop discipline:** max two review loops on CHANGES_REQUESTED; a third
-means the spec was wrong, not the code — stop and ask the human. A
+means the spec was wrong, not the code — stop and ask the human. **Every
+other way the implementer gets re-engaged is budgeted too** — test-fix loops
+(cap 2) and spec bounces (cap 1) — and all three counters live in the state
+file where a script can check them. A budget with no counter is not a
+budget: before this toolkit added the test-fix counter, a flaky suite plus
+an eager implementer could cycle fix→test forever, because the only budget
+in the file counted review passes.
+
+**A second review pass closes the first, it does not restart it:** every
+earlier finding marked fixed, withdrawn, disputed (answering the author's
+written reason) or routed to test, and a finding about code the diff did
+not change is admissible on a later pass only at the top two severities.
+Without that, a loop cap stops being a convergence guarantee and becomes an
+arbitrary cutoff. For the same reason the reviewer must read the author's
+decisions/reasoning log, not only the diff — otherwise written disagreement
+has no reader and the record of it is theatre.
+
+**Independence of *evidence*, not only of opinion.** Switching the
+reviewer's model family buys you an independent opinion. It buys nothing
+about the tests: if the implementer wrote them, a green run confirms the
+code matches its author's own idea of correct. Require the tester to read
+the acceptance criteria, to record its acceptance-criteria coverage (each
+criterion and the covering test), to name every criterion **no** test
+covers, and to record who authored the tests it ran. A suite that exercises none of the criteria is not evidence,
+and a reader cannot tell unless the file says so.
+
+A
 CHANGES_REQUESTED whose findings name no concrete code defect is not a
 loop at all: route it to the test/verification step as an explicit thing
 to check, logged in the state file so the human can see and disagree —
@@ -132,6 +198,14 @@ its label.
 You don't need to replicate any specific tool's slash-command or subagent
 mechanism. You need three things:
 
+0. **First, check whether this project was just scaffolded.** If a
+   first-run customization marker exists (this toolkit writes
+   `.agents/.needs-customization`), the role files still carry generic
+   pitfalls/hard-rules text rather than this codebase's real ones — do that
+   customization pass with the human before running anything, then delete
+   the marker. It is written once, on a fresh scaffold only, and the check
+   otherwise lives in a Claude-Code-specific command file that you, as a
+   different lead, will never execute.
 1. **A way to read and write `.agents/T-<id>.md`** — any tool with file
    access can do this.
 2. **A way to run each worker role** — either do the work yourself inline

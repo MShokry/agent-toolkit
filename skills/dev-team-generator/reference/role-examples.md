@@ -32,6 +32,18 @@ ambiguity into Open questions, and stop. Don't resolve it by guessing, and
 don't paper over it with a flexible design that handles every reading —
 the lead clears open questions, not the planner.
 
+Scope is this role's real leverage, so it gets the same minimalism rules
+the implementer gets (see `lessons-learned.md` entry 20): specify the
+minimum that satisfies the request, no speculative flexibility, every file
+in scope traceable to the goal in one clause. Two fields make that
+reasoning reviewable rather than internal, and the human reads both at the
+approval gate: **the simplest version considered** (and why the spec is
+bigger than it), and **the blast radius** (what breaks if this is wrong).
+
+The planner writes the criteria's *text* and a ledger row for each one — it
+never records an outcome and never ticks a box. That is the lead's job at
+the report step, from the reviewer's and tester's evidence (entry 12).
+
 Sizing: if the request can't be stated as roughly seven or fewer acceptance
 criteria against a handful of files, it's more than one task — say so,
 propose the split, spec the first piece only.
@@ -54,6 +66,18 @@ log as it's made — not reconstructed afterward. If it hits something the
 spec didn't anticipate (a file outside the stated scope needs touching, a
 genuine ambiguity), append an Open question and stop; it does not resolve
 spec ambiguity by guessing, and does not silently widen its own file scope.
+
+Two things it must never do: **mark its own work as meeting a criterion**
+(the ledger is the lead's, from someone else's evidence), and **argue with a
+finding only in its own head** — a disputed finding gets its reason written
+in the Decisions log, by number, where the reviewer is required to answer it
+next pass (entries 12 and 18).
+
+When the *spec itself* is unbuildable — contradictory criteria, a scope that
+omits a file the work can't avoid — that's not an implementation question:
+record which line is unbuildable and why, set the bounced-to-planner blocked
+status, and stop. One bounce per task; a second is the human's to settle
+(entry 15).
 
 Testing rhythm (see `lessons-learned.md` entry 4): run this project's fast,
 deterministic checks on what was touched — a type check, a linter, a test
