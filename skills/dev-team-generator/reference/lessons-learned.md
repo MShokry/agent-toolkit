@@ -423,3 +423,30 @@ fewest rules about removing it.
   already reasons about; the fields make that reasoning reviewable instead
   of internal, and give the human something concrete to push back on other
   than the planner's own framing.
+
+## 21. Session scope is one task, not one sub-agent
+
+When a dispatch tool supports session continuity it is tempting to give
+every dispatched role a fresh session "for independence". That trades a
+real cost for a partial benefit: a fresh reviewer/tester must re-read every
+file the implementer already read — on a large implementation that burns
+more context than the independence is worth. The rule that held up: **same
+task → same session, new task → new session, for all sub-agents alike.**
+The implementer, reviewer, and tester of one task share its single
+session; nothing carries across tasks.
+
+## 22. Track classifications with their decision source
+
+Wherever the pipeline records a judgment about a task (here: its class —
+routine / standard / sensitive), record **who made it**: `agent` or
+`human`. A bare value decays into folklore — nobody can later tell whether
+a human chose it or a model guessed. Two rules kept this cheap:
+
+- The **model proposes** (the planner knows the spec's true breadth best),
+  the lead confirms, and the human is asked **only when the lead is torn**.
+  Asking on every task makes the question noise; noise trains humans to
+  auto-approve.
+- The classification is **recorded, not acted on**: it never changes
+  session policy, permissions, or budgets mid-task. A label that can
+  silently change what a role is allowed to do is a permission system, and
+  permission changes belong at gates, not in metadata.

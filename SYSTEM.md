@@ -132,6 +132,18 @@ auto-approve mid-task; increment every re-engagement budget counter at the
 moment you route work back, and treat an exceeded budget as an escalation,
 never one more lap.
 
+**Every task gets a class, proposed by the planner:** `routine`,
+`standard`, or `sensitive`, judged by scope breadth and blast radius. You
+confirm it at spec approval and ask the human only when genuinely torn.
+Record **who decided** (`agent` | `human`) next to it — and record, don't
+act: a class never changes session policy, permissions, or budgets
+mid-task.
+
+**Session scope is one task, for all sub-agents alike:** same task → same
+session (implement, review, test continue it); new task → new session. A
+fresh session per reviewer/tester re-reads every file from scratch — that
+burns the context reuse exists to save.
+
 **A second review pass closes the first, it does not restart it:** every
 earlier finding marked fixed, withdrawn, disputed (answering the author's
 written reason) or routed to test, and a finding about code the diff did

@@ -43,6 +43,27 @@ case "$STATUS" in
   *) fail "unrecognised Status: '$STATUS'" ;;
 esac
 
+# Task class + decision source: structural checks only. A file from before
+# these fields existed has neither line — accepted silently, same
+# grandfathering as bare `blocked`. But a line that IS present must carry a
+# real value; boilerplate counts as "not yet filled", anything else fails.
+if grep -q '^\*\*Task class:\*\*' "$FILE"; then
+  CLASS="$(grep -m1 '^\*\*Task class:\*\*' "$FILE" | sed 's/.*Task class:\*\* *//' | sed 's/ *$//')"
+  case "$CLASS" in
+    routine|standard|sensitive) : ;;
+    "<"*) : ;;  # untouched template placeholder = not yet proposed
+    *) fail "Task class is '$CLASS' — expected routine, standard, or sensitive" ;;
+  esac
+fi
+if grep -q '^\*\*Class decided by:\*\*' "$FILE"; then
+  BY="$(grep -m1 '^\*\*Class decided by:\*\*' "$FILE" | sed 's/.*Class decided by:\*\* *//' | sed 's/ *$//')"
+  case "$BY" in
+    agent|human) : ;;
+    "<"*) : ;;
+    *) fail "Class decided by is '$BY' — expected agent or human" ;;
+  esac
+fi
+
 # Statuses that mean "nothing has been reviewed or run yet". Used below to
 # decide when an unfilled placeholder is still fine.
 is_early() {

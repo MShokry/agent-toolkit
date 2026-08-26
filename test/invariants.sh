@@ -66,6 +66,14 @@ rule "standing duties: ask once, unblock, never widen mid-task" \
   'removing blockers, not implementing' \
   "$FEATURE" "$SYSTEM" "$FLOW"
 
+rule "task class proposed by model, tracked with decision source" \
+  'class decided by|record \*\*who decided\*\*|who decided.*agent.*human' \
+  "$FEATURE" "$SYSTEM" "$FLOW"
+
+rule "session scope is one task for all sub-agents" \
+  'same task.*same session|new task.*new session' \
+  "$FEATURE" "$SYSTEM" "$FLOW"
+
 rule "ask before splitting a very large task" \
   'split it into smaller tasks|split into smaller tasks' \
   "$FEATURE" "$SYSTEM" "$FLOW"

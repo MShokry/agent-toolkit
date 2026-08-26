@@ -152,6 +152,17 @@ EOF
 "$VS" T-01 > /dev/null 2>&1 || fail "verify-state rejected a valid blocked-state file"
 ok "verify-state accepts valid state file incl. blocked Status"
 
+# 6a. Task class + decision source: absent = fine, junk = fails
+cat > "$TMP/.agents/T-01.md" <<'EOF'
+**Status:** blocked
+**Task class:** TBD
+**Class decided by:** maybe
+EOF
+"$VS" T-01 > /dev/null 2>&1 && fail "verify-state accepted bogus Task class / decision source"
+printf '**Status:** blocked\n**Task class:** sensitive\n**Class decided by:** human\n' > "$TMP/.agents/T-01.md"
+"$VS" T-01 > /dev/null 2>&1 || fail "verify-state rejected a valid class + decision source"
+ok "verify-state validates Task class + Class decided by (absent ok, junk fails)"
+
 printf '\n### Pass 3 — 2026-08-26 — verdict: PASS\n\nnone\n' >> "$TMP/.agents/T-01.md"
 if "$VS" T-01 > /dev/null 2>&1; then
   fail "verify-state accepted a Pass 3 (two-loop cap breached)"

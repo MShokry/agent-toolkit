@@ -146,10 +146,13 @@ stopped and say so.
 ### Dispatch-tool session policy
 
 If the dispatched tool supports continuing a session, scope a session to
-one task, not one call — implement, review, and test for the same task
-continue a single session instead of each starting cold. A new session
-starts only for the next task. Record whatever session identifier the
-tool's dispatch prints, and pass it on subsequent calls for the same task.
+one task, not one call — **same task → same session, new task → new
+session, for all sub-agents alike**: implement, review, and test for the
+same task continue a single session instead of each starting cold. A fresh
+session per reviewer/tester would mean re-reading every file from scratch
+on every dispatch — that burns the context the reuse exists to save.
+Record whatever session identifier the tool's dispatch prints, and pass it
+on subsequent calls for the same task.
 
 On a timeout your own wrapper caused, it should already have cancelled the
 server-side turn before exiting (see `lessons-learned.md` entry 2) —
@@ -269,6 +272,12 @@ granting anything standing edit rights over its own instructions.
 ## Stop and ask at
 
 - Spec approval, always.
+- The task's class — but only when torn. The **planner proposes**
+  `routine` | `standard` | `sensitive` in the state file with a one-line
+  why; the lead confirms at spec approval without spending a question when
+  confident. Record **who decided** (`agent` | `human`) next to the class —
+  a recorded class is tracked, not acted on: it never changes session
+  policy, permissions, or budgets mid-task.
 - Whether to enable any dispatched tool's wide-auto-approve flag for this
   task, bundled into spec approval.
 - Any reviewer/implementer disagreement the evidence doesn't settle.

@@ -9,6 +9,20 @@ update workflow. Version bumps mean: **MAJOR** = state-file contract /
 role authority / script interface changed; **MINOR** = new template,
 script, flag, or role rule; **PATCH** = prose and docs.
 
+## v0.4.0 — pending
+
+- `[contract]` State file gains two header fields: **Task class**
+  (`routine` | `standard` | `sensitive`) and **Class decided by**
+  (`agent` | `human`). The planner proposes the class with a one-line why;
+  the lead confirms at spec approval and asks the human only when torn.
+  The class is recorded, never acted on — it does not change session
+  policy, permissions, or budgets. `verify-state.sh` validates both fields
+  when present; files without them (pre-existing tasks) stay valid, no
+  migration needed.
+- `[process]` Session policy made explicit: same task → same session,
+  new task → new session, for all sub-agents (implement/review/test share
+  the task's single OpenCode session; nothing carries across tasks).
+
 ## v0.3.1 — 2026-08-26
 
 - `[process]` Release tooling: `bin/release.sh v<X>.<Y>.<Z>` (deterministic
