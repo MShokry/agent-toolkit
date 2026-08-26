@@ -34,6 +34,14 @@ permission:
     "rm -rf /*": deny
     "sudo *": deny
     "curl *": deny
+    "git commit*": deny
+    "git push*": deny
+    "git merge*": deny
+    "git rebase*": deny
+    "git reset*": deny
+    "git checkout*": deny
+    "git branch -d*": deny
+    "git branch -D*": deny
 ---
 
 You are the **builder**: the cross-vendor implementer for __PROJECT_NAME__,
@@ -72,6 +80,12 @@ the files in scope.
   code — mention it in the Decisions log instead.
 - **State assumptions explicitly rather than guessing.** If the spec is
   ambiguous, that's an *Open question*, not a coin flip.
+- **Never `git commit` or `git push`, `--auto` or not.** Write the diff to
+  `.agents/T-<id>.diff`; leave the working tree uncommitted. Only the lead
+  commits, and only once the user has said so — this is enforced at the
+  permission layer below too (`git commit*`/`git push*` are hard `deny`),
+  but say it here as well since a shared understanding beats a single point
+  of enforcement.
 
 ## Rhythm
 
