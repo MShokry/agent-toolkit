@@ -23,15 +23,18 @@ on demand rather than requiring everything read up front.
 flowchart TD
     Req([Feature request]) --> Lead
     Lead -->|dispatch| Planner
-    Planner -->|writes T-id.md - Goal, ACs, files in scope| Lead
-    Lead -->|shows spec to user| Approve{User approves?}
+    Planner -->|T-id.md - Goal, ACs, ledger rows, scope| Spec[/verify-spec.sh<br/>structural check, no LLM call/]
+    Spec -- fails --> Planner
+    Spec -- passes --> Approve{User approves?}
     Approve -- no or open questions --> Req
     Approve -- yes --> Impl[Implementer<br/>builder or senior-dev]
+    Impl -- spec unbuildable, max 1 bounce --> Planner
     Impl -->|code, T-id.diff, Decisions log| Review[Reviewer]
-    Review -- PASS --> Test[Tester]
     Review -- CHANGES_REQUESTED, max 2 loops --> Impl
-    Test -- N of N pass --> Report[Lead reports to user]
-    Test -- failures --> Impl
+    Review -- PASS --> Test[Tester]
+    Test -- failures, max 2 loops --> Impl
+    Test -->|AC coverage, test authorship| Ledger[Lead closes the AC ledger<br/>a tick needs reviewer AND test evidence]
+    Ledger --> Report[Lead reports: ACs met, unverified, loops used]
     Report --> Merge{Merge?}
 ```
 
@@ -362,10 +365,19 @@ project on its own.
 
 - `test/smoke.sh` covers the scaffolder's core guarantees (placeholder
   substitution, never-clobber on re-run, `--update` diffing, the
-  findings-path traversal guard, the loop-cap check) but nothing yet runs
-  a *live* pipeline end to end against a real OpenCode server — permission
+  findings-path traversal guard, the loop-cap and budget checks, the
+  refusal to mark a task `done` on an open acceptance criterion, and
+  `verify-spec.sh`'s three cases), and `test/invariants.sh` covers rule
+  presence across the hand-synced copies — but nothing yet runs a *live*
+  pipeline end to end against a real OpenCode server. **Permission
   enforcement in particular still needs the manual verification described
-  under "Design decisions".
+  under "Design decisions", and remains the single biggest unverified
+  assumption in this toolkit.**
+- The checks are structural by design. They can tell you a spec is
+  unfinished, a budget is blown, or a criterion was closed without
+  evidence; they cannot tell you the spec is *wrong* or the evidence is
+  *good*. That judgement is still the reviewer's, the tester's, and yours
+  at the approval and merge gates.
 - Nothing here validates that a given OpenCode `vendor/model` string is
   real — `opencode models` is the source of truth and isn't queried by
   `init.sh` automatically.

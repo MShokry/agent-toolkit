@@ -70,10 +70,11 @@ recurs:
 - **Simple and mechanical, and you've now done it more than once** — stop
   and write a script under `scripts/`. A structural check, a copy, a
   format conversion: none of that needs judgment, so it never needed an
-  LLM call in the first place. `scripts/verify-state.sh` and
-  `scripts/promote-findings.sh` exist because the same "did this land in
-  the right place" and "does this belong in a doc" questions were being
-  re-answered by hand every task; now they're free and can't misjudge.
+  LLM call in the first place. `scripts/verify-state.sh`,
+  `scripts/verify-spec.sh` and `scripts/promote-findings.sh` exist because
+  the same "did this land in the right place", "is this spec actually
+  finished" and "does this belong in a doc" questions were being re-answered
+  by hand every task; now they're free and can't misjudge.
 - **Needs judgment, but the same judgment every time** — write it up as a
   Skill instead of re-deriving the reasoning in every session. If you find
   yourself re-explaining the same rule to yourself or a delegate for the

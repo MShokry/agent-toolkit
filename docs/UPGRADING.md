@@ -25,9 +25,11 @@ four problems in a row:
    one hunk is a permission-block change you must merge today and another
    is a typo fix in a comment. Every upstream change looks equally
    urgent, so none of them get merged.
-4. **No migrations.** When the state-file contract gains a field (as it
-   just did — *Reviewer for this task*), existing `.agents/T-*.md` files
-   in flight silently lack it, and nothing says so.
+4. **No migrations.** When the state-file contract gains a field or a
+   section — as it has now, substantially (the acceptance-criteria ledger,
+   three budget counters, a split blocked status) — existing
+   `.agents/T-*.md` files in flight silently lack it, and nothing says so.
+   Stage 4 below now carries the real migration note for that change.
 
 Consequence: `--update` is technically correct and practically unused. A
 project scaffolds once and never upgrades, which means every hardening
@@ -134,16 +136,42 @@ With Stages 1–2 in place, `--update` gets three cheap upgrades:
 ## Stage 4 — Migrations for contract changes
 
 Only `[contract]` changes need this, which is rare by design. Ship a note
-per contract change under `migrations/`:
+per contract change under `migrations/`. **There is now a real one to
+write** — the delivery-contract work applied from `REVIEW-2.md` changed the
+state file more than anything since the toolkit was extracted:
 
 ```markdown
-# 03 — Reviewer/Tester fields (v0.3.0)
-Applies to: .agents/TEMPLATE.md and any in-flight .agents/T-*.md
-Add under **Implementer for this task:**
-  **Reviewer for this task:** none yet — set by the lead before dispatching review
-  **Tester for this task:**   none yet — set by the lead before dispatching test
+# 01 — Delivery contract (ledger, budgets, split blocked status)
+Applies to: .agents/TEMPLATE.md, scripts/verify-state.sh, every role file,
+            and any in-flight .agents/T-*.md
+
+New header fields (add under **Implementer for this task:**):
+  **Reviewer for this task:** / **Tester for this task:**
+  **Test-fix loops:** 0 / 2      **Spec bounces:** 0 / 1
+  **Blocked since:** —
+
+New section, under Acceptance criteria:
+  ### Acceptance criteria ledger — one row per AC, columns:
+  | AC | Met? | Reviewer evidence | Test evidence |
+
+Status enum: `blocked` split into `blocked:question` / `blocked:spec`.
+  Bare `blocked` still validates — it is kept as the legacy value precisely
+  so in-flight files don't break. Nothing to do for existing tasks.
+
+New script: scripts/verify-spec.sh (run at the end of step 1).
+
 Safe to skip for tasks already at Status `done`.
 ```
+
+**Backward compatibility, deliberately:** the new `verify-state.sh` treats
+every new field as optional — an absent budget counter is skipped rather
+than failed, an absent ledger means the done-gate has nothing to check, and
+bare `blocked` still validates. So a downstream project can take the new
+script before it takes the new template, and its in-flight tasks keep
+passing. What it does *not* get until it takes the template is the
+guarantee: no ledger means nothing refuses a premature `done`. That is the
+difference between the checks being installed and the checks being load-
+bearing, and it is worth saying out loud in the changelog entry.
 
 Short, literal, and hand-appliable. Do **not** build a migration runner —
 these are two-line edits a few times a year, and a runner is exactly the
@@ -169,7 +197,12 @@ command rendered by `init.sh` alongside `feature.md`:
 6. **Hard stop on permission blocks.** Any hunk touching a `permission:`
    or `tools:` block is presented, never auto-applied, and carries the
    toolkit's standing rule: verify it live against the real server before
-   trusting it. This toolkit's own history is the argument — a
+   trusting it.
+   Treat a new or changed structural script (`verify-state.sh`,
+   `verify-spec.sh`, `promote-findings.sh`) as `[safety]` too: these are
+   what the pipeline's guarantees actually rest on, and a project running
+   an old `verify-state.sh` against a new template silently loses the
+   done-gate rather than failing loudly about it. This toolkit's own history is the argument — a
    blanket-deny that read correctly and did not enforce.
 7. Update the stamp to the new SHA/tag when the merge is accepted.
 8. Report merged / skipped / deferred, and record it in the project's
@@ -180,6 +213,22 @@ live while a task is in flight, and changing the template under a running
 task is exactly how an in-flight `T-<id>` ends up half on each contract.
 
 ---
+
+## Upstream's own half of this
+
+A downstream project can only merge what upstream shipped coherently. This
+toolkit keeps several hand-synced copies of the same rules (three of the
+lead's flow, two of the state-file contract), and hand-syncing failed twice
+on consecutive commits before `test/invariants.sh` existed to check it —
+including one rule that a review file recorded as applied and that was not
+actually in the file.
+
+That test is the upstream-side counterpart to everything above: it asserts
+one grep per (rule, file) pair and runs in CI, so a release cannot ship a
+rule that reached only two of its three homes. Add a rule to a flow copy and
+you add one line to its table in the same commit. Without that, a downstream
+project merging faithfully still inherits whichever copy happened to be
+stale.
 
 ## Rejected: submodule or subtree
 

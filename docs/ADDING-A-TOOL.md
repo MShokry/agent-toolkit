@@ -54,8 +54,16 @@ you want it to also run under some other tool.
    "How it flows" diagrams if a genuinely new path through the pipeline
    was added (not just a new implementer vendor, which the existing
    diagram already generalizes over).
-7. **Smoke-test**: re-run `bin/init.sh` into a scratch directory and
-   confirm the new file renders with no leftover `__PLACEHOLDER__` tokens.
+7. **Add the role's rules to `test/invariants.sh`.** That test checks one
+   grep per (rule, file) pair across every copy that must carry a rule — a
+   new role file is a new column for the rules it has to carry (the loop
+   budgets, the ledger's write-ownership, the blocked-status protocol, and
+   whichever else apply to that role). One line per rule in its table. Skip
+   this and the new file silently drifts from its siblings, which is the
+   exact failure the test exists to stop.
+8. **Smoke-test**: run `bash test/smoke.sh` and `bash test/invariants.sh`,
+   then re-run `bin/init.sh` into a scratch directory and confirm the new
+   file renders with no leftover `__PLACEHOLDER__` tokens.
 
 ## Case 2 — a role that's now genuinely duplicated across 2+ tools
 

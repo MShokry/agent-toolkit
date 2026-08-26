@@ -45,7 +45,7 @@ Ask these up front rather than guessing — they shape every generated file:
 
 It writes `.claude/agents/`, `.opencode/agent/`, `.claude/commands/feature.md`,
 `.agents/TEMPLATE.md`, and `scripts/{oc.sh,team.sh,verify-state.sh,
-promote-findings.sh}` into the target. It does **not** overwrite a file that
+verify-spec.sh,promote-findings.sh}` into the target. It does **not** overwrite a file that
 already exists — it prints what it skipped so you can diff and merge by
 hand.
 
@@ -100,3 +100,11 @@ them at `SYSTEM.md` at the toolkit root instead.
    "this project's own guidance file" for constraints — make sure the
    project actually has a `CLAUDE.md`/`AGENTS.md` before relying on that,
    or the delegates have nothing to read.
+5. Point out the two structural scripts and when each runs, since they are
+   what the pipeline's guarantees actually rest on: `verify-spec.sh` at the
+   end of step 1 (before the user approves a spec) and `verify-state.sh`
+   after review and again at report time. Neither makes an LLM call, and
+   `verify-state.sh` is what refuses to let a task be marked `done` while an
+   acceptance criterion is unticked and unwaived — that refusal is the
+   toolkit's definition of done, so it is worth the user knowing it exists
+   rather than discovering it as an error.
