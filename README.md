@@ -90,6 +90,9 @@ decisions" below).
 bin/init.sh           the scaffolder — copies templates/ into a target repo
                         (--update: diffs current templates against a target
                         that's already scaffolded, writes nothing)
+bin/release.sh        the releaser — checks clean tree/main/changelog heading,
+                        then annotated tag + push (drafting the entry is the
+                        toolkit-release skill's job)
 test/smoke.sh         automated smoke test for the guarantees above (run by CI)
 test/invariants.sh    asserts every load-bearing rule is present in each of the
                         hand-synced copies that must carry it (run by CI) —
@@ -118,6 +121,10 @@ skills/
                           any project's lead session, independent of init.sh
   toolkit-init/SKILL.md  a thin skill wrapping bin/init.sh, so a lead can
                           run this conversationally in a target repo
+  toolkit-release/        cut a release conversationally: drafts the
+    SKILL.md              impact-tagged changelog entry from git history
+                          since the last tag, proposes the version, runs
+                          bin/release.sh after user approval
   dev-team-generator/     self-contained alternative to toolkit-init: asks
     SKILL.md              first, then generates the team + flow live for
                           whatever tool(s) are actually available, instead

@@ -16,7 +16,7 @@ jobs:
       - name: ShellCheck
         run: |
           shellcheck --version >/dev/null 2>&1 || { echo "shellcheck not installed; skipping"; exit 0; }
-          shellcheck bin/init.sh test/smoke.sh test/invariants.sh
+          shellcheck bin/init.sh bin/release.sh test/smoke.sh test/invariants.sh
           for f in templates/scripts/*.tmpl; do
             shellcheck --shell=bash "$f"
           done

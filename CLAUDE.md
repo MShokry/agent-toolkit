@@ -59,6 +59,8 @@ files are skipped, not clobbered (`render()`'s core guarantee).
 | Path | Role |
 | --- | --- |
 | `bin/init.sh` | The scaffolder. `render()` copies a `.tmpl` file to a destination with `sed` placeholder substitution, skipping any file that already exists |
+| `bin/release.sh` | Deterministic releaser: validates clean tree / main / changelog heading / no duplicate tag, then annotated tag + push. Judgment (changelog drafting, version choice) lives in `skills/toolkit-release/`, never in the script |
+| `skills/toolkit-release/` | Conversational release flow: classify commits since the last tag into `[contract]›[safety]›[process]›[docs]`, propose a semver-ish version, get user approval, write the CHANGELOG section, run `bin/release.sh` |
 | `test/smoke.sh` | The automated smoke run (see Commands). CI runs it plus shellcheck on every push |
 | `test/invariants.sh` | Cross-file rule presence check: one grep per (rule, file) pair over the hand-synced copies. Add a rule = one line in its table |
 | `.github/workflows/ci.yml` | Runs `test/smoke.sh` + shellcheck (`bin/init.sh`, the test, and every `templates/scripts/*.tmpl`) |

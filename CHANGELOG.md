@@ -9,6 +9,14 @@ update workflow. Version bumps mean: **MAJOR** = state-file contract /
 role authority / script interface changed; **MINOR** = new template,
 script, flag, or role rule; **PATCH** = prose and docs.
 
+## Unreleased
+
+- [process] Release tooling: `bin/release.sh v<X>.<Y>.<Z>` (deterministic
+  checks — clean tree, on main, changelog heading present, no duplicate tag —
+  then annotated tag + push) and `skills/toolkit-release/` (drafts the
+  changelog entry from git history since the last tag, classifies impact,
+  proposes the version, runs the releaser after user approval).
+
 ## v0.3.0 — 2026-08-26
 
 - `[contract]` state file: acceptance-criteria ledger (lead-only, evidence
