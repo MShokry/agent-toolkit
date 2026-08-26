@@ -9,7 +9,7 @@ update workflow. Version bumps mean: **MAJOR** = state-file contract /
 role authority / script interface changed; **MINOR** = new template,
 script, flag, or role rule; **PATCH** = prose and docs.
 
-## v0.4.0 — pending
+## v0.4.0 — 2026-08-26
 
 - `[contract]` State file gains two header fields: **Task class**
   (`routine` | `standard` | `sensitive`) and **Class decided by**
@@ -22,6 +22,14 @@ script, flag, or role rule; **PATCH** = prose and docs.
 - `[process]` Session policy made explicit: same task → same session,
   new task → new session, for all sub-agents (implement/review/test share
   the task's single OpenCode session; nothing carries across tasks).
+- `[process]` `scripts/team.sh`: pane 0 no longer resumes via
+  `claude --continue` ("the most recent conversation in this directory,"
+  with no notion of which tmux session started it — a second team.sh
+  session name, or an unrelated `claude` run, in the same repo could steal
+  the next resume). Each tmux session name now pins to its own
+  conversation via a stored UUID
+  (`.agents/.claude-session-id.<session-name>`, resumed with
+  `claude --resume`), removing that ambiguity.
 
 ## v0.3.1 — 2026-08-26
 
