@@ -1,0 +1,20 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Scaffolder smoke test
+        run: bash test/smoke.sh
+      - name: ShellCheck
+        run: |
+          shellcheck --version >/dev/null 2>&1 || { echo "shellcheck not installed; skipping"; exit 0; }
+          shellcheck bin/init.sh test/smoke.sh
+          for f in templates/scripts/*.tmpl; do
+            shellcheck --shell=bash "$f"
+          done

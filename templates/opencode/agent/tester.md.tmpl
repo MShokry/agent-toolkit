@@ -25,6 +25,11 @@ permission:
   webfetch: allow
   websearch: deny
   bash:
+    # "npm install *" is allowed on purpose: a missing dev dependency is an
+    # environmental failure the tester must be able to resolve to run the
+    # suite at all. The tradeoff (postinstall code execution) is accepted
+    # because this role's write scope is bounded to __TEST_DIR__/ + .agents/
+    # and every call lands in --raw-out.
     "*": ask
     "node *": allow
     "npm test*": allow

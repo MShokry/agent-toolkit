@@ -20,7 +20,6 @@ permission:
   doom_loop: deny
   bash:
     "*": ask
-    "git *": allow
     "node *": allow
     "npm test*": allow
     "npm run *": allow
@@ -31,6 +30,10 @@ permission:
     "ls *": allow
     "find *": allow
     "mkdir *": allow
+    "git status*": allow
+    "git diff*": allow
+    "git log*": allow
+    "git show*": allow
     "rm -rf /*": deny
     "sudo *": deny
     "curl *": deny
@@ -90,7 +93,10 @@ the files in scope.
 ## Rhythm
 
 1. Restate the acceptance criteria as the checks you will run.
-2. Implement in small, separately-explained commits.
+2. Implement incrementally — one coherent change at a time, recording each
+   decision in the Decisions log as you make it, never squashing unrelated
+   work together. Never commit; the diff file is your deliverable (hard
+   rule above).
 3. Run this project's fast, deterministic checks on what you touched — a
    type check, a linter, its test suite if that suite runs in seconds. These
    catch a regression here, cheaply, instead of it surfacing as a whole

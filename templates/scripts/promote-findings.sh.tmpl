@@ -19,6 +19,12 @@
 
 set -eu
 
+# Anchor to the repo root like oc.sh/team.sh do, so the script works from any
+# CWD and — more importantly — so the repo-escape check below is checked
+# against a known root rather than wherever the caller happened to be.
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$REPO_ROOT"
+
 ID="${1:?usage: promote-findings.sh <task-id, e.g. T-03>}"
 FILE=".agents/${ID}.md"
 [ -f "$FILE" ] || { echo "promote-findings.sh: no such file: $FILE" >&2; exit 1; }
@@ -35,10 +41,20 @@ DATE="$(date +%Y-%m-%d)"
 printf '%s\n' "$LINES" | while IFS= read -r line; do
   DOC="$(printf '%s\n' "$line" | sed -n 's/^- \[\([^]]*\)\].*/\1/p')"
   TEXT="$(printf '%s\n' "$line" | sed 's/^- \[[^]]*\] *//')"
-  if [ -z "$DOC" ]; then
-    echo "promote-findings.sh: skip malformed line: $line" >&2
-    continue
-  fi
+  # The doc path comes from state-file content an agent wrote. Treat it as
+  # untrusted: refuse absolute paths and any ".." segment, so a finding can
+  # never write outside this repo — the whole point of routing docs writes
+  # through this script instead of granting agents write access to docs/.
+  case "$DOC" in
+    ''|/*)
+      echo "promote-findings.sh: skip unsafe/invalid doc path (must be repo-relative): $line" >&2
+      continue ;;
+  esac
+  case "/$DOC/" in
+    */../*)
+      echo "promote-findings.sh: skip doc path escaping the repo root: $line" >&2
+      continue ;;
+  esac
   mkdir -p "$(dirname "$DOC")"
   [ -f "$DOC" ] || printf '# %s\n' "$(basename "$DOC" .md)" > "$DOC"
   if grep -qF "$TEXT" "$DOC" 2>/dev/null; then

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 #
+# BEGIN USAGE
 # Scaffolds the planner -> implement -> review -> test agent pipeline into a
 # target project. Copies templates/, substituting __PLACEHOLDER__ tokens for
 # values passed as flags. Never overwrites an existing file — prints what it
@@ -23,6 +24,7 @@
 #
 # Requires: bash, sed, diff. No other dependency — matches the rest of this
 # toolkit's zero-runtime-dependency stance.
+# END USAGE
 
 set -eu
 
@@ -42,7 +44,7 @@ UPDATE=0
 die() { printf '%s\n' "init.sh: $*" >&2; exit 1; }
 
 usage() {
-  sed -n '3,25p' "$0" | sed 's/^# \{0,1\}//'
+  awk '/^# BEGIN USAGE$/ {f=1; next} /^# END USAGE$/ {f=0} f' "$0" | sed 's/^# \{0,1\}//'
   exit 1
 }
 
@@ -72,25 +74,31 @@ done
 [ -d "$TARGET" ] || die "target does not exist: $TARGET"
 TARGET="$(cd "$TARGET" && pwd)"
 
+[ "$TARGET" != "$TOOLKIT_ROOT" ] || die "refusing to scaffold into the toolkit's own checkout — pick another --target"
+
 # Captured before any render() call touches the target, so it reflects
 # whether this is the very first scaffold of this project — used below to
 # decide whether to drop the first-run customization marker.
 FRESH_SCAFFOLD=0
 [ -f "$TARGET/.claude/commands/feature.md" ] || FRESH_SCAFFOLD=1
 
+# The substitution list, built once — a new placeholder gets added here and
+# nowhere else (render()'s two branches used to duplicate it by hand).
+SED_ARGS=(
+  -e "s|__PROJECT_NAME__|$PROJECT_NAME|g"
+  -e "s|__CLAUDE_MODEL__|$CLAUDE_MODEL|g"
+  -e "s|__BUILDER_MODEL__|$BUILDER_MODEL|g"
+  -e "s|__REVIEWER_MODEL__|$REVIEWER_MODEL|g"
+  -e "s|__REVIEWER_FALLBACK_MODEL__|$REVIEWER_FALLBACK_MODEL|g"
+  -e "s|__TESTER_MODEL__|$TESTER_MODEL|g"
+  -e "s|__TEST_DIR__|$TEST_DIR|g"
+)
+
 render() {
   # $1 = template file, $2 = destination file
   if [ "$UPDATE" -eq 1 ]; then
     tmp="$(mktemp)"
-    sed \
-      -e "s|__PROJECT_NAME__|$PROJECT_NAME|g" \
-      -e "s|__CLAUDE_MODEL__|$CLAUDE_MODEL|g" \
-      -e "s|__BUILDER_MODEL__|$BUILDER_MODEL|g" \
-      -e "s|__REVIEWER_MODEL__|$REVIEWER_MODEL|g" \
-      -e "s|__REVIEWER_FALLBACK_MODEL__|$REVIEWER_FALLBACK_MODEL|g" \
-      -e "s|__TESTER_MODEL__|$TESTER_MODEL|g" \
-      -e "s|__TEST_DIR__|$TEST_DIR|g" \
-      "$1" > "$tmp"
+    sed "${SED_ARGS[@]}" "$1" > "$tmp"
     if [ ! -f "$2" ]; then
       printf 'init.sh: %s does not exist yet (new upstream file — re-run without --update to add it)\n' "$2"
     elif diff -u "$2" "$tmp" > /dev/null 2>&1; then
@@ -109,15 +117,7 @@ render() {
     return
   fi
   mkdir -p "$(dirname "$2")"
-  sed \
-    -e "s|__PROJECT_NAME__|$PROJECT_NAME|g" \
-    -e "s|__CLAUDE_MODEL__|$CLAUDE_MODEL|g" \
-    -e "s|__BUILDER_MODEL__|$BUILDER_MODEL|g" \
-    -e "s|__REVIEWER_MODEL__|$REVIEWER_MODEL|g" \
-    -e "s|__REVIEWER_FALLBACK_MODEL__|$REVIEWER_FALLBACK_MODEL|g" \
-    -e "s|__TESTER_MODEL__|$TESTER_MODEL|g" \
-    -e "s|__TEST_DIR__|$TEST_DIR|g" \
-    "$1" > "$2"
+  sed "${SED_ARGS[@]}" "$1" > "$2"
   printf 'init.sh: wrote %s\n' "$2"
 }
 
@@ -152,6 +152,21 @@ chmod +x "$TARGET/scripts/oc.sh" "$TARGET/scripts/team.sh" \
 mkdir -p "$TARGET/.agents"
 if [ "$FRESH_SCAFFOLD" -eq 1 ]; then
   touch "$TARGET/.agents/.needs-customization"
+fi
+
+# .agents/.oc-port is local machine state (which port scripts/team.sh last
+# bound), never something to commit. Append-if-missing when the target is a
+# git repo — additive only, in keeping with this script's never-overwrite
+# stance; a project that ignores it differently is left alone.
+if [ -d "$TARGET/.git" ]; then
+  GITIGNORE="$TARGET/.gitignore"
+  if ! grep -qxF '.agents/.oc-port' "$GITIGNORE" 2>/dev/null; then
+    {
+      printf '\n# local opencode server port written by scripts/team.sh\n'
+      printf '.agents/.oc-port\n'
+    } >> "$GITIGNORE"
+    printf 'init.sh: added .agents/.oc-port to %s\n' "$GITIGNORE"
+  fi
 fi
 
 cat <<MSG

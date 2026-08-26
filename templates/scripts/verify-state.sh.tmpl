@@ -20,6 +20,11 @@
 
 set -eu
 
+# Anchor to the repo root like oc.sh/team.sh do, so `.agents/` resolves the
+# same way no matter where the lead runs this from.
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$REPO_ROOT"
+
 ID="${1:?usage: verify-state.sh <task-id, e.g. T-01>}"
 FILE=".agents/${ID}.md"
 
@@ -30,7 +35,7 @@ fail() { printf 'verify-state.sh: %s\n' "$1" >&2; FAIL=1; }
 
 STATUS="$(grep -m1 '^\*\*Status:\*\*' "$FILE" | sed 's/.*Status:\*\* *//')"
 case "$STATUS" in
-  draft|spec-approved|in-progress|in-review|changes-requested|testing|done) ;;
+  draft|spec-approved|in-progress|blocked|in-review|changes-requested|testing|done) ;;
   *) fail "unrecognised Status: '$STATUS'" ;;
 esac
 
@@ -38,9 +43,16 @@ esac
 # is fine while still drafting/implementing, but not once review has run.
 if grep -q '^### Pass .*verdict: <PASS | CHANGES_REQUESTED>$' "$FILE"; then
   case "$STATUS" in
-    draft|spec-approved|in-progress) ;;
+    draft|spec-approved|in-progress|blocked) ;;
     *) fail "a Review verdicts pass heading still has the unfilled placeholder verdict, but Status is '$STATUS'" ;;
   esac
+fi
+
+# The loop cap is structural, not advisory: a Pass 3 heading means a third
+# review loop ran, which feature.md forbids (two failed loops means the spec
+# was wrong, not the code — stop and ask the user).
+if grep -q '^### Pass 3' "$FILE"; then
+  fail "a third review pass (Pass 3) exists — the two-loop cap is exceeded; escalate to the user instead"
 fi
 
 # Duplicate "### Pass N" headings usually mean a misplaced append rather

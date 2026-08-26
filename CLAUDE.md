@@ -7,18 +7,30 @@ cross-vendor implement/review/test, a state file (`.agents/T-<id>.md`) as the
 one handoff surface between roles, and a `delegate` skill that keeps the
 orchestrating lead's own context small across a long run.
 
-It was extracted from a real project (a browser extension) so the same
-setup — permissions, session-reuse policy, cross-vendor independence rules,
-the state-file contract, the context-discipline rules — doesn't get
-re-invented and re-debugged from scratch in every new repo. Read
+It was distilled from real multi-agent pipeline runs and hardened there
+over time, so the same setup — permissions, session-reuse policy,
+cross-vendor independence rules, the state-file contract, the
+context-discipline rules — doesn't get re-invented and re-debugged from
+scratch in every new repo. Read
 `README.md` first for the pitch, the file tree, and the documented design
 tradeoffs; this file is for someone (human or agent) actively changing the
 toolkit's own code.
 
 ## Commands
 
-No build step, no dependencies, no test runner yet (see README's "Known
-gaps"). Verify a change with a manual smoke run into a scratch directory:
+No build step, no dependencies, no LLM calls in the test path. Verify a
+change with the automated smoke run:
+
+```bash
+bash test/smoke.sh
+```
+
+It scaffolds into a throwaway directory and asserts the core guarantees:
+every placeholder substituted, no file clobbered on re-run, `--update`
+reports up-to-date when clean and exactly one diff after a deliberate
+drift, the findings-promotion traversal guard holds, and the loop-cap
+check fires. CI runs it plus shellcheck on every push (`.github/workflows/
+ci.yml`). For an eyeball-level pass you can still do the manual version:
 
 ```bash
 mkdir -p /tmp/toolkit-smoke && bash bin/init.sh \
@@ -26,7 +38,6 @@ mkdir -p /tmp/toolkit-smoke && bash bin/init.sh \
   --builder-model a/b --reviewer-model a/c \
   --reviewer-fallback-model d/e --tester-model a/b
 grep -rl '__[A-Z_]*__' /tmp/toolkit-smoke   # must print nothing — no unfilled placeholder
-find /tmp/toolkit-smoke -type f | wc -l     # should match the file count bin/init.sh reports
 rm -rf /tmp/toolkit-smoke
 ```
 
@@ -43,14 +54,23 @@ prints a `diff -u` for exactly that file and still writes nothing.
 | Path | Role |
 | --- | --- |
 | `bin/init.sh` | The scaffolder. `render()` copies a `.tmpl` file to a destination with `sed` placeholder substitution, skipping any file that already exists |
+| `test/smoke.sh` | The automated smoke run (see Commands). CI runs it plus shellcheck on every push |
+| `.github/workflows/ci.yml` | Runs `test/smoke.sh` + shellcheck (`bin/init.sh`, the test, and every `templates/scripts/*.tmpl`) |
 | `templates/claude/agents/` | `planner.md.tmpl`, `senior-dev.md.tmpl` — Claude subagent role definitions |
 | `templates/claude/commands/` | `feature.md.tmpl` — the `/feature` pipeline command (the lead's own instructions) |
 | `templates/opencode/agent/` | `builder.md.tmpl`, `reviewer.md.tmpl`, `tester.md.tmpl` — OpenCode role definitions |
 | `templates/agents-state/` | `TEMPLATE.md.tmpl` — the `T-<id>` state-file shape every role reads and appends to |
-| `templates/scripts/` | `oc.sh.tmpl` (OpenCode CLI wrapper), `team.sh.tmpl` (tmux layout), `verify-state.sh.tmpl` / `promote-findings.sh.tmpl` (deterministic, no-LLM-call structural checks) |
+| `templates/scripts/` | `oc.sh.tmpl` (OpenCode CLI wrapper), `team.sh.tmpl` (+ `team-completion.bash.tmpl`; tmux layout), `verify-state.sh.tmpl` / `promote-findings.sh.tmpl` (deterministic, no-LLM-call structural checks) |
 | `skills/delegate/` | Context-discipline rules for the lead — usable independently of `init.sh` |
 | `skills/toolkit-init/` | Thin skill wrapping `bin/init.sh`, for running the scaffold conversationally |
 | `skills/dev-team-generator/` | Self-contained, interview-driven alternative to `toolkit-init`: generates the team + flow live for whatever tool(s) are actually available, instead of stamping out `templates/`. Its own `reference/lessons-learned.md` is a generalized, tool-agnostic distillation of this toolkit's hardening history — see the Conventions bullet below |
+| `skills/status-board/` | Keeps a project-wide status board in sync with per-task state files — independent of `init.sh` |
+| `skills/karpathy-guidelines/` | Behavioral defaults loaded by the lead via `feature.md`; inlined into senior-dev/builder rather than granted Skill access |
+| `skills/self-improvement/` | Optional, off by default: lead-only capture of user corrections into its own instruction files. Never auto-loaded |
+| `SYSTEM.md` | Tool-agnostic one-pager meant to be handed to any AI ("recreate this system with yourself as lead") |
+| `REVIEW.md` | Point-in-time honest review of the toolkit (passes 1 and 2); every heading marked ✅ done / ⬜ open / 🔶 awaiting a decision |
+| `REVIEW-2.md` | Third review pass — the delivery contract (acceptance criteria are never marked met by anyone), the status state machine, the missing team-charter layer. Does not repeat `REVIEW.md`; its Part D re-ranks and prunes that file's backlog |
+| `docs/UPGRADING.md` | Staged plan for keeping an already-scaffolded downstream project current: provenance stamp, tagged releases + impact-classified changelog, `--update` triage, AI-assisted merge |
 
 ## Conventions
 
@@ -74,12 +94,22 @@ prints a `diff -u` for exactly that file and still writes nothing.
   context small across a long pipeline run. When editing a role template's
   "Report"/"Output" section, preserve that shape rather than reverting to
   "report your findings/output to the lead."
-- **Keep `templates/` and any applied copy (e.g. `vivaldi-extension`'s own
-  `.claude/` + `.opencode/` + `.agents/TEMPLATE.md`) in sync** when one
-  side gets a structural fix — a new state-file field, a new script, a
-  report-back change. They're meant to be the same mechanism, generic vs.
-  applied. There is no automated check for this yet; do it by hand and
-  `diff` the two sides after any pipeline-mechanism change.
+- **Keep `templates/` and any applied copy of this toolkit in sync** (any
+  repo that has scaffolded it, with its own `.claude/` + `.opencode/` +
+  `.agents/TEMPLATE.md`) when one side gets a
+  structural fix — a new state-file field, a new script, a report-back
+  change. They're meant to be the same mechanism, generic vs. applied.
+  There is no automated check for this yet; do it by hand and `diff` the
+  two sides after any pipeline-mechanism change.
+- **The lead's flow exists in three hand-synced copies — re-diff all
+  three when the pipeline sequence changes:**
+  `templates/claude/commands/feature.md.tmpl`, `SYSTEM.md`, and
+  `skills/dev-team-generator/reference/flow-example.md`. They serve three
+  audiences (generated project / any-AI-as-lead / generate-anything skill)
+  but must carry the same sequence and stop-and-ask rules. These have
+  diverged silently before (the non-actionable-findings routing existed in
+  one copy only); check all three plus `lessons-learned.md` per the next
+  bullet.
 - **Mirror every new hardening lesson into
   `skills/dev-team-generator/reference/lessons-learned.md`, in the same
   turn.** This toolkit's real lessons — a live-verified gotcha, a
@@ -115,19 +145,22 @@ prints a `diff -u` for exactly that file and still writes nothing.
   non-fresh `init.sh` run will re-trigger it.
 - `templates/opencode/agent/reviewer.md.tmpl` defaults to blanket
   `edit: deny` / `write: deny`, unlike a project that has since widened its
-  own copy (e.g. `vivaldi-extension`'s `.opencode/agent/reviewer.md` allows
+  own copy (e.g. an applied copy's reviewer allows
   `.agents/**`). That gap is intentional — see README's "Design decisions"
   — not drift to fix by copying the widened version back over the
   template.
 - A permission block that reads correctly in YAML is not proof it's
   enforced by the runtime. This toolkit's safe-default posture exists
-  because that assumption failed once in the project it was extracted
-  from. Any change to a permission block in a template should carry a note
+  because that assumption failed once in a real pipeline. Any change to a
+  permission block in a template should carry a note
   to verify it live (dispatch the agent, try the disallowed action,
   confirm it's refused) rather than just reading the config.
 
 ## Status
 
-No commits yet as of writing — everything here is uncommitted working
-state. No CI, no automated test for `init.sh` beyond the manual smoke run
-above. Treat README.md's "Known gaps" section as the actual backlog.
+Actively developed; history in git. The scaffolder's core guarantees are
+covered by `test/smoke.sh` (CI: smoke + shellcheck). What's *not*
+automated: a live end-to-end pipeline run against a real OpenCode server,
+and live permission-enforcement verification — those stay manual per
+README's "Design decisions". Treat README.md's "Known gaps" and
+REVIEW.md's open items as the backlog.

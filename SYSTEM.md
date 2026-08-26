@@ -76,9 +76,12 @@ permission block just because it reads correctly; dispatch it once and try
 to make it do the disallowed thing before relying on it.
 
 **Loop discipline:** max two review loops on CHANGES_REQUESTED; a third
-means the spec was wrong, not the code — stop and ask the human. Never
-merge without asking. Any new permission or dependency, however reasonable
-it looks, gets asked about too.
+means the spec was wrong, not the code — stop and ask the human. A
+CHANGES_REQUESTED whose findings name no concrete code defect is not a
+loop at all: route it to the test/verification step as an explicit thing
+to check, logged in the state file so the human can see and disagree —
+never silently downgraded. Never merge without asking. Any new permission
+or dependency, however reasonable it looks, gets asked about too.
 
 **Keep the project's main tracking doc current, always, not only at
 completion.** A status board / task list / equivalent, updated at the end

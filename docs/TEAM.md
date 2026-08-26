@@ -44,9 +44,10 @@ reads it automatically (when `OC_SERVER` isn't already set), so every
 `oc.sh` call in this project just uses the right port — you don't export
 `OC_SERVER` by hand for every call.
 
-**Add `.agents/.oc-port` to this project's `.gitignore`.** It's local
-machine state — which port happened to be free on your laptop today — not
-something to commit.
+**`.agents/.oc-port` is gitignored automatically by `bin/init.sh`** when
+the target is a git repo — it's local machine state (which port happened
+to be free on your laptop today), not something to commit. If your project
+predates that, or ignores it differently, add it by hand.
 
 ## Shell completion (optional)
 

@@ -6,10 +6,10 @@ for cross-vendor implement/review/test, a state file
 (`.agents/T-<id>.md`) as the single handoff surface between roles, and a
 `delegate` skill so the lead's own context stays small across a long run. 
 
-It grew out of a real project (a browser-extension repo) and was pulled out
-here so the same setup — permissions, session-reuse policy, cross-vendor
-independence rules, the state-file contract — doesn't get re-invented and
-re-debugged from scratch in every new repo.
+It was distilled from real multi-agent pipeline runs and hardened there
+over time, so the same setup — permissions, session-reuse policy,
+cross-vendor independence rules, the state-file contract — doesn't get
+re-invented and re-debugged from scratch in every new repo.
 
 **Not a Claude Code user, or want a different tool to run the lead itself
 (not just a worker role)?** Read `[SYSTEM.md](SYSTEM.md)` instead of this
@@ -86,6 +86,7 @@ decisions" below).
 bin/init.sh           the scaffolder — copies templates/ into a target repo
                         (--update: diffs current templates against a target
                         that's already scaffolded, writes nothing)
+test/smoke.sh         automated smoke test for the guarantees above (run by CI)
 templates/             every generated file, with __PLACEHOLDER__ tokens
   claude/agents/        planner.md.tmpl, senior-dev.md.tmpl
   claude/commands/      feature.md.tmpl — the /feature pipeline command
@@ -135,21 +136,7 @@ skills/
 cd /path/to/some/other/project
 opencode models          # see what's actually configured before picking models
 
-~/PWS/agent-toolkit/bin/init.sh \
-  --target . \
-  --project-name "my-project" \
-  --claude-model sonnet \
-  --builder-model "vendor/model-a" \
-  --reviewer-model "vendor/model-b" \
-  --reviewer-fallback-model "vendor2/model-c" \
-  --tester-model "vendor/model-a" \
-  --test-dir e2e
-```
-
-```bash
-# example
-
-~/PWS/agent-toolkit/bin/init.sh \
+/path/to/agent-toolkit/bin/init.sh \
   --target . \
   --project-name "my-project" \
   --claude-model sonnet \
@@ -163,13 +150,14 @@ opencode models          # see what's actually configured before picking models
 `--reviewer-model` and `--reviewer-fallback-model` should be **different
 model families** — the fallback is what the pipeline switches to when
 `builder` implements and would otherwise share a vendor with the default
-reviewer, which would defeat cross-vendor independence.
+reviewer, which would defeat cross-vendor independence. The `hcnsec/auto`
+values above are flag *shape* only — run `opencode models`, pin real
+strings, and do not use `auto` for the reviewer.
 
 Cost/quality picks (Kimi implementer, GLM reviewer, DeepSeek Flash
 tester, Claude Sonnet lead/planner/fallback), and why one OpenCode
 aggregator plus Claude is better than a new toolkit tool per lab: see
-`[docs/MODELS.md](docs/MODELS.md)`. The `hcnsec/auto` example above is
-flag *shape* only — do not use `auto` for the reviewer.
+[`docs/MODELS.md`](docs/MODELS.md).
 
 `init.sh` never overwrites a file that already exists in the target — it
 prints `skip (exists)` and leaves it alone, so re-running is safe and an
@@ -220,9 +208,13 @@ See `feature.md.tmpl`'s Preflight step 1.
 
 ## Design decisions, and why
 
-- **Zero dependency, bash + sed only.** Matches the style of the project
-this was extracted from, and means the scaffolder itself has nothing to
-install or go stale.
+- **Zero dependency, bash + sed only — for the scaffolder itself.**
+  `bin/init.sh` needs nothing beyond bash, sed, and diff: scaffolding has
+  nothing to install or go stale. The *generated runtime scripts* have a
+  small, standard footprint each one documents in its own header:
+  `python3` and `curl` everywhere (`oc.sh`), GNU/coreutils `timeout` on
+  macOS via `brew install coreutils` (`oc.sh`), and `tmux` if you use
+  `scripts/team.sh`.
 - **Project-specific constraints are never duplicated into the templates.**
 Every generated agent file says "read this project's own `CLAUDE.md` /
 `AGENTS.md` first" rather than trying to guess or hardcode what a given
@@ -269,7 +261,7 @@ subagents or shell out to `scripts/oc.sh` repeatedly. It covers: when a
 dispatch is worth its overhead, why raw event streams are the biggest
 avoidable context cost, named anti-patterns (circular delegation, context
 loss across a handoff, silent scope creep, retrying into a collision)
-drawn from real incidents in the project this was pulled out of, and a
+drawn from real pipeline incidents, and a
 four-way rule for simple tasks — one-off simple work you just do yourself,
 simple work that recurs becomes a script, judgment that recurs becomes a
 Skill, and only genuinely one-off judgment or cross-vendor work becomes a
@@ -286,10 +278,6 @@ flowchart TD
     Q3 -- no --> Script[Write a script under scripts/]
     Q3 -- yes --> Skill[Write it up as a Skill]
 ```
-
-
-
-[Read more about agent delegation rules here.](https://mcpmarket.com/tools/skills/claude-agent-delegation-rules)
 
 ## The `status-board` skill
 
@@ -325,7 +313,7 @@ mechanism. Full behavior and guardrails: `skills/self-improvement/ SKILL.md`.
 **To enable it in a project:**
 
 1. Copy the file in:
-  `cp ~/PWS/agent-toolkit/skills/self-improvement/SKILL.md .claude/skills/self-improvement/SKILL.md`
+  `cp /path/to/agent-toolkit/skills/self-improvement/SKILL.md .claude/skills/self-improvement/SKILL.md`
    (or wherever your tool discovers skills from — same as `delegate` and
    `karpathy-guidelines`, this toolkit's skills aren't rendered by
    `init.sh`, they're copied in on request).
@@ -366,17 +354,20 @@ project on its own.
 
 ## Known gaps
 
-- No automated test for `init.sh` beyond a manual smoke run into a scratch
-directory (see the commit history / conversation this was built from). If
-this toolkit grows real users, add a script under a future `test/` that
-runs `init.sh` against a throwaway dir and asserts every placeholder was
-substituted and no file was clobbered on a second run.
+- `test/smoke.sh` covers the scaffolder's core guarantees (placeholder
+  substitution, never-clobber on re-run, `--update` diffing, the
+  findings-path traversal guard, the loop-cap check) but nothing yet runs
+  a *live* pipeline end to end against a real OpenCode server — permission
+  enforcement in particular still needs the manual verification described
+  under "Design decisions".
 - Nothing here validates that a given OpenCode `vendor/model` string is
-real — `opencode models` is the source of truth and isn't queried by
-`init.sh` automatically.
+  real — `opencode models` is the source of truth and isn't queried by
+  `init.sh` automatically.
 
+## Reviews and upgrading
 
-
-## Other Skills
-
-[https://github.com/anbturki/claude-toolkit](https://github.com/anbturki/claude-toolkit)
+- [`docs/UPGRADING.md`](docs/UPGRADING.md) — the staged plan for keeping
+  an already-scaffolded project current with this toolkit: a provenance
+  stamp so `--update` needs no remembered flags, tagged releases with an
+  impact-classified changelog, and an AI-assisted merge command. Today's
+  `--update` is the mechanical half of that and nothing else.

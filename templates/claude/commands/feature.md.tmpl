@@ -47,9 +47,11 @@ does not know it.
    content. Either answer, delete the marker file once asked — this only
    happens once.
 2. Pick the next free id: `ls .agents/T-*.md`.
-3. Confirm the OpenCode server is up — `curl -sS -m 5 http://localhost:4096`.
-   If not, tell the user to run `scripts/team.sh` (or `opencode serve`) and
-   stop.
+3. Confirm the OpenCode server is up, resolving the port the same way
+   `scripts/oc.sh` does (`OC_SERVER`, then `.agents/.oc-port`, then 4096):
+   `curl -sS -m 5 "http://localhost:$(cat .agents/.oc-port 2>/dev/null || echo 4096)"`.
+   If not up, tell the user to run `scripts/team.sh` (or `opencode serve`)
+   and stop.
 4. Confirm the working tree is clean enough to produce a meaningful diff.
 
 ## Token discipline

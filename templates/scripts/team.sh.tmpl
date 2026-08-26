@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 #
+# BEGIN USAGE
 # tmux layout for the agent team.
 #
 #   pane 0 (left, big)    claude          <- you talk to the lead here
@@ -30,11 +31,12 @@
 # project its own port: `scripts/team.sh --port 4097`. That port is written
 # to .agents/.oc-port in this repo, and scripts/oc.sh reads it automatically
 # (when OC_SERVER isn't set) — so oc.sh calls in this project just work
-# without you having to export OC_SERVER by hand every time. Add
-# .agents/.oc-port to this project's .gitignore; it's local machine state,
-# not something to commit.
+# without you having to export OC_SERVER by hand every time. bin/init.sh
+# adds .agents/.oc-port to this project's .gitignore; it's local machine
+# state, not something to commit.
 #
 # See docs/TEAM.md for more.
+# END USAGE
 
 set -eu
 
@@ -51,7 +53,7 @@ while [ $# -gt 0 ]; do
     --port)   [ $# -ge 2 ] || { echo "team.sh: --port needs a value" >&2; exit 1; }
               PORT="$2"; shift 2 ;;
     -h|--help)
-      sed -n '3,29p' "$0" | sed 's/^# \{0,1\}//'
+      awk '/^# BEGIN USAGE$/ {f=1; next} /^# END USAGE$/ {f=0} f' "$0" | sed 's/^# \{0,1\}//'
       exit 0 ;;
     *)        SESSION="$1"; shift ;;
   esac

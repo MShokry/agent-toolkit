@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 #
+# BEGIN USAGE
 # Wrapper for every OpenCode invocation in the agent pipeline.
 #
 # Why this exists rather than calling `opencode run` directly:
@@ -85,6 +86,7 @@
 #       --auto was passed). The server-side session is aborted
 #       automatically when a session id is known; see the note above for
 #       when it isn't.
+# END USAGE
 
 set -eu
 
@@ -111,7 +113,7 @@ AUTO=0
 die() { printf '%s\n' "oc.sh: $*" >&2; exit 1; }
 
 usage() {
-  sed -n '3,87p' "$0" | sed 's/^# \{0,1\}//'
+  awk '/^# BEGIN USAGE$/ {f=1; next} /^# END USAGE$/ {f=0} f' "$0" | sed 's/^# \{0,1\}//'
   exit 1
 }
 

@@ -195,3 +195,43 @@ If you're generating a lead flow and asked to tighten its human-facing
 report, treat this as a real design decision to make with the user, not an
 obvious extension of the role-to-role rule — get their answer on what to
 keep versus compress before changing it.
+
+## 10. In a permission map, prefer enumerated-safe over broad-allow-with-narrow-denies
+
+A permission map shaped like `"tool *": allow` plus specific
+`"tool dangerous*": deny` exceptions only blocks the dangerous calls if
+the runtime resolves narrow rules over broad ones — first-match,
+most-specific-match, and last-match-wins are all real designs, and a map
+that reads correctly under one precedence rule silently fails under
+another. This is the same class of assumption as verifying permission
+enforcement live, but at the within-one-map level: even a runtime that
+enforces *some* deterministic ordering can enforce a different one than
+the file's visual order implies.
+
+- Prefer enumerating the safe commands explicitly (the read-only verbs
+  the role's rhythm actually needs) and letting everything else fall
+  through to "ask" or the tool's equivalent. The safe path then never
+  depends on precedence at all — there is no broad allow for a narrow
+  deny to outrank.
+- Keep the explicit denies anyway, even when they look redundant under
+  the "ask" catch-all: wide auto-approve flags (entry 1) typically
+  bypass "ask"-level entries while still honoring explicit denies, so
+  the denies are what holds with the flag on.
+- If a role genuinely needs broad access plus exceptions, that is a
+  live-verification requirement, not a config detail: dispatch it, make
+  it try the denied thing, confirm the refusal names the deny rule.
+
+## 11. Anything a script writes from agent-authored content gets its paths treated as untrusted
+
+When a deterministic script copies or writes to a path that originated in
+agent-written state (a findings line naming a doc, an output location a
+role chose), that path is untrusted input even with no adversary in the
+loop — a confused agent is enough. `../..` segments or absolute paths let
+a well-meaning finding write outside the repo, defeating whatever
+write-scoping the pipeline set up everywhere else.
+
+- Refuse absolute paths and any `..` path segment; skip loudly rather
+  than silently normalizing.
+- Anchor the script itself to the repo root (the way dispatch wrappers
+  do) so relative paths have exactly one meaning no matter the caller's
+  CWD.

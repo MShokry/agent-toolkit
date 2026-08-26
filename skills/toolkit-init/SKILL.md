@@ -7,7 +7,8 @@ description: Scaffold the multi-agent pipeline (planner/implementer/reviewer/tes
 
 Bootstraps the current project with the same planner → implement → review →
 test pipeline used elsewhere, backed by `bin/init.sh` in the toolkit repo
-(default location: `~/PWS/agent-toolkit` — ask the user if it isn't there).
+(wherever it's cloned — ask the user for the path if you can't find a
+checkout; nothing in this skill assumes a fixed location).
 
 ## What you need from the user before running it
 
@@ -31,7 +32,7 @@ Ask these up front rather than guessing — they shape every generated file:
 ## Run it
 
 ```bash
-~/PWS/agent-toolkit/bin/init.sh \
+/path/to/agent-toolkit/bin/init.sh \
   --target . \
   --project-name "<name>" \
   --claude-model sonnet \

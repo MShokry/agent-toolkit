@@ -8,7 +8,7 @@ fill it in per task.
 ```markdown
 # T-<id> — <short title>
 
-**Status:** draft | spec-approved | in-progress | in-review | changes-requested | testing | done
+**Status:** draft | spec-approved | in-progress | blocked | in-review | changes-requested | testing | done
 **Owner right now:** planner | implementer | reviewer | tester | lead
 **Implementer for this task:** <role/tool/model — e.g. "senior-dev (claude/sonnet)" or "builder (opencode/kimi-k2.7-code)">
 **Dispatch session id:** none yet — set after the first dispatch call, reused for every later call on this task
