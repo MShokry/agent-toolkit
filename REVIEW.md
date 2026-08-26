@@ -396,7 +396,10 @@ These are standing rules; they describe your job, not suggestions:
 1. ✅ O4 (loop budget) — **DONE**: *Test-fix loops* 0/2, *Spec bounces* 0/1, enforced in `verify-state.sh`, smoke-covered
 2. ⬜ `[OPEN]` Live permission verification on a real server (builder denies under `--auto`; reviewer blanket-deny) — manual by design
 3. 🔶 `[REC]` O1/O3 now folded into REVIEW-2's H1 "task classes" — **NEEDS YOUR CALL**; O2/O6 done, O7's free half done (loops-used in the step-5 report)
-4. 🔶 `[REC]` Part 3's lead rules currently live only in this file — a review doc no generated agent reads. On approval, promote rules 1–6 into `feature.md.tmpl` (and one-line versions into `SYSTEM.md` / `flow-example.md`) so every scaffolded lead actually carries them — note the budget rules already made it there via O4; what's still missing is "ask once up front" and "remove blockers to the end" as named duties
+4. ✅ Part 3's lead rules — **PROMOTED**: "Standing duties" block now lives
+   in all three flow copies (`feature.md.tmpl`, `SYSTEM.md`,
+   `flow-example.md`), guarded by a new `test/invariants.sh` rule pair so
+   they can't silently diverge again
 5. ⬜ `[OPEN]` MODELS.md trim, team-completion.bash removal — editorial calls
 
 ## Then the third pass

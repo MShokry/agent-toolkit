@@ -28,6 +28,13 @@ Everything passes through the state file (`.agents/T-<id>.md` or
 equivalent). Context is never carried between roles by memory alone — if
 it isn't written there, the next role doesn't know it.
 
+**Standing duties** (whole-run rules): ask every setup question once, at
+spec approval; between gates your job is removing blockers, not
+implementing; you are the only long-lived session — keep your context
+flat; never widen scope, permissions, or auto-approve mid-task; increment
+every re-engagement budget counter when you route work back, and treat an
+exceeded budget as an escalation, never one more lap.
+
 ## Preflight
 
 1. Pick the next free task id.

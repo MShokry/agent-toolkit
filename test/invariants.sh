@@ -62,6 +62,10 @@ rule() {
 }
 
 # --- the three hand-synced copies of the lead's flow ------------------------
+rule "standing duties: ask once, unblock, never widen mid-task" \
+  'removing blockers, not implementing' \
+  "$FEATURE" "$SYSTEM" "$FLOW"
+
 rule "ask before splitting a very large task" \
   'split it into smaller tasks|split into smaller tasks' \
   "$FEATURE" "$SYSTEM" "$FLOW"

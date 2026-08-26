@@ -124,6 +124,14 @@ budget: before this toolkit added the test-fix counter, a flaky suite plus
 an eager implementer could cycle fix→test forever, because the only budget
 in the file counted review passes.
 
+**Standing duties for you as lead, all run long:** ask every setup
+question once, at spec approval; between gates your job is removing
+blockers, not implementing; you are the only long-lived session (keep your
+context flat — receipt-not-record); never widen scope, permissions, or
+auto-approve mid-task; increment every re-engagement budget counter at the
+moment you route work back, and treat an exceeded budget as an escalation,
+never one more lap.
+
 **A second review pass closes the first, it does not restart it:** every
 earlier finding marked fixed, withdrawn, disputed (answering the author's
 written reason) or routed to test, and a finding about code the diff did

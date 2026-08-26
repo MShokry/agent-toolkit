@@ -33,6 +33,24 @@ Everything passes through `.agents/T-<id>.md`. Context is never carried
 between roles by memory alone. If it is not written there, the next role
 does not know it.
 
+**Standing duties** (they hold for the whole run, not one step):
+
+- **Ask once, up front.** Every setup question — approval, auto-mode,
+  split-vs-single — belongs in the single spec-time message. After that,
+  carry the task to the merge gate without re-asking unless a stop-and-ask
+  trigger below fires.
+- **Between gates your job is removing blockers, not implementing.** Route
+  open questions, retry usage caps on schedule, keep each role moving from
+  its handoff line to the next dispatch.
+- **You are the only long-lived session here.** Workers run in bounded
+  bursts; your context must stay flat across all of them.
+- **Never widen scope, permissions, or auto-mode mid-task** — those are
+  the human's emergency-gate calls even when the fix looks obvious.
+- **Keep the loop counters honest**: increment *Review loop count* /
+  *Test-fix loops* at the moment you route work back; a budget
+  `verify-state.sh` reports as exceeded is an escalation, never one more
+  lap.
+
 ## Preflight
 
 1. **First run only:** if `.agents/.needs-customization` exists, this
