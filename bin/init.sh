@@ -392,10 +392,12 @@ if [ "$FRESH_SCAFFOLD" -eq 1 ] && [ ! -f "$STAMP" ]; then
   printf 'init.sh: wrote %s\n' "$STAMP"
 fi
 
-# .agents/.oc-port is local machine state (which port scripts/team.sh last
-# bound), never something to commit. Append-if-missing when the target is a
-# git repo — additive only, in keeping with this script's never-overwrite
-# stance; a project that ignores it differently is left alone.
+# .agents/.oc-port and .agents/.claude-session-id.* are local machine state
+# (which port scripts/team.sh last bound; which Claude conversation each
+# tmux session name is pinned to), never something to commit.
+# Append-if-missing when the target is a git repo — additive only, in
+# keeping with this script's never-overwrite stance; a project that ignores
+# these differently is left alone.
 if [ -d "$TARGET/.git" ]; then
   GITIGNORE="$TARGET/.gitignore"
   if ! grep -qxF '.agents/.oc-port' "$GITIGNORE" 2>/dev/null; then
@@ -404,6 +406,13 @@ if [ -d "$TARGET/.git" ]; then
       printf '.agents/.oc-port\n'
     } >> "$GITIGNORE"
     printf 'init.sh: added .agents/.oc-port to %s\n' "$GITIGNORE"
+  fi
+  if ! grep -qxF '.agents/.claude-session-id.*' "$GITIGNORE" 2>/dev/null; then
+    {
+      printf '\n# local Claude session ids pinned per tmux session name by scripts/team.sh\n'
+      printf '.agents/.claude-session-id.*\n'
+    } >> "$GITIGNORE"
+    printf 'init.sh: added .agents/.claude-session-id.* to %s\n' "$GITIGNORE"
   fi
 fi
 

@@ -15,15 +15,20 @@
 #   scripts/team.sh --port <N>             opencode server port (default 4096)
 #   scripts/team.sh --kill [session-name]
 #
-# Resuming is the default, not an opt-in: pane 0 runs `claude --continue`,
-# which picks up the most recent conversation in this project's directory.
-# That matters because killing this tmux session (the usual way to free up
-# a port so a second project can use scripts/team.sh at the same time) used
-# to also throw away the lead's context — there was no way back into the
-# same conversation short of scrolling terminal history. `--continue` fixes
-# that: kill the session, come back later, run scripts/team.sh again, the
-# lead picks up where it left off. Pass --fresh on the rare run where you
-# actually want a clean slate.
+# Resuming is the default, not an opt-in: pane 0 resumes the lead's own
+# Claude conversation, pinned to this session name via a stored UUID (see
+# .agents/.claude-session-id.<session-name>) rather than `claude --continue`
+# (which just means "the most recent conversation in this directory" — with
+# no notion of *which* tmux session started it, so a second team.sh session
+# name in the same repo, or even a one-off `claude` run there, could steal
+# the next --continue). That matters because killing this tmux session (the
+# usual way to free up a port so a second project can use scripts/team.sh at
+# the same time) used to also throw away the lead's context — there was no
+# way back into the same conversation short of scrolling terminal history.
+# The pinned session id fixes that: kill the session, come back later, run
+# scripts/team.sh again, the lead picks up its own thread — never someone
+# else's. Pass --fresh on the rare run where you actually want a clean
+# slate (this also mints a new pinned id, so future resumes follow it).
 #
 # Running two projects at once: opencode's server binds one port per
 # process, so two projects both defaulting to --port 4096 collide — the
@@ -66,6 +71,19 @@ fi
 
 command -v tmux >/dev/null 2>&1 || { echo "team.sh: tmux not found" >&2; exit 1; }
 
+gen_uuid() {
+  if command -v uuidgen >/dev/null 2>&1; then
+    uuidgen | tr '[:upper:]' '[:lower:]'
+  elif [ -r /proc/sys/kernel/random/uuid ]; then
+    cat /proc/sys/kernel/random/uuid
+  elif command -v python3 >/dev/null 2>&1; then
+    python3 -c 'import uuid; print(uuid.uuid4())'
+  else
+    echo "team.sh: need uuidgen or python3 to mint a Claude session id" >&2
+    exit 1
+  fi
+}
+
 if tmux has-session -t "$SESSION" 2>/dev/null; then
   echo "team.sh: session '$SESSION' already exists — attaching"
   exec tmux attach -t "$SESSION"
@@ -74,8 +92,21 @@ fi
 mkdir -p "$REPO_ROOT/.agents"
 printf '%s' "$PORT" > "$REPO_ROOT/.agents/.oc-port"
 
-CLAUDE_CMD="claude --continue"
-[ "$FRESH" -eq 1 ] && CLAUDE_CMD="claude"
+# Pin pane 0 to one Claude conversation per tmux session name (see usage
+# comment above for why --continue alone isn't enough).
+SESSION_ID_FILE="$REPO_ROOT/.agents/.claude-session-id.$SESSION"
+[ "$FRESH" -eq 1 ] && rm -f "$SESSION_ID_FILE"
+
+if [ -f "$SESSION_ID_FILE" ]; then
+  CLAUDE_UUID="$(cat "$SESSION_ID_FILE")"
+  # Fall back to re-minting under the same id if the stored conversation is
+  # gone (history pruned, project path changed) so the pane never just dies.
+  CLAUDE_CMD="claude --resume $CLAUDE_UUID || claude --session-id $CLAUDE_UUID"
+else
+  CLAUDE_UUID="$(gen_uuid)"
+  printf '%s' "$CLAUDE_UUID" > "$SESSION_ID_FILE"
+  CLAUDE_CMD="claude --session-id $CLAUDE_UUID"
+fi
 
 tmux new-session -d -s "$SESSION" -c "$REPO_ROOT" -n team
 

@@ -18,15 +18,26 @@ Flags can combine with a session name in any order:
 
 ## Resuming is the default
 
-Pane 0 runs `claude --continue`, which picks up the most recent
-conversation in this project's directory — not a fresh one. This exists
-because killing the tmux session (the usual way to free up a port, or just
-closing the terminal) used to also throw away the lead's context, with no
-way back into the same conversation. Now: kill it, come back later, run
-`scripts/team.sh` again, the lead is where you left it.
+Pane 0 resumes the lead's own conversation — not a fresh one — but it does
+so by pinning to a stored UUID (`.agents/.claude-session-id.<session-name>`,
+written the first time that session name runs) rather than
+`claude --continue`. `--continue` only means "the most recent conversation
+in this directory," with no notion of *which* tmux session started it, so
+running a second `scripts/team.sh` session name against the same repo (or
+just running a one-off `claude` there for something unrelated) could make
+the next `--continue` resume the wrong thread entirely. The pinned id
+removes that ambiguity: each session name always resumes its own
+conversation via `claude --resume <uuid>`, however many other Claude
+conversations have happened in the same directory since.
+
+This exists because killing the tmux session (the usual way to free up a
+port, or just closing the terminal) used to also throw away the lead's
+context, with no way back into the same conversation. Now: kill it, come
+back later, run `scripts/team.sh` again, the lead is where you left it.
 
 Pass `--fresh` on the rare run where you actually want a clean slate
-instead.
+instead — this mints a new pinned id, so later resumes follow the new
+conversation, not the old one.
 
 ## Running two projects at once
 
