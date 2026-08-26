@@ -206,10 +206,11 @@ migration — in the *target* project:
    `git -C <toolkit-checkout> pull`, or
    `git clone https://github.com/MShokry/agent-toolkit` if it isn't
    cloned yet.
-2. Run `/toolkit-update` and give it the checkout path — or by hand,
-   `bin/init.sh --update --target .` plus the ORIGINAL init flags
-   (`--project-name`, `--builder-model`, …). Without a stamp they are
-   required; this prints the drift summary.
+2. Run `/toolkit-update` and give it the checkout path — or by hand, just
+   `bin/init.sh --update --target .`. With no stamp it recovers the original
+   init values from the target's own scaffolded files and prints them for
+   you to verify (pass the flags explicitly only if something looks wrong).
+   This prints the drift summary.
 3. Merge in `CHANGELOG.md` impact order. Coming from ≤ v0.2.x also apply
    `migrations/01-delivery-contract.md` to `.agents/TEMPLATE.md` and any
    in-flight `.agents/T-*.md` (bare `blocked` still validates; nothing

@@ -117,17 +117,16 @@ bash "$ROOT/bin/init.sh" --refresh-stamp --target "$TMP" > /dev/null 2>&1 || rc=
 grep -q '^toolkit_sha:' "$STAMP" || fail "rewritten stamp lost its fields"
 ok "--refresh-stamp rewrites the provenance stamp (the only post-scaffold writer)"
 
-# --- 5c. --update without a stamp falls back to flags -------------------------
+# --- 5c. --update without a stamp recovers init values from the target --------
 mv "$STAMP" "$TMP/stamp.hold"
 rc=0
-bash "$ROOT/bin/init.sh" --update "${INIT_ARGS[@]}" > "$TMP/upd5.log" 2>&1 || rc=$?
-[ "$rc" = "1" ] || fail "stamp-less --update with explicit flags exited $rc, expected 1 (known drift)"
+bash "$ROOT/bin/init.sh" --update --target "$TMP" > "$TMP/upd5.log" 2>&1 || rc=$?
+[ "$rc" = "1" ] || fail "stamp-less flag-free --update exited $rc, expected 1 (known drift)"
+grep -q "no stamp — inferred" "$TMP/upd5.log" || fail "did not report inferring values from the target"
+grep -q 'BUILDER_MODEL: a/b' "$TMP/upd5.log" || fail "inferred wrong builder_model"
 grep -q 'scaffolded from' "$TMP/upd5.log" && fail "claimed a stamp baseline without a stamp"
-if bash "$ROOT/bin/init.sh" --update --target "$TMP" >/dev/null 2>&1; then
-  fail "--update without a stamp or flags should fail loudly, not guess defaults silently"
-fi
 mv "$TMP/stamp.hold" "$STAMP"
-ok "--update without a stamp requires explicit flags and says so"
+ok "--update without a stamp recovers the init values from the target's files"
 
 # leave the deliberate TEMPLATE.md drift in place; later sections don't read it
 

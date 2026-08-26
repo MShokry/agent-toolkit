@@ -131,6 +131,35 @@ load_stamp_value() { # $1 = key, sets REPLY
   REPLY="$(sed -n "s/^$1: *//p" "$STAMP" | head -1)"
 }
 
+# Recover an init value from the target's own scaffolded files (pre-stamp
+# projects). Each pattern matches the substituted form of a __VAR__ token in
+# exactly one rendered file. Sets REPLY; empty if not found.
+recover_from_target() { # $1 = key
+  REPLY=""
+  case "$1" in
+    builder_model)
+      REPLY="$(sed -n 's/^model: //p' "$TARGET/.opencode/agent/builder.md" | head -1)" ;;
+    reviewer_model)
+      REPLY="$(sed -n 's/^model: //p' "$TARGET/.opencode/agent/reviewer.md" | head -1)" ;;
+    reviewer_fallback_model)
+      # feature.md: "switch to `__REVIEWER_FALLBACK_MODEL__`"
+      REPLY="$(sed -n 's/.*switch to `\([^`]*\)`.*/\1/p' \
+        "$TARGET/.claude/commands/feature.md" | head -1)" ;;
+    tester_model)
+      REPLY="$(sed -n 's/^model: //p' "$TARGET/.opencode/agent/tester.md" | head -1)" ;;
+    claude_model)
+      REPLY="$(sed -n 's/^model: //p' "$TARGET/.claude/agents/planner.md" 2>/dev/null | head -1)" ;;
+    project_name)
+      # team.sh: SESSION="__PROJECT_NAME__"
+      REPLY="$(sed -n 's/^SESSION="\(.*\)"/\1/p' \
+        "$TARGET/scripts/team.sh" | head -1)" ;;
+    test_dir)
+      # tester.md: "__TEST_DIR__/**": allow
+      REPLY="$(sed -n 's/^ *"\(.*\)\/\*\*": allow.*/\1/p' \
+        "$TARGET/.opencode/agent/tester.md" | head -1)" ;;
+  esac
+}
+
 if [ "$UPDATE" -eq 1 ]; then
   if [ -f "$STAMP" ]; then
     for spec in \
@@ -150,10 +179,30 @@ if [ "$UPDATE" -eq 1 ]; then
       fi
     done
   else
-    # No stamp (pre-provenance scaffold): fall back to the old defaults so
-    # --update still works; passing the original flags explicitly avoids any
-    # spurious noise on substituted lines.
+    # No stamp (pre-v0.3.0 scaffold): recover the original values from the
+    # target's own scaffolded files — they carry the substituted forms of the
+    # same tokens. Anything still missing falls back to defaults, then to an
+    # explicit-flags error below.
+    for spec in \
+      "project_name|PROJECT_NAME" \
+      "claude_model|CLAUDE_MODEL" \
+      "builder_model|BUILDER_MODEL" \
+      "reviewer_model|REVIEWER_MODEL" \
+      "reviewer_fallback_model|REVIEWER_FALLBACK_MODEL" \
+      "tester_model|TESTER_MODEL" \
+      "test_dir|TEST_DIR"; do
+      key="${spec%%|*}"; var="${spec##*|}"
+      if [ -z "${!var}" ]; then
+        recover_from_target "$key"
+        [ -n "$REPLY" ] && printf -v "$var" '%s' "$REPLY"
+      fi
+    done
     apply_defaults
+    RECOVERED=""
+    for var in PROJECT_NAME BUILDER_MODEL REVIEWER_MODEL REVIEWER_FALLBACK_MODEL TESTER_MODEL; do
+      [ -n "${!var}" ] && RECOVERED="$RECOVERED ${var}: ${!var}"
+    done
+    [ -n "$RECOVERED" ] && printf 'init.sh: no stamp — inferred init values from the target%s\n  (verify these, then make it permanent: bin/init.sh --refresh-stamp --target %s)\n' "$RECOVERED" "$TARGET"
   fi
 
   missing=""

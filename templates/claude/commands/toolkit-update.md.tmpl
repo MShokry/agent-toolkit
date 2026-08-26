@@ -36,8 +36,10 @@ project's own copies.
    `scaffolded`. This is your baseline — the diff is always *current
    toolkit templates vs your live files*, and the changelog entries that
    matter are those added after this baseline. If it doesn't exist, this
-   is a pre-v0.3.0 scaffold: ask the user for the original init flags
-   before going further, and expect to create the stamp at step 6.
+   is a pre-v0.3.0 scaffold: don't ask the user to re-type flags —
+   `--update` infers them from the target's files and prints them; verify
+   they look right before merging, and expect to create the stamp at
+   step 7.
 3. Run `bin/init.sh --update --target .` (from the toolkit checkout path).
    Exit 0 means nothing to do — report that and stop. Exit 1 lists the
    differing/new files.

@@ -16,6 +16,10 @@ script, flag, or role rule; **PATCH** = prose and docs.
   then annotated tag + push) and `skills/toolkit-release/` (drafts the
   changelog entry from git history since the last tag, classifies impact,
   proposes the version, runs the releaser after user approval).
+- [process] `--update` on a pre-stamp project no longer requires the
+  original init flags: it recovers them from the target's own scaffolded
+  files, prints them for verification, and suggests `--refresh-stamp` to
+  make them permanent.
 
 ## v0.3.0 — 2026-08-26
 
