@@ -202,26 +202,40 @@ baseline: `bin/init.sh --refresh-stamp --target .`. Full workflow:
 Older scaffolds have no `.agents/.toolkit-version` stamp. One-time
 migration — in the *target* project:
 
+`/toolkit-update` doesn't exist in the target yet at this point (step 3
+below is what adds it) — so this first pass has to be done by hand,
+against the *toolkit checkout*, not the target's own commands:
+
 1. **Get the latest toolkit on disk** (this is what you update against):
    `git -C <toolkit-checkout> pull`, or
    `git clone https://github.com/MShokry/agent-toolkit` if it isn't
    cloned yet.
-2. Run `/toolkit-update` and give it the checkout path — or by hand, just
-   `bin/init.sh --update --target .`. With no stamp it recovers the original
-   init values from the target's own scaffolded files and prints them for
-   you to verify (pass the flags explicitly only if something looks wrong).
-   This prints the drift summary.
-3. Merge in `CHANGELOG.md` impact order. Coming from ≤ v0.2.x also apply
+2. From the toolkit checkout, run
+   `bin/init.sh --update --target <path-to-project>`. With no stamp it
+   recovers the original init values from the target's own scaffolded
+   files and prints them for you to verify — pass a flag explicitly only
+   if one couldn't be recovered (a project that customized its reviewer
+   selection past the standard single-model-plus-fallback shape will need
+   `--reviewer-fallback-model` by hand). This prints the drift summary and
+   **doesn't write anything yet**. Before merging, check
+   `.agents/T-*.md` for any `Status:` that isn't `done` — merge at a task
+   boundary, not mid-flight.
+3. Run the **same command again with the same flags, minus `--update`**
+   (i.e. plain `bin/init.sh --target <path> --project-name ... [...]`) —
+   skip-if-exists makes this safe. This is what actually adds the files
+   your scaffold predates (`.claude/commands/toolkit-update.md`,
+   `scripts/verify-spec.sh`); it is **not** flag-free the way a re-run
+   against an already-current project is — you still need the values from
+   step 2, because this run doesn't attempt recovery itself.
+4. Merge in `CHANGELOG.md` impact order. Coming from ≤ v0.2.x also apply
    `migrations/01-delivery-contract.md` to `.agents/TEMPLATE.md` and any
    in-flight `.agents/T-*.md` (bare `blocked` still validates; nothing
    breaks if you skip it — you just don't get the new guarantees).
-4. Run one plain, flag-free `bin/init.sh --target .` — skip-if-exists
-   makes this safe — to add the files your scaffold predates
-   (`/toolkit-update`, `scripts/verify-spec.sh`).
-5. Create the baseline: `bin/init.sh --refresh-stamp --target .`.
+5. Create the baseline: `bin/init.sh --refresh-stamp --target <path>`
+   (same flags again).
 
-Every later update is then just: pull the toolkit → `/toolkit-update` →
-done.
+Every later update is then just: pull the toolkit → open the target repo
+→ `/toolkit-update` → done.
 
 ## Using it
 
