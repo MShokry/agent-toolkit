@@ -22,6 +22,13 @@ usually, "dangerous."
   into whatever approval gate already exists (don't invent a second
   interruption point for it) — never the lead's or implementer's own
   judgement call, not even after a timeout.
+- **A very large task compounds this risk rather than just scaling it** — a
+  wide, hard-to-review diff plus unattended permission approval across all
+  of it, at once. Before asking about the flag on a task that looks very
+  large (many files or subsystems, several unrelated acceptance criteria),
+  ask the user first whether to split it into smaller tasks run through the
+  pipeline one at a time, or proceed as a single task. Same judgement call
+  as above: the lead sizes it, the user decides.
 - **Verify live, before trusting it, that the tool's own explicit deny-list
   still blocks even with the flag on.** Don't take the tool's docs' word for
   it. The verification this toolkit did: dispatch a throwaway agent with a

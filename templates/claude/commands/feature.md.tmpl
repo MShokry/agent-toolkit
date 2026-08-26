@@ -133,6 +133,16 @@ outstanding. If the planner says the feature is already specified
 elsewhere in the repo, say so and ask whether to use that instead of a new
 spec.
 
+**If the task looks very large — many files or subsystems touched, several
+unrelated acceptance criteria — ask the user, before the auto-mode
+question below, whether to split it into smaller tasks (separate
+`T-<id>`s run through this same pipeline one at a time) or proceed as a
+single task.** Judge size by scope breadth, the same test used above for
+whether the planner is needed, not by effort alone. This is the user's
+call, not yours to default either way — a large task run unsplit under
+`--auto` compounds the risk of both (a wide, hard-to-review diff and
+unattended permission approval across it) at once.
+
 **In the same message, also ask whether to enable OpenCode's `--auto` for
 this task** — only relevant if `builder` ends up implementing it below.
 `--auto` auto-approves any permission not explicitly `deny`d in
@@ -309,6 +319,7 @@ verdict, test results, anything unverified, and the proposed merge.
 ## Stop and ask at
 
 - Spec approval, always.
+- A very large task — split into smaller tasks or run as one.
 - Any reviewer/implementer disagreement the evidence does not settle.
 - Any new permission or dependency, however reasonable it looks.
 - A third review loop.
