@@ -9,17 +9,23 @@ update workflow. Version bumps mean: **MAJOR** = state-file contract /
 role authority / script interface changed; **MINOR** = new template,
 script, flag, or role rule; **PATCH** = prose and docs.
 
-## Unreleased
+## v0.3.1 — 2026-08-26
 
-- [process] Release tooling: `bin/release.sh v<X>.<Y>.<Z>` (deterministic
+- `[process]` Release tooling: `bin/release.sh v<X>.<Y>.<Z>` (deterministic
   checks — clean tree, on main, changelog heading present, no duplicate tag —
   then annotated tag + push) and `skills/toolkit-release/` (drafts the
   changelog entry from git history since the last tag, classifies impact,
   proposes the version, runs the releaser after user approval).
-- [process] `--update` on a pre-stamp project no longer requires the
+- `[process]` `--update` on a pre-stamp project no longer requires the
   original init flags: it recovers them from the target's own scaffolded
   files, prints them for verification, and suggests `--refresh-stamp` to
   make them permanent.
+- `[docs]` Fixed two wrong steps in "Updating a project scaffolded before
+  v0.3.0" (README), found by actually running them against two real
+  projects: a premature `/toolkit-update` reference before that command
+  exists in the target, and a false "flag-free" claim on the file-adding
+  re-run (it needs the same flags as the `--update` pass before it — only
+  `--update` attempts recovery).
 
 ## v0.3.0 — 2026-08-26
 
