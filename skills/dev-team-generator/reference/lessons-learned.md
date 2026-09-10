@@ -97,6 +97,19 @@ worse than the flat timeout it was meant to improve on.
   reusing this note as precedent — the finding above is tool-and-version
   specific, not a general property of CLI tools.
 
+**Update 2026-09-10 — an idle watchdog now ships, on a different signal.**
+The output-file-growth signal above is still dead (re-confirmed on opencode
+1.18.25). But `oc.sh` no longer needs it: it polls the tool's own
+**session-state API** — `GET /session/<id>/message?limit=1`, whose
+byte-fingerprint tracks sub-turn progress and carries the `completed`
+flag — the same API §2 already trusts for abort verification. Verified
+against opencode 1.18.25 with a real multi-minute run (not false-killed) and
+a forced stall (caught). `OC_TIMEOUT` is now the ceiling, `OC_IDLE_TIMEOUT`
+(default 600 s) the wedge detector. Full write-up + test procedure:
+`docs/OC-TIMEOUT-WATCHDOG.md`. The "flat timeout is the current design"
+conclusion above held only while every candidate signal was broken — one
+wasn't.
+
 ## 4. Implementer testing: scoped to fast/deterministic, not banned, not unlimited
 
 Don't swing to either extreme:
@@ -450,3 +463,30 @@ a human chose it or a model guessed. Two rules kept this cheap:
   session policy, permissions, or budgets mid-task. A label that can
   silently change what a role is allowed to do is a permission system, and
   permission changes belong at gates, not in metadata.
+
+## 23. A long-lived dispatch server caches permission config
+
+A permission deny that "is in the file" is not a deny that fires. Verified
+live: an OpenCode-style server kept running for three days across edits to
+the role files; agent definitions were read at startup, so newly added
+deny rules never took effect — a `git push` deny silently didn't apply,
+while older rules (present before startup) enforced fine. The config was
+correct; the process was stale.
+
+- After editing any dispatched agent's permission block, **restart the
+  dispatch server** and re-run one negative probe before trusting it.
+- A "verified live" claim has a timestamp. Config verified last month on a
+  server that restarted yesterday is not verified.
+
+## 24. Blanket bash denies do not block the runtime's built-in safe list
+
+With `bash "*": deny` confirmed working (arbitrary commands hard-fail with
+a rule error), some commands still executed: `ls`, `git status`. The
+runtime treats certain known-read-only commands as always-permitted,
+above any configured rule. Design accordingly:
+
+- A blanket bash deny limits *damage*, not *observation*. Anything visible
+  to `ls`/`git status` should be assumed readable by every role.
+- When auditing permissions, probe with an innocuous non-safe command
+  (`whoami`, `touch /tmp/...`), not with `ls` — a passing `ls` proves
+  nothing about the deny actually being loaded.

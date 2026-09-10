@@ -9,6 +9,32 @@ update workflow. Version bumps mean: **MAJOR** = state-file contract /
 role authority / script interface changed; **MINOR** = new template,
 script, flag, or role rule; **PATCH** = prose and docs.
 
+## v0.5.0 — 2026-09-10
+
+- `[process]` `scripts/oc.sh` replaces its flat wall-clock `timeout` with a
+  keep-alive watchdog. It backgrounds `opencode run` and polls the server's
+  own session-state API (`GET /session/<id>/message?limit=1`,
+  byte-fingerprint + `completed` flag) for forward progress; a run is
+  aborted only when that fingerprint is frozen for `OC_IDLE_TIMEOUT`
+  seconds while still not completed (a real wedge), or the absolute
+  `OC_TIMEOUT` ceiling is hit. A run that keeps making progress is never
+  killed for merely taking a while — which the flat timeout did constantly
+  to real 20–60 min builder/reviewer turns.
+  - **Env change:** `OC_TIMEOUT` is now the *ceiling*, default raised
+    `600` → `2400`. New: `OC_IDLE_TIMEOUT` (default `600`), `OC_POLL`
+    (default `20`). Exit `124` still means aborted; the stderr message now
+    says whether it was idle or the ceiling.
+  - Fresh (`--session`-less) runs now get their session id resolved by the
+    watchdog, so abort-on-timeout always has a target — closes the old
+    "no session id known to abort" gap.
+  - Falls back to ceiling-only (old behaviour, no regression) if the
+    session id can't be resolved or the message endpoint isn't JSON.
+  - Signal is opencode-version-specific (verified 1.18.25). Full rationale,
+    the signals that *don't* work, and a test procedure:
+    `docs/OC-TIMEOUT-WATCHDOG.md`. Supersedes
+    `skills/dev-team-generator/reference/lessons-learned.md` §3's
+    "flat timeout is the current design" (see the update note there).
+
 ## v0.4.0 — 2026-08-26
 
 - `[contract]` State file gains two header fields: **Task class**

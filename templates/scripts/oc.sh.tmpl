@@ -7,9 +7,8 @@
 #
 #   1. --attach reuses an already-running `opencode serve`, skipping MCP cold
 #      boot on every call. Without it each invocation pays startup again.
-#   2. `opencode run` hangs forever if the agent hits a permission prompt in a
-#      non-TTY. That is the known failure mode this wrapper exists to guard
-#      against, so every call is bounded by a hard timeout and a non-zero exit.
+#   2. `opencode run` can hang in a non-TTY if the agent hits an unanswerable
+#      permission prompt. Every call is bounded — see the watchdog note below.
 #   3. Model is an argument, so the lead can switch vendors without editing a
 #      single agent prompt.
 #
@@ -44,53 +43,74 @@
 # for a task the user explicitly confirmed at spec approval (see
 # feature.md's step 1) — not as a standing default.
 #
-# Timeout is a flat wall-clock kill (OC_TIMEOUT, default 600s), not an
-# idle-based one. An idle/no-output watchdog was tried and reverted: it
-# relies on the raw JSON output file growing as the agent works, but
-# `opencode run --format json` (verified against v1.18.18, --attach, both
-# --format json and --format default, with and without `stdbuf -oL`)
-# writes nothing to its own stdout until the *entire turn completes* — the
-# file sits at 0 bytes through 12+ seconds of genuinely active, multi-step
-# work. Polling its size can't tell "stuck" from "working" here; it would
-# kill every run past the idle threshold, successful or not. If opencode
-# ever starts streaming incrementally, or a server-side polling approach
-# (session message state via the HTTP API, not the client's stdout) is
-# worth the added complexity, revisit this — but don't re-introduce
-# file-size polling without re-verifying it against the actual installed
-# opencode version first.
+# --- How a run is bounded (idle watchdog, not a flat clock) --------------
 #
-# Killing the client does NOT cancel the server-side turn (--attach
-# sessions outlive the CLI process) — a killed run can leave an orphaned
-# message with no `completed` timestamp, and reusing that session for a
-# later call can then hang forever behind it. So on a timeout this script
-# calls the server's abort endpoint on whatever session id it can
-# determine (the `--session` it was given, if any — the client rarely has
-# a session id of its own to fall back on, per the buffering note above)
-# before it exits 124 — verified live against a real OpenCode 1.x server
-# (POST /session/<id>/abort returns 200, and no-ops cleanly if the turn
-# had already finished).
+# A flat wall-clock kill is wrong for these models: builder/reviewer runs on
+# opencode-go/glm-5.3-flash and kimi-k2.7-code routinely do 20-60 min of
+# genuinely active work, and a flat timeout SIGTERMs them mid-tool-call.
+#
+# So this script backgrounds `opencode run` and polls the OpenCode server for
+# this session's *last message* (GET /session/<id>/message?limit=1). While the
+# agent works, that message's parts and text grow, so its byte-fingerprint
+# keeps changing; when a turn is genuinely wedged (an unanswered permission
+# prompt, a black-holed provider call) the fingerprint is frozen. The run is
+# aborted only when:
+#   - the fingerprint does not change for OC_IDLE_TIMEOUT seconds AND the
+#     message has no `completed` timestamp (a real wedge), or
+#   - the absolute OC_TIMEOUT ceiling is reached while still running.
+# A run that keeps making progress is left alone however long it takes.
+#
+# Signals that were tried and rejected against opencode 1.18.x, don't
+# re-introduce without re-verifying on the installed version:
+#   - `opencode run --format json` stdout / the --raw-out file: buffers to
+#     end-of-turn (0 bytes, or one tiny early chunk, then nothing until the
+#     whole turn flushes at once) — can't tell "stuck" from "working".
+#   - GET /session/<id> state (time.updated / tokens / cost): only advances at
+#     some step boundaries, sat frozen through 80s of active file-reading.
+#   - GET /event and GET /session/<id>/event SSE: emit only
+#     server.connected / server.heartbeat, never per-message/step/tool events.
+# The /session/<id>/message?limit=1 body is the one thing observed to track
+# sub-turn progress *and* carry the `completed` flag.
+#
+# If the session id can't be resolved (a fresh --session-less run, server slow
+# to list it) or the message endpoint keeps erroring, the watchdog disables
+# itself and the only bound is the OC_TIMEOUT ceiling — never worse than a
+# flat timeout.
+#
+# Killing the client does NOT cancel the server-side turn (--attach sessions
+# outlive the CLI). So on any abort this script calls POST
+# /session/<id>/abort (verified live against a real OpenCode 1.x server:
+# returns 200, no-ops cleanly if the turn had already finished) before it
+# exits 124. The watchdog resolves the session id even for a fresh run, so
+# this abort now always has a target.
 #
 # Env:
-#   OC_SERVER   default http://localhost:4096, or the port scripts/team.sh
-#               last started (read from .agents/.oc-port) if that file
-#               exists and OC_SERVER isn't set — see scripts/team.sh's own
-#               header for why (running two projects at once needs two
-#               ports, and this is what lets oc.sh find the right one
-#               without you exporting OC_SERVER by hand every call).
-#   OC_TIMEOUT  default 600 (seconds)
+#   OC_SERVER        default http://localhost:4096, or the port
+#                    scripts/team.sh last started (read from
+#                    .agents/.oc-port) if that file exists and OC_SERVER
+#                    isn't set — see scripts/team.sh's own header for why.
+#   OC_TIMEOUT       absolute ceiling, seconds. Default 2400. A run still
+#                    making progress is killed here; raise it for a job
+#                    legitimately longer than 40 min.
+#   OC_IDLE_TIMEOUT  seconds the session's last message may stay byte-for-byte
+#                    unchanged, while not completed, before the run is treated
+#                    as wedged and aborted. Default 600.
+#   OC_POLL          fingerprint poll interval, seconds. Default 20.
 #
 # Exit codes:
 #   0   ok
 #   1   usage or runtime error
-#   124 timed out (almost always a permission prompt in a non-TTY, unless
-#       --auto was passed). The server-side session is aborted
-#       automatically when a session id is known; see the note above for
-#       when it isn't.
+#   124 aborted — either idle (no progress for OC_IDLE_TIMEOUT; usually a
+#       permission prompt in a non-TTY, unless --auto was passed, or a hung
+#       provider call) or the OC_TIMEOUT ceiling. The stderr message says
+#       which. The server-side session is aborted automatically.
 # END USAGE
 
 set -eu
 
-TIMEOUT_SECS="${OC_TIMEOUT:-600}"
+CEIL_SECS="${OC_TIMEOUT:-2400}"
+IDLE_SECS="${OC_IDLE_TIMEOUT:-600}"
+POLL_SECS="${OC_POLL:-20}"
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 if [ -n "${OC_SERVER:-}" ]; then
@@ -163,7 +183,7 @@ if ! curl -sS -o /dev/null -m 5 "$SERVER" 2>/dev/null; then
      (or run scripts/team.sh, which starts it in pane 1)"
 fi
 
-printf '%s\n' "oc.sh: agent=$AGENT model=$MODEL timeout=${TIMEOUT_SECS}s server=$SERVER session=${SESSION:-new} auto=$AUTO" >&2
+printf '%s\n' "oc.sh: agent=$AGENT model=$MODEL ceiling=${CEIL_SECS}s idle=${IDLE_SECS}s server=$SERVER session=${SESSION:-new} auto=$AUTO" >&2
 
 RAW_TMP="$(mktemp "${TMPDIR:-/tmp}/oc-raw.XXXXXX")"
 trap 'rm -f "$RAW_TMP"' EXIT
@@ -174,8 +194,62 @@ SESSION_ARGS=()
 AUTO_ARGS=()
 [ "$AUTO" -eq 1 ] && AUTO_ARGS=(--auto)
 
+# --- watchdog helpers ---------------------------------------------------
+
+# md5 of stdin, portable across macOS (`md5`) and Linux (`md5sum`).
+_md5() { if command -v md5 >/dev/null 2>&1; then md5 -q; else md5sum | cut -d' ' -f1; fi; }
+
+# Every current session id, newest first (empty on any error).
+list_session_ids() {
+  curl -sS -m 10 "$SERVER/session" 2>/dev/null \
+    | grep -o '"id":"ses_[^"]*"' | cut -d'"' -f4
+}
+
+# Echo the first session id present now but not in $1 (newline-separated list).
+resolve_new_session() {
+  local pre="$1" id
+  for id in $(list_session_ids); do
+    printf '%s\n' "$pre" | grep -qxF "$id" || { printf '%s\n' "$id"; return 0; }
+  done
+  return 1
+}
+
+# Fingerprint of a session's last message: "<size>:<md5>", or "" if unreadable.
+# Changes whenever a part is added or streamed text grows; stable when wedged.
+message_fp() {
+  local body
+  body="$(curl -sS -m 10 "$SERVER/session/$1/message?limit=1" 2>/dev/null)" || return 0
+  case "$body" in
+    '['*|'{'*) printf '%s:%s' "$(printf '%s' "$body" | wc -c | tr -d ' ')" "$(printf '%s' "$body" | _md5)" ;;
+    *) : ;;  # HTML / error page — treat as unreadable, watchdog stays passive
+  esac
+}
+
+# Exit 0 if that last message carries a `completed` timestamp.
+turn_completed() {
+  curl -sS -m 10 "$SERVER/session/$1/message?limit=1" 2>/dev/null | python3 -c '
+import json, sys
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    raise SystemExit(1)
+m = d[-1] if isinstance(d, list) and d else d
+if not isinstance(m, dict):
+    raise SystemExit(1)
+info = m.get("info", m)
+raise SystemExit(0 if (info.get("time", {}) or {}).get("completed") else 1)
+' 2>/dev/null
+}
+
+# --- launch + keep-alive watchdog -------------------------------------
+
+PRE_SESSIONS=""
+[ -z "$SESSION" ] && PRE_SESSIONS="$(list_session_ids)"
+
 set +e
-printf '%s' "$PROMPT" | "$TIMEOUT_BIN" "$TIMEOUT_SECS" \
+# Outer `timeout` is only an ultimate backstop for a wedged watchdog loop;
+# the watchdog itself enforces the real OC_TIMEOUT ceiling below.
+printf '%s' "$PROMPT" | "$TIMEOUT_BIN" "$((CEIL_SECS + 300))" \
   opencode run \
     --attach "$SERVER" \
     --dir "$REPO_ROOT" \
@@ -183,16 +257,61 @@ printf '%s' "$PROMPT" | "$TIMEOUT_BIN" "$TIMEOUT_SECS" \
     --model "$MODEL" \
     ${SESSION_ARGS[@]+"${SESSION_ARGS[@]}"} \
     ${AUTO_ARGS[@]+"${AUTO_ARGS[@]}"} \
-    --format json > "$RAW_TMP"
+    --format json > "$RAW_TMP" 2>>"$RAW_TMP" &
+OC_PID=$!
+
+WATCH_SID="$SESSION"
+KILL_REASON=""
+START_TS="$(date +%s)"
+LAST_PROGRESS="$START_TS"
+RESOLVE_DEADLINE="$((START_TS + 60))"
+FP_PREV=""
+
+while kill -0 "$OC_PID" 2>/dev/null; do
+  sleep "$POLL_SECS"
+  NOW="$(date +%s)"
+
+  if [ -z "$WATCH_SID" ]; then
+    WATCH_SID="$(resolve_new_session "$PRE_SESSIONS")" || WATCH_SID=""
+    if [ -n "$WATCH_SID" ]; then
+      LAST_PROGRESS="$NOW"
+    elif [ "$NOW" -ge "$RESOLVE_DEADLINE" ]; then
+      break   # can't identify this run's session — leave it to the ceiling
+    fi
+    continue
+  fi
+
+  FP="$(message_fp "$WATCH_SID")"
+  if [ -n "$FP" ] && [ "$FP" != "$FP_PREV" ]; then
+    FP_PREV="$FP"
+    LAST_PROGRESS="$NOW"
+  fi
+
+  if [ "$((NOW - LAST_PROGRESS))" -ge "$IDLE_SECS" ]; then
+    turn_completed "$WATCH_SID" && break   # finished between polls; let it flush
+    KILL_REASON="idle"
+    kill -TERM "$OC_PID" 2>/dev/null
+    break
+  fi
+
+  if [ "$((NOW - START_TS))" -ge "$CEIL_SECS" ]; then
+    KILL_REASON="ceiling"
+    kill -TERM "$OC_PID" 2>/dev/null
+    break
+  fi
+done
+
+wait "$OC_PID"
 STATUS=$?
 set -e
 
 [ -n "$RAW_OUT" ] && cp "$RAW_TMP" "$RAW_OUT"
 
 # Report the session id actually used, whatever the outcome, so the caller can
-# persist it and continue the same session on the next call for this task.
-# (On a killed run this is usually empty — see the buffering note above.)
-USED_SESSION="$(grep -o '"sessionID":"[^"]*"' "$RAW_TMP" 2>/dev/null | head -1 | cut -d'"' -f4)"
+# persist it and continue the same session on the next call for this task. The
+# watchdog resolves it even for a fresh run; fall back to the raw stream.
+USED_SESSION="$WATCH_SID"
+[ -n "$USED_SESSION" ] || USED_SESSION="$(grep -o '"sessionID":"[^"]*"' "$RAW_TMP" 2>/dev/null | head -1 | cut -d'"' -f4)"
 [ -n "$USED_SESSION" ] && printf '%s\n' "oc.sh: session=$USED_SESSION" >&2
 
 emit() {
@@ -215,32 +334,44 @@ sys.stdout.write("\n")
   fi
 }
 
-if [ "$STATUS" -eq 124 ]; then
-  ABORT_SESSION="${SESSION:-$USED_SESSION}"
+# An abort — from the watchdog (KILL_REASON set) or the outer backstop
+# (STATUS 124) — is reported the same way and always exits 124.
+if [ -n "$KILL_REASON" ] || [ "$STATUS" -eq 124 ]; then
+  [ -n "$KILL_REASON" ] || KILL_REASON="ceiling"
+  ABORT_SESSION="${WATCH_SID:-$USED_SESSION}"
   if [ -n "$ABORT_SESSION" ]; then
     curl -sS -X POST -m 10 "$SERVER/session/$ABORT_SESSION/abort" -o /dev/null 2>/dev/null || true
     ABORT_NOTE="Aborted server-side session $ABORT_SESSION so it won't orphan the next call — retrying is safe."
   else
-    ABORT_NOTE="No session id was known to abort (killed before any event reached this client — see the header note on output buffering). If this session gets reused, check it isn't still running server-side before sending the next message."
+    ABORT_NOTE="No session id was known to abort. If this session gets reused, check it isn't still running server-side before sending the next message."
+  fi
+
+  if [ "$KILL_REASON" = "idle" ]; then
+    WHY="the session's last message did not change for ${IDLE_SECS}s while a turn was still open"
+    HINT="That is what a wedged run looks like — almost always a permission prompt
+  with no TTY to answer it:
+    - Widen .opencode/agent/$AGENT.md's bash permissions to cover the command
+      that stopped it, and set 'question: deny'.
+    - Or pass --auto to this script (only for a task the user has confirmed) —
+      it auto-approves anything not explicitly 'deny'd instead of hanging.
+  If neither applies the provider call may have hung — check --raw-out for the
+  last event before the stall, then resume the same --session id."
+  else
+    WHY="the run hit the absolute ${CEIL_SECS}s ceiling while still active"
+    HINT="If the job is legitimately this long, raise OC_TIMEOUT (seconds) for
+  this dispatch. A wedged run is caught by OC_IDLE_TIMEOUT (${IDLE_SECS}s)
+  well before this; hitting the ceiling means it was genuinely still working."
   fi
 
   cat >&2 <<MSG
 
-oc.sh: TIMED OUT after ${TIMEOUT_SECS}s (agent=$AGENT model=$MODEL)
+oc.sh: ABORTED — $WHY (agent=$AGENT model=$MODEL)
 
   $ABORT_NOTE
 
-  The usual cause is a permission prompt with no TTY to answer it: opencode run
-  waits forever instead of failing. Two ways to fix it:
-    - Widen .opencode/agent/$AGENT.md's bash permissions to cover the command
-      that stopped it, and set 'question: deny'.
-    - Pass --auto to this script (only for a task the user has confirmed) —
-      it auto-approves anything not explicitly 'deny'd instead of hanging
-      on 'ask', without disabling the agent's deny list.
+  $HINT
 
-  If neither applies, it may just be a genuinely long run — raise OC_TIMEOUT.
-
-  Reproduce interactively to see which prompt it stopped on:
+  Reproduce interactively to watch it run:
     opencode run --attach $SERVER --agent $AGENT --model $MODEL "<prompt>"
 
 MSG
