@@ -8,11 +8,12 @@ front — pull in a specific template's full text only once you actually need
 that role's exact prose, using the paths cited below.
 
 **Do not copy any template file byte-for-byte assuming it fits your tool.**
-Claude Code and OpenCode both discover custom agent files per-repo; not
-every tool does — some tools (Codex, for one) only support custom agents
-globally per machine, not per-repo, and permission models differ in shape,
-not just detail (a per-command allow/deny/ask map is not the same kind of
-thing as one coarse sandbox flag). Read `docs/ADDING-A-TOOL.md` before
+Claude Code, Codex, and OpenCode discover custom agent files per-repo, but their
+formats and permission models differ in shape, not just detail (a per-command
+allow/deny/ask map is not the same kind of thing as one coarse sandbox flag).
+Codex project agents live under `.codex/agents/`, project skills under
+`.agents/skills/`, and project instructions in `AGENTS.md`. Read
+`docs/ADDING-A-TOOL.md` before
 assuming a mechanism transfers — check your actual tool's real config and
 capability surface first, the same way this toolkit's own worker-role
 ports did, and recreate the *behavior*, adapted to what your tool can
@@ -97,6 +98,13 @@ Dispatching another agent to check an agent's structural output is a paid
 call that adds a component that can misjudge the same way the one it's
 checking can. Prefer the script.
 
+Have the reviewer emit a machine-readable verdict line — `VERDICT: PASS` /
+`VERDICT: CHANGES_REQUESTED` as the first line of its reply — and **branch
+on that line**, not on its findings prose or the raw event stream. Have the
+structural check also fail when a task has reached review with no filled
+verdict on record, so a missing or malformed verdict is caught from both
+the reply and the file.
+
 **Permission is least-privilege per role, verified live, not assumed.**
 Whatever your tool's capability model actually is, give the reviewer
 nothing beyond read + (optionally) writing its own verdict; give the
@@ -168,6 +176,18 @@ loop at all: route it to the test/verification step as an explicit thing
 to check, logged in the state file so the human can see and disagree —
 never silently downgraded. Never merge without asking. Any new permission
 or dependency, however reasonable it looks, gets asked about too.
+
+**Only the lead commits, and only once the user has approved the merge** —
+every implementer's write scope hard-denies `git commit`/`git push` so this
+stays the one git-mutating action in the whole pipeline, gated on a human
+yes. When you do, stage the state file alongside the code (so the commit
+carries the spec, decisions, findings, and test results together, not
+scattered across an un-versioned file) and **tag the commit with the task
+id** — `[T-<id>]` leading the subject line, or appended if the project's
+own commit convention already owns that position. It has to be in the
+one-line subject, not just the body, so `git log --oneline` / `git blame`
+show it and a later `git log --grep` finds every commit for a task from
+whatever incident sends someone looking.
 
 **Keep the project's main tracking doc current, always, not only at
 completion.** A status board / task list / equivalent, updated at the end
@@ -263,9 +283,9 @@ recreate the behavior, don't paste the file.
 
 ## If you're scaffolding into a fresh repo, not just orienting yourself
 
-`bin/init.sh` renders the Claude and OpenCode templates into a target repo
-mechanically (see README's "Quick start"). Use it if your tool is one of
-those two; otherwise this file plus `docs/ADDING-A-TOOL.md` is the path —
-there's no flag for "generate my tool's shim," it's a research step
-followed by a small, real file, same as every tool that's here today
-started out.
+`bin/init.sh` renders Claude, Codex-lead, and OpenCode templates into a target
+repo mechanically (see README's "Quick start"). The Codex adapter consists of
+root `AGENTS.md`, a project-scoped planner, and `feature` / `toolkit-update`
+skills; it executes the same canonical flow as Claude. For any other tool, this
+file plus `docs/ADDING-A-TOOL.md` is the path — there's no flag for "generate my
+tool's shim," so research its real discovery and permission surfaces first.

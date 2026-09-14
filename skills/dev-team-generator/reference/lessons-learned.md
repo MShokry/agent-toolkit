@@ -490,3 +490,81 @@ above any configured rule. Design accordingly:
 - When auditing permissions, probe with an innocuous non-safe command
   (`whoami`, `touch /tmp/...`), not with `ls` — a passing `ls` proves
   nothing about the deny actually being loaded.
+
+## 25. A rule the template states but the checker doesn't verify is not a rule
+
+The state-file template can say "a box may be ticked only when both
+evidence cells are filled" in plain words, every role can have read it, and
+the box still gets ticked on recollection — because the only thing that
+actually holds a pipeline to a rule is the deterministic check, and a rule
+that lives only in prose is enforced by nobody. This surfaced twice at the
+same seam: a criterion marked met with an empty evidence column, and a
+review verdict where the placeholder had been deleted but no verdict
+written (the check only looked for the *placeholder string*, so its absence
+read as "filled").
+
+- For every load-bearing rule you write into the template, ask whether the
+  structural check actually asserts it. "Ticked ⇒ both evidence cells
+  non-empty" and "past review ⇒ a filled verdict on record" are both cheap
+  greps; without them the template is documentation, not a contract.
+- Prefer checks that catch a *positive* bad state (a tick with no
+  evidence) over ones that catch a known-bad *token* (the literal
+  placeholder). The token check passes the moment someone edits the
+  placeholder out, which is exactly when you most need it to fire.
+- Give the handoff a **machine-readable form** at every seam a script or
+  the lead has to branch on. Have the reviewer open its reply with a fixed
+  `VERDICT: <PASS|CHANGES_REQUESTED>` line and branch on that line — not on
+  a scan of the findings prose or the raw event stream, both of which are
+  parseable only by eye and only unreliably.
+
+## 26. Instrument the pipeline's own cost, not just the product's
+
+It is easy to end up tracking the *product's* cost to a decimal while the
+*pipeline's* own $/min per role is invisible — knowable only when a
+timeout forces someone to open a session and look. That is how an
+expensive, slow, verdict-less reviewer model survives far longer than it
+should: nothing routinely surfaces that one dispatch cost 200x another.
+
+- Have the dispatch wrapper append one structured line per call to a log
+  the pipeline owns: timestamp, role, model, session, wall-clock seconds,
+  exit status, and — best-effort from the tool's own session API — token
+  counts and cost. One line, one file, appended on every outcome including
+  a timeout.
+- Make it strictly additive and best-effort: a failure to resolve cost or
+  write the line must never change the run's exit code. Telemetry that can
+  break the thing it measures gets disabled the first time it does.
+- Treat the log as machine state, not a committed artifact — add it to the
+  target repo's ignore file the same way the wrapper's other local state
+  (server port, session ids) is handled.
+
+## 27. Re-check a tool's discovery surface before preserving an old limitation
+
+A tool that once supported custom agents only in machine-global configuration
+may later add repository-scoped agents and skills. Treating the old limitation
+as permanent leaves a documented "manual adapter" long after the tool can be a
+first-class project lead.
+
+- Verify current official documentation before adding or rejecting support.
+- Prefer repository-scoped instructions, skills, and agents when the tool
+  discovers them; they are reviewable and travel with the project.
+- Keep one canonical workflow and make tool-specific lead entry points thin
+  adapters over it. Duplicating a long flow creates another hand-synced policy
+  surface; an adapter should name only genuine capability differences.
+- Launcher fallback should be deterministic and overridable: prefer the
+  established lead when available, fall back to the supported alternative when
+  it is absent, and provide an explicit selection flag for testing and intent.
+
+## 28. A new update entry point needs a lower-level bootstrap path
+
+A command or skill introduced by an upgrade cannot perform the upgrade that
+installs itself. Existing users of another lead may already have an update
+command, but users of the newly supported lead need one documented shell-level
+path before its project integration exists.
+
+- Keep preview and write separate: first show drift without writing, then run a
+  skip-if-exists installer that can add only missing files.
+- Persist scaffold inputs so the missing-file run does not require users to
+  reconstruct old model and directory choices.
+- Test the exact bootstrap state by removing the newly introduced files from a
+  stamped scaffold and confirming a flag-free run restores only those files,
+  preserves the stamp, and does not retrigger first-run behavior.

@@ -1,6 +1,7 @@
 # `scripts/team.sh`
 
-A tmux layout for running the pipeline: pane 0 is the lead (`claude`), pane
+A tmux layout for running the pipeline: pane 0 is the lead (`claude` when
+installed, otherwise `codex`), pane
 1 is `opencode serve` (what `scripts/oc.sh` attaches to), pane 2 tails
 `.agents/` for activity, pane 3 is free.
 
@@ -9,12 +10,25 @@ A tmux layout for running the pipeline: pane 0 is the lead (`claude`), pane
 ```
 scripts/team.sh [session-name]     start, or attach if it's already running
 scripts/team.sh --fresh            start a NEW lead conversation, not a resume
+scripts/team.sh --lead <name>      auto (default), claude, or codex
 scripts/team.sh --port <N>         opencode server port (default 4096)
 scripts/team.sh --kill [session-name]
 ```
 
 Flags can combine with a session name in any order:
 `scripts/team.sh --port 4097 my-second-project`.
+
+## Lead selection
+
+`--lead auto` prefers Claude when `claude` is installed and falls back to Codex
+when it is not. Use `--lead claude` or `--lead codex` to override that choice;
+`TEAM_LEAD` provides the same default as an environment variable. When creating
+a session, the script fails before creating panes if the selected CLI is
+unavailable; attaching an already-running session does not require the CLI to
+remain discoverable.
+
+In a Codex pane, invoke `$feature <request>`. The generated repository skill
+drives the same pipeline as Claude's `/feature` command.
 
 ## Resuming is the default
 
@@ -39,6 +53,11 @@ Pass `--fresh` on the rare run where you actually want a clean slate
 instead — this mints a new pinned id, so later resumes follow the new
 conversation, not the old one.
 
+Codex has no create-with-session-id equivalent. Without `--fresh`, the launcher
+uses `codex resume --last`, whose lookup is scoped to the current repository;
+if no saved session exists it starts `codex`. With `--fresh`, it starts a new
+Codex conversation directly.
+
 ## Running two projects at once
 
 `opencode serve` binds one port per process. Two projects both defaulting
@@ -62,7 +81,7 @@ predates that, or ignores it differently, add it by hand.
 
 ## Shell completion (optional)
 
-`scripts/team-completion.bash` completes `--fresh`, `--port`, `--kill`,
+`scripts/team-completion.bash` completes `--fresh`, `--lead`, `--port`, `--kill`,
 and `-h`/`--help`. It's not installed automatically — source it from your
 shell rc file if you want it:
 

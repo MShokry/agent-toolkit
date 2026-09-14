@@ -1,0 +1,23 @@
+# Codex instructions for __PROJECT_NAME__
+
+Read `CLAUDE.md` first when it exists. It is this project's primary guidance
+file; these instructions add Codex integration without duplicating or
+overriding the project's own constraints.
+
+This repository uses a planner -> implement -> review -> test pipeline. For a
+feature or bug-fix request, invoke the `feature` skill and act as its lead. For
+an agent-toolkit scaffold update, invoke the `toolkit-update` skill. Do not run
+either workflow from memory: load the skill and follow its referenced canonical
+flow.
+
+The task state file under `.agents/` is the only handoff surface between roles.
+Keep role replies short and leave full details in that file.
+
+## Project-specific guidance
+
+Not populated by agent-toolkit: a generic scaffolder must not guess this
+project's architecture, security boundaries, test commands, or style. If
+`CLAUDE.md` does not exist and this paragraph has not been replaced with real
+project guidance, stop before feature work and ask the user to customize this
+section. Do not treat the pipeline instructions above as project-specific
+constraints.

@@ -45,7 +45,9 @@ Ask these up front rather than guessing — they shape every generated file:
 ```
 
 It writes `.claude/agents/`, `.opencode/agent/`, `.claude/commands/{feature.md,
-toolkit-update.md}`, `.agents/{TEMPLATE.md,.toolkit-version}`, and
+toolkit-update.md}`, Codex project instructions/skills/planner under `AGENTS.md`,
+`.agents/skills/`, and `.codex/agents/`,
+`.agents/{TEMPLATE.md,.toolkit-version}`, and
 `scripts/{oc.sh,team.sh,verify-state.sh,verify-spec.sh,promote-findings.sh}`
 into the target. It does **not** overwrite a file that already exists — it
 prints what it skipped so you can diff and merge by hand.
@@ -57,12 +59,14 @@ It writes nothing — it prints a drift summary and exits 1 when files
 differ; add `--diff`/`--only <path>` for hunks. Triage against the
 toolkit's impact-tagged `CHANGELOG.md`, merge deliberately, then refresh
 the baseline with `--refresh-stamp`. In a scaffolded project your lead can
-do all of this via the generated `/toolkit-update` command.
+do all of this via the generated `/toolkit-update` Claude command or
+`$toolkit-update` Codex skill.
 
 ## If the user wants a worker role under a tool this doesn't already template
 
-`bin/init.sh` only knows Claude and OpenCode today. If the user asks for a
-*worker* role (planner/implementer/reviewer/tester) under a different tool:
+`bin/init.sh` knows Claude, a Codex lead/planner, and OpenCode workers today.
+If the user asks for a *worker* role (planner/implementer/reviewer/tester) under
+a different tool:
 
 1. **Don't force it into `bin/init.sh`'s shape by guessing.** Different
    tools genuinely differ in how they read project config, discover custom
@@ -83,9 +87,9 @@ do all of this via the generated `/toolkit-update` command.
    research-then-build step live for this project regardless of whether
    that offer is taken.
 
-If instead the user wants a *different AI to be the lead itself* — not a
-worker role dispatched by an existing lead — that's not this skill. Point
-them at `SYSTEM.md` at the toolkit root instead.
+Codex is already supported as a fallback lead. For a different AI to be the
+lead itself — not a worker role dispatched by an existing lead — point the
+user at `SYSTEM.md` at the toolkit root.
 
 ## After it runs
 
@@ -97,9 +101,10 @@ them at `SYSTEM.md` at the toolkit root instead.
    from the YAML. This has bitten a real project before: a blanket-deny
    config still let a reviewer write outside its intended scope.
 2. Confirm `opencode serve` is reachable, per the printed next step.
-3. Tell the user to load the `delegate` skill at the start of the lead's
-   own session — it's the context-discipline half of this, not the
-   workflow half.
+3. Tell the user Claude uses `/feature`; when Claude is unavailable, Codex uses
+   `$feature`. `scripts/team.sh` chooses that fallback automatically. Tell the
+   user to load the `delegate` skill at the start of the lead's own session —
+   it's the context-discipline half of this, not the workflow half.
 4. The generated `.claude/commands/feature.md` and agent files reference
    "this project's own guidance file" for constraints — make sure the
    project actually has a `CLAUDE.md`/`AGENTS.md` before relying on that,

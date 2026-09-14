@@ -58,8 +58,9 @@ project's own copies.
    what this project customized locally (git diff/log on the file helps),
    and propose the merge. Apply with their chosen option. New upstream
    files (ones this project doesn't have at all) are added by one plain,
-   flag-free `bin/init.sh --target .` run — skip-if-exists makes that
-   safe: it writes only the missing files and touches nothing else.
+   flag-free `bin/init.sh --target .` run — it loads the original values from
+   the provenance stamp, and skip-if-exists makes it safe: it writes only the
+   missing files and touches nothing else.
 7. **After all merges are applied**, create or refresh the baseline:
    `bin/init.sh --refresh-stamp --target .` (on a pre-v0.3.0 project this
    writes the stamp for the first time — future updates then need no

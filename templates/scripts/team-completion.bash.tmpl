@@ -14,6 +14,10 @@ _team_sh_complete() {
       COMPREPLY=()
       return 0
       ;;
+    --lead)
+      COMPREPLY=($(compgen -W "auto claude codex" -- "$cur"))
+      return 0
+      ;;
     --kill)
       # Complete with currently running tmux session names, if tmux is
       # available and has any — this is the one place a real value helps.
@@ -24,7 +28,7 @@ _team_sh_complete() {
       ;;
   esac
 
-  COMPREPLY=($(compgen -W "--fresh --port --kill -h --help" -- "$cur"))
+  COMPREPLY=($(compgen -W "--fresh --lead --port --kill -h --help" -- "$cur"))
 }
 
 complete -F _team_sh_complete team.sh

@@ -3,11 +3,82 @@
 Impact tags, in descending order of "drop what you are doing":
 `[contract]` › `[safety]` › `[process]` › `[docs]`.
 
-A downstream project (or its AI lead — run `/toolkit-update`) reads this
-file *first* and the diffs second. See `docs/UPGRADING.md` for the full
+A downstream project (or its AI lead — run `/toolkit-update` in Claude or
+`$toolkit-update` in Codex) reads this file *first* and the diffs second. See
+`docs/UPGRADING.md` for the full
 update workflow. Version bumps mean: **MAJOR** = state-file contract /
 role authority / script interface changed; **MINOR** = new template,
 script, flag, or role rule; **PATCH** = prose and docs.
+
+## v0.8.0 — 2026-09-13
+
+- `[process]` Fresh scaffolds now support Codex as the project lead when Claude
+  Code is unavailable. `init.sh` adds a root `AGENTS.md`, repository-scoped
+  `feature` and `toolkit-update` skills, and a source-read-only-by-instruction
+  Codex planner under `.codex/agents/`. Codex's sandbox cannot restrict writes
+  to `.agents/**` alone, so this limitation is explicit. The Codex feature
+  skill is a thin adapter over the
+  canonical Claude feature flow, so lead policy remains one maintained copy.
+- `[process]` `scripts/team.sh` now selects the lead with
+  `--lead auto|claude|codex` (`auto` prefers Claude, then Codex) and resumes the
+  latest repository-scoped Codex session when using the fallback. Existing
+  Claude UUID pinning is unchanged.
+- `[safety]` Plain `bin/init.sh --target .` re-runs now load render values from
+  an existing provenance stamp. This makes the documented missing-file step
+  genuinely flag-free, allowing older scaffolds to install the new Codex files
+  without reconstructing their original model flags or overwriting local
+  customizations. Smoke coverage removes and bootstraps the four Codex files.
+- `[docs]` Corrected the obsolete statement that Codex custom agents are
+  machine-global only; current Codex supports project agents under
+  `.codex/agents/` and project skills under `.agents/skills/`.
+
+## v0.7.0 — 2026-09-11
+
+- `[process]` The lead's commit, once the user approves the merge, now has
+  concrete mechanics instead of stopping at "propose the merge": stage the
+  state file alongside the code (so `git show` on the commit carries the
+  spec, decisions, findings, and test results together) and **tag the
+  commit subject with the task id**, `[T-<id>]` — leading it, or appended
+  if the project's own commit convention already owns that position.
+  Lands in the one-line subject (not just the body) so `git log --oneline`,
+  `git blame`, and `git log --grep '\[T-<id>\]'` all find their way back
+  to `.agents/T-<id>.md`'s full record from an incident later. This was
+  already implicit ("only the lead commits" lived in `senior-dev.md`) but
+  had no explicit instruction anywhere in the lead's own flow. Synced
+  across all three flow copies; `test/invariants.sh` enforces the rule's
+  presence.
+
+## v0.6.0 — 2026-09-10
+
+Closes three role-boundary seams surfaced by a session that drove the
+pipeline end to end. All three are "a script that can't misjudge" fixes,
+not new agents.
+
+- `[safety]` `scripts/verify-state.sh` gains two checks, each enforcing a
+  rule `TEMPLATE.md` already stated but nothing verified:
+  - **Ledger evidence.** `done` is now refused when a *ticked* Acceptance
+    criteria ledger row has an empty *Reviewer evidence* or *Test
+    evidence* cell. The template already says a box may be ticked "only
+    when both evidence cells are non-empty"; a tick resting on
+    recollection now fails loudly instead of relying on the lead to
+    self-police. A row carrying `waived …` is unaffected.
+  - **Verdict present.** Once Status is `in-review` or later, at least one
+    `### Pass N` heading must carry a filled `PASS`/`CHANGES_REQUESTED` —
+    the mirror of the existing unfilled-placeholder check, closing the gap
+    where the placeholder was deleted but no verdict written.
+- `[process]` The lead branches the review step on the reviewer's
+  machine-readable `VERDICT: PASS` / `VERDICT: CHANGES_REQUESTED` reply
+  line (already emitted by `reviewer.md`), not on the raw event stream or
+  a scan of findings prose. Synced across all three flow copies
+  (`feature.md`, `SYSTEM.md`, `flow-example.md`); `test/invariants.sh`
+  enforces the rule's presence.
+- `[process]` `scripts/oc.sh` appends one JSON line per call to
+  `.agents/logs/pipeline.jsonl` — `ts`, `agent`, `model`, `session`,
+  `wall_s`, `status`, `kill_reason`, and best-effort `cost` / `tokens`
+  from `GET /session/<id>`. Makes the pipeline's own $/min per role
+  answerable after the fact, not only when a timeout forces a look.
+  Best-effort: never fails the run. `bin/init.sh` adds `.agents/logs/` to a
+  target repo's `.gitignore` (machine state, like `.agents/.oc-port`).
 
 ## v0.5.0 — 2026-09-10
 

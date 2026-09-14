@@ -95,7 +95,7 @@ TARGET="$(cd "$TARGET" && pwd)"
 STAMP="$TARGET/.agents/.toolkit-version"
 
 # Keep in sync with the number of check_pair/render lines below.
-RENDER_TOTAL=14
+RENDER_TOTAL=18
 
 write_stamp() {
   local sha tag
@@ -118,9 +118,9 @@ write_stamp() {
 
 # --- resolve flag values -----------------------------------------------------
 # Fresh scaffolds take values from flags (with two long-standing defaults).
-# --update / --refresh-stamp prefer explicit flags, then fall back to the
-# provenance stamp — that is what lets "init.sh --update --target ." run
-# without re-typing the original flags and without spurious diff noise.
+# Every later run prefers explicit flags, then falls back to the provenance
+# stamp. That makes both update triage and a plain missing-file bootstrap
+# flag-free without changing render()'s never-overwrite behavior.
 
 apply_defaults() {
   [ -n "$CLAUDE_MODEL" ] || CLAUDE_MODEL="sonnet"
@@ -129,6 +129,25 @@ apply_defaults() {
 
 load_stamp_value() { # $1 = key, sets REPLY
   REPLY="$(sed -n "s/^$1: *//p" "$STAMP" | head -1)"
+}
+
+load_flags_from_stamp() {
+  for spec in \
+    "project_name|PROJECT_NAME" \
+    "claude_model|CLAUDE_MODEL" \
+    "builder_model|BUILDER_MODEL" \
+    "reviewer_model|REVIEWER_MODEL" \
+    "reviewer_fallback_model|REVIEWER_FALLBACK_MODEL" \
+    "tester_model|TESTER_MODEL" \
+    "test_dir|TEST_DIR"; do
+    key="${spec%%|*}"; var="${spec##*|}"
+    if [ -z "${!var}" ]; then
+      load_stamp_value "$key"
+      # printf -v: portable indirect assignment (bash's ${!var:=x} does
+      # not actually assign on the macOS-shipped bash 3.2).
+      [ -n "$REPLY" ] && printf -v "$var" '%s' "$REPLY"
+    fi
+  done
 }
 
 # Recover an init value from the target's own scaffolded files (pre-stamp
@@ -160,25 +179,12 @@ recover_from_target() { # $1 = key
   esac
 }
 
+if [ -f "$STAMP" ]; then
+  load_flags_from_stamp
+fi
+
 if [ "$UPDATE" -eq 1 ]; then
-  if [ -f "$STAMP" ]; then
-    for spec in \
-      "project_name|PROJECT_NAME" \
-      "claude_model|CLAUDE_MODEL" \
-      "builder_model|BUILDER_MODEL" \
-      "reviewer_model|REVIEWER_MODEL" \
-      "reviewer_fallback_model|REVIEWER_FALLBACK_MODEL" \
-      "tester_model|TESTER_MODEL" \
-      "test_dir|TEST_DIR"; do
-      key="${spec%%|*}"; var="${spec##*|}"
-      if [ -z "${!var}" ]; then
-        load_stamp_value "$key"
-        # printf -v: portable indirect assignment (bash's ${!var:=x} does
-        # not actually assign on the macOS-shipped bash 3.2).
-        [ -n "$REPLY" ] && printf -v "$var" '%s' "$REPLY"
-      fi
-    done
-  else
+  if [ ! -f "$STAMP" ]; then
     # No stamp (pre-v0.3.0 scaffold): recover the original values from the
     # target's own scaffolded files — they carry the substituted forms of the
     # same tokens. Anything still missing falls back to defaults, then to an
@@ -306,6 +312,10 @@ if [ "$UPDATE" -eq 1 ]; then
   check_pair "$TEMPLATES/claude/agents/senior-dev.md.tmpl" "$TARGET/.claude/agents/senior-dev.md"
   check_pair "$TEMPLATES/claude/commands/feature.md.tmpl"  "$TARGET/.claude/commands/feature.md"
   check_pair "$TEMPLATES/claude/commands/toolkit-update.md.tmpl" "$TARGET/.claude/commands/toolkit-update.md"
+  check_pair "$TEMPLATES/codex/AGENTS.md.tmpl"              "$TARGET/AGENTS.md"
+  check_pair "$TEMPLATES/codex/agents/planner.toml.tmpl"   "$TARGET/.codex/agents/planner.toml"
+  check_pair "$TEMPLATES/codex/skills/feature/SKILL.md.tmpl" "$TARGET/.agents/skills/feature/SKILL.md"
+  check_pair "$TEMPLATES/codex/skills/toolkit-update/SKILL.md.tmpl" "$TARGET/.agents/skills/toolkit-update/SKILL.md"
   check_pair "$TEMPLATES/opencode/agent/builder.md.tmpl"   "$TARGET/.opencode/agent/builder.md"
   check_pair "$TEMPLATES/opencode/agent/reviewer.md.tmpl"  "$TARGET/.opencode/agent/reviewer.md"
   check_pair "$TEMPLATES/opencode/agent/tester.md.tmpl"    "$TARGET/.opencode/agent/tester.md"
@@ -363,6 +373,10 @@ render "$TEMPLATES/claude/agents/planner.md.tmpl"    "$TARGET/.claude/agents/pla
 render "$TEMPLATES/claude/agents/senior-dev.md.tmpl" "$TARGET/.claude/agents/senior-dev.md"
 render "$TEMPLATES/claude/commands/feature.md.tmpl"  "$TARGET/.claude/commands/feature.md"
 render "$TEMPLATES/claude/commands/toolkit-update.md.tmpl" "$TARGET/.claude/commands/toolkit-update.md"
+render "$TEMPLATES/codex/AGENTS.md.tmpl"              "$TARGET/AGENTS.md"
+render "$TEMPLATES/codex/agents/planner.toml.tmpl"   "$TARGET/.codex/agents/planner.toml"
+render "$TEMPLATES/codex/skills/feature/SKILL.md.tmpl" "$TARGET/.agents/skills/feature/SKILL.md"
+render "$TEMPLATES/codex/skills/toolkit-update/SKILL.md.tmpl" "$TARGET/.agents/skills/toolkit-update/SKILL.md"
 render "$TEMPLATES/opencode/agent/builder.md.tmpl"   "$TARGET/.opencode/agent/builder.md"
 render "$TEMPLATES/opencode/agent/reviewer.md.tmpl"  "$TARGET/.opencode/agent/reviewer.md"
 render "$TEMPLATES/opencode/agent/tester.md.tmpl"    "$TARGET/.opencode/agent/tester.md"
@@ -394,7 +408,9 @@ fi
 
 # .agents/.oc-port and .agents/.claude-session-id.* are local machine state
 # (which port scripts/team.sh last bound; which Claude conversation each
-# tmux session name is pinned to), never something to commit.
+# tmux session name is pinned to), never something to commit. Codex resumes
+# its most recent conversation scoped to the current project and needs no
+# toolkit-owned session-id file.
 # Append-if-missing when the target is a git repo — additive only, in
 # keeping with this script's never-overwrite stance; a project that ignores
 # these differently is left alone.
@@ -414,6 +430,13 @@ if [ -d "$TARGET/.git" ]; then
     } >> "$GITIGNORE"
     printf 'init.sh: added .agents/.claude-session-id.* to %s\n' "$GITIGNORE"
   fi
+  if ! grep -qxF '.agents/logs/' "$GITIGNORE" 2>/dev/null; then
+    {
+      printf '\n# per-call pipeline telemetry written by scripts/oc.sh\n'
+      printf '.agents/logs/\n'
+    } >> "$GITIGNORE"
+    printf 'init.sh: added .agents/logs/ to %s\n' "$GITIGNORE"
+  fi
 fi
 
 cat <<MSG
@@ -428,21 +451,21 @@ Next steps:
      from the YAML.
   2. Start opencode serve (or run $TARGET/scripts/team.sh) so scripts/oc.sh
      has something to attach to.
-  3. Load the "delegate" skill at the start of the lead's own session — it
-     is the context-discipline half of this, the workflow half is
-     .claude/commands/feature.md.
-  4. Make sure $TARGET has its own CLAUDE.md/AGENTS.md — the generated
-     files defer project-specific constraints to it and have nothing to
-     say without one.
-  5. On the first /feature run, the lead will notice
+  3. Start the lead with Claude when installed, or Codex otherwise. In
+     Claude run /feature; in Codex invoke the feature skill (for example,
+     \$feature). scripts/team.sh makes the same Claude-first choice.
+     Load the "delegate" skill when available; it is the context-discipline
+     half of this.
+  4. Make sure $TARGET has real project-specific guidance. The generated
+     AGENTS.md is Codex integration plus an explicitly unpopulated guidance
+     section; fill it when no project CLAUDE.md already supplies constraints.
+  5. On the first feature run, either lead will notice
      .agents/.needs-customization and ask whether to fill the role files'
      generic pitfalls/hard-rules sections with this project's real ones.
-     If your lead isn't Claude Code (that check lives in feature.md, which
-     is Claude-specific), do that pass yourself, once, by hand — and
-     delete the marker file when done.
   6. Later, once the toolkit itself has moved on: bin/init.sh --update
      --target $TARGET shows a drift summary (exit 1 = something to merge),
-     and /toolkit-update walks your lead through the merge. Refresh the
+     and /toolkit-update (Claude) or \$toolkit-update (Codex) walks your
+     lead through the merge. Refresh the
      stamp afterwards: bin/init.sh --refresh-stamp --target $TARGET.
 
 MSG

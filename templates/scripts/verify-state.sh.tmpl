@@ -6,8 +6,9 @@
 # lead context on every single hop, and a verifier agent costs a paid call
 # per hop *and* can misjudge the same way the role it's checking can. A
 # script that only asserts structural facts (right heading, no duplicates,
-# no unfilled placeholder, a budget not exceeded) can't hallucinate a pass —
-# it either matches or it doesn't.
+# no unfilled placeholder, a filled review verdict once review has run,
+# every ticked ledger row backed by evidence, a budget not exceeded) can't
+# hallucinate a pass — it either matches or it doesn't.
 #
 # This is deliberately narrow: it catches shape problems (the T-01 incident
 # this exists because of — a verdict landed as a duplicate heading outside
@@ -79,6 +80,18 @@ if grep -q '^### Pass .*verdict: <PASS | CHANGES_REQUESTED>$' "$FILE"; then
   is_early || fail "a Review verdicts pass heading still has the unfilled placeholder verdict, but Status is '$STATUS'"
 fi
 
+# The mirror of that check. Deleting the placeholder without writing a real
+# verdict would otherwise slip straight through — nothing downstream keyed
+# off the verdict's *presence*, only off the placeholder string. Once review
+# has run, at least one pass heading must carry a filled PASS or
+# CHANGES_REQUESTED. The reviewer emits a machine-readable "VERDICT: <x>"
+# line in its reply for exactly this reason; this is the state-file side of
+# the same guarantee.
+if ! is_early; then
+  grep -qE '^### Pass [0-9].*verdict: (PASS|CHANGES_REQUESTED)$' "$FILE" \
+    || fail "Status is '$STATUS' but no Review verdicts pass records a filled PASS or CHANGES_REQUESTED verdict"
+fi
+
 # The loop cap is structural, not advisory: a Pass 3 heading means a third
 # review loop ran, which feature.md forbids (two failed loops means the spec
 # was wrong, not the code — stop and ask the user).
@@ -148,6 +161,24 @@ if [ "$STATUS" = "done" ]; then
   UNMET="$(awk '/^### Acceptance criteria ledger/{f=1;next} /^## /{f=0} f && /^\| *AC[0-9]/ && /\[ \]/ && !/waived/' "$FILE" | wc -l | tr -d ' ')"
   [ "$UNMET" = "0" ] || fail "Status is 'done' but $UNMET acceptance criteria are unticked and unwaived in the ledger"
   grep -q '^### Pass .*verdict: PASS' "$FILE" || fail "Status is 'done' but no review pass records a PASS verdict"
+
+  # A ticked ledger row whose Reviewer-evidence or Test-evidence cell is
+  # empty is a tick resting on someone's recollection — the exact failure
+  # the ledger exists to prevent. TEMPLATE.md already says a box may be
+  # ticked "only when both evidence cells are non-empty"; this makes that
+  # rule fail loudly instead of trusting the lead to self-police it. Columns
+  # are `| AC | Met? | Reviewer evidence | Test evidence |`, so with `|` as
+  # the field separator Met? is $3 and the two evidence cells are $4 and $5.
+  # A row that carries `waived` in a cell is deliberately left alone.
+  NOEVID="$(awk -F'|' '
+    /^### Acceptance criteria ledger/{f=1;next} /^## /{f=0}
+    f && $2 ~ /AC[0-9]/ {
+      met=$3; rev=$4; tst=$5
+      gsub(/[ \t]/,"",met)
+      gsub(/^[ \t]+|[ \t]+$/,"",rev); gsub(/^[ \t]+|[ \t]+$/,"",tst)
+      if (met=="[x]" && (rev=="" || tst=="")) { gsub(/[ \t]/,"",$2); printf "%s ", $2 }
+    }' "$FILE")"
+  [ -z "$NOEVID" ] || fail "Status is 'done' but ticked ledger row(s) cite no evidence ($NOEVID) — both the Reviewer and Test evidence cells must be filled, or the row is not ticked"
 fi
 
 if [ "$FAIL" -eq 0 ]; then

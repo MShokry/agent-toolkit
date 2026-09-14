@@ -84,6 +84,18 @@
 # exits 124. The watchdog resolves the session id even for a fresh run, so
 # this abort now always has a target.
 #
+# --- Pipeline telemetry -----------------------------------------------------
+#
+# Every call appends one JSON line to .agents/logs/pipeline.jsonl (the dir is
+# created on first use, and init.sh adds it to a target repo's .gitignore —
+# it is machine state, like .agents/.oc-port). Fields: ts, agent, model,
+# session, wall_s, status, kill_reason, and — best-effort from
+# GET /session/<id> — token counts and cost. This is what makes the
+# pipeline's *own* $/min per role answerable after the fact, instead of only
+# when a timeout forces someone to look. Purely additive and best-effort: a
+# failure to resolve cost, create the dir, or write the line never fails the
+# run or changes its exit code.
+#
 # Env:
 #   OC_SERVER        default http://localhost:4096, or the port
 #                    scripts/team.sh last started (read from
@@ -313,6 +325,39 @@ set -e
 USED_SESSION="$WATCH_SID"
 [ -n "$USED_SESSION" ] || USED_SESSION="$(grep -o '"sessionID":"[^"]*"' "$RAW_TMP" 2>/dev/null | head -1 | cut -d'"' -f4)"
 [ -n "$USED_SESSION" ] && printf '%s\n' "oc.sh: session=$USED_SESSION" >&2
+
+# --- pipeline telemetry (best-effort; never fails the run) ----------------
+{
+  TELEMETRY_DIR="$REPO_ROOT/.agents/logs"
+  if mkdir -p "$TELEMETRY_DIR" 2>/dev/null; then
+    curl -sS -m 10 "$SERVER/session/${USED_SESSION:-none}" 2>/dev/null | python3 -c '
+import json, sys, datetime
+extra = {}
+try:
+    d = json.loads(sys.stdin.read())
+    d = d[0] if isinstance(d, list) and d else d
+    if isinstance(d, dict):
+        for k in ("cost", "tokens"):
+            if k in d:
+                extra[k] = d[k]
+except Exception:
+    pass
+rec = {
+    "ts": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
+    "agent": sys.argv[1],
+    "model": sys.argv[2],
+    "session": sys.argv[3] or None,
+    "wall_s": int(sys.argv[4]),
+    "status": int(sys.argv[5]),
+    "kill_reason": sys.argv[6] or None,
+}
+rec.update(extra)
+with open(sys.argv[7], "a") as fh:
+    fh.write(json.dumps(rec) + "\n")
+' "$AGENT" "$MODEL" "${USED_SESSION:-}" "$(( $(date +%s) - START_TS ))" "$STATUS" "$KILL_REASON" \
+      "$TELEMETRY_DIR/pipeline.jsonl" 2>/dev/null || true
+  fi
+} || true
 
 emit() {
   if [ "$TEXT_ONLY" -eq 1 ]; then

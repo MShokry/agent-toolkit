@@ -5,8 +5,11 @@
 #
 #   1. first scaffold writes every file, with no unsubstituted placeholder
 #   2. the first-run customization marker is dropped exactly once
-#   3. a second run skips everything (never clobbers) and does NOT re-drop
-#      the marker once deleted
+#   3. a flag-free second run loads its stamp, skips everything (never
+#      clobbers), and does NOT re-drop the marker once deleted
+#   3a. a flag-free plain run installs files added by a newer toolkit
+#   3a. Codex lead instructions, skills, and planner are scaffolded; team.sh
+#       falls back to Codex when Claude is unavailable
 #   4. --update against an unchanged target reports every file up to date
 #      and writes nothing
 #   5. --update against a drifted file reports exactly that one diff
@@ -14,7 +17,8 @@
 #   7. verify-state.sh: valid state file passes; 'blocked' Status is known;
 #      a third review pass (loop-cap breach) fails loudly; a blown budget
 #      counter fails; 'done' is refused while an acceptance criterion is
-#      unticked and unwaived
+#      unticked and unwaived, or while a ticked ledger row cites no
+#      evidence; a task past review with no filled verdict fails
 #   8. verify-spec.sh: the raw template fails (it is boilerplate), a filled
 #      spec passes, and an unmeasurable acceptance criterion is caught
 #   9. promote-findings.sh: copies findings into docs, is idempotent, and
@@ -54,6 +58,25 @@ files="$(find "$TMP" -type f -not -name run1.log \
 [ "$wrote" = "$((files + stamp_written))" ] || fail "claimed $wrote writes but $((files + stamp_written)) files exist"
 ok "every reported write produced exactly one file ($files rendered + stamp)"
 
+for codex_file in \
+  "$TMP/AGENTS.md" \
+  "$TMP/.codex/agents/planner.toml" \
+  "$TMP/.agents/skills/feature/SKILL.md" \
+  "$TMP/.agents/skills/toolkit-update/SKILL.md"; do
+  [ -f "$codex_file" ] || fail "Codex scaffold file missing: $codex_file"
+done
+grep -q '\.claude/commands/feature.md' "$TMP/.agents/skills/feature/SKILL.md" \
+  || fail "Codex feature skill does not point at the canonical lead flow"
+grep -q 'Not populated by agent-toolkit' "$TMP/AGENTS.md" \
+  || fail "generated AGENTS.md masks its missing project-specific guidance"
+grep -q 'Codex `planner` subagent' "$TMP/.agents/skills/feature/SKILL.md" \
+  || fail "Codex feature skill does not select the Codex planner"
+grep -q 'sandbox_mode = "workspace-write"' "$TMP/.codex/agents/planner.toml" \
+  || fail "Codex planner lacks the sandbox needed to write its state file"
+grep -q 'never modify source' "$TMP/.codex/agents/planner.toml" \
+  || fail "Codex planner does not state its source-write boundary"
+ok "Codex lead instructions, skills, and planner were scaffolded"
+
 [ -f "$TMP/.agents/.needs-customization" ] || fail ".needs-customization marker missing on fresh scaffold"
 ok "first-run customization marker dropped"
 
@@ -68,7 +91,7 @@ ok "fresh scaffold wrote the provenance stamp with flags + toolkit SHA"
 cp "$TMP/.claude/commands/feature.md" "$TMP/feature.sentinel"
 printf 'LOCAL CUSTOMIZATION\n' >> "$TMP/.claude/commands/feature.md"
 rm -f "$TMP/.agents/.needs-customization"
-bash "$ROOT/bin/init.sh" "${INIT_ARGS[@]}" > "$TMP/run2.log" 2>&1 \
+bash "$ROOT/bin/init.sh" --target "$TMP" > "$TMP/run2.log" 2>&1 \
   || fail "second init.sh run failed"
 skips="$(grep -c '^init.sh: skip (exists)' "$TMP/run2.log" || true)"
 [ "$skips" = "$files" ] || fail "second run: $skips skips, expected $files"
@@ -81,6 +104,54 @@ cmp -s "$TMP/stamp.bak" "$TMP/.agents/.toolkit-version" 2>/dev/null \
 ok "re-run skipped all $files files, preserved local edits, marker + stamp untouched"
 # restore the pristine render so the --update checks below start clean
 mv "$TMP/feature.sentinel" "$TMP/.claude/commands/feature.md"
+
+# Simulate a stamped project that predates Codex support. A plain, flag-free
+# run must recover the render values from the stamp and add only missing files.
+rm -f "$TMP/AGENTS.md" \
+  "$TMP/.codex/agents/planner.toml" \
+  "$TMP/.agents/skills/feature/SKILL.md" \
+  "$TMP/.agents/skills/toolkit-update/SKILL.md"
+bash "$ROOT/bin/init.sh" --target "$TMP" > "$TMP/bootstrap.log" 2>&1 \
+  || fail "flag-free missing-file bootstrap failed"
+bootstrap_writes="$(grep -c '^init.sh: wrote ' "$TMP/bootstrap.log" || true)"
+[ "$bootstrap_writes" = "4" ] \
+  || fail "missing-file bootstrap wrote $bootstrap_writes files, expected 4"
+grep -q '^builder_model: a/b' "$TMP/.agents/.toolkit-version" \
+  || fail "missing-file bootstrap changed the provenance values"
+[ ! -f "$TMP/.agents/.needs-customization" ] \
+  || fail "missing-file bootstrap recreated the first-run marker"
+ok "flag-free plain run installs newly added files from stamped values only"
+
+# Exercise lead auto-selection without requiring tmux/Codex on the test host.
+# PATH contains a fake codex and tmux but no claude, and tmux records the pane
+# command instead of creating a real session.
+FAKEBIN="$TMP/fakebin"
+mkdir -p "$FAKEBIN"
+cat > "$FAKEBIN/codex" <<'EOF'
+#!/bin/sh
+exit 0
+EOF
+cat > "$FAKEBIN/tmux" <<'EOF'
+#!/bin/sh
+printf '%s\n' "$*" >> "$TEAM_LOG"
+[ "$1" = "has-session" ] && [ "${TEAM_HAS_SESSION:-0}" = "1" ] && exit 0
+[ "$1" = "has-session" ] && exit 1
+exit 0
+EOF
+chmod +x "$FAKEBIN/codex" "$FAKEBIN/tmux"
+TEAM_LOG="$TMP/team.log" PATH="$FAKEBIN:/usr/bin:/bin" \
+  "$TMP/scripts/team.sh" --fresh codex-smoke >/dev/null 2>&1 \
+  || fail "team.sh failed its Codex fallback launch"
+grep -q 'send-keys .* codex C-m' "$TMP/team.log" \
+  || fail "team.sh did not put Codex in the lead pane when Claude was unavailable"
+ok "team.sh falls back to Codex when Claude is unavailable"
+
+TEAM_LOG="$TMP/team-existing.log" TEAM_HAS_SESSION=1 TEAM_LEAD=invalid \
+  PATH="$FAKEBIN:/usr/bin:/bin" "$TMP/scripts/team.sh" existing \
+  >/dev/null 2>&1 || fail "team.sh refused to attach an existing session before lead selection"
+grep -q '^attach -t existing$' "$TMP/team-existing.log" \
+  || fail "team.sh did not attach the existing session"
+ok "team.sh attaches an existing session without requiring a lead CLI"
 
 # --- 3. provenance stamp ------------------------------------------------------
 
@@ -228,6 +299,60 @@ open(p,'w').write(s)
 PY
 "$VS" T-04 > /dev/null 2>&1 || fail "verify-state rejected 'done' with a properly waived criterion"
 ok "verify-state refuses 'done' on an open criterion, accepts an explicit waiver"
+
+# 6c. done-gate also rejects a ticked ledger row with an empty evidence cell —
+# a tick TEMPLATE.md already forbids, now enforced instead of self-policed.
+cat > "$TMP/.agents/T-06.md" <<'EOF'
+**Status:** done
+**Review loop count:** 1 / 2
+**Test-fix loops:** 0 / 2
+**Spec bounces:** 0 / 1
+
+## Acceptance criteria
+
+- [ ] AC1 — something checkable
+
+### Acceptance criteria ledger
+
+| AC | Met? | Reviewer evidence | Test evidence |
+| --- | --- | --- | --- |
+| AC1 | [x] | Pass 1 — a.js:42 | |
+
+## Review verdicts
+
+### Pass 1 — 2026-09-10 — verdict: PASS
+
+none
+EOF
+"$VS" T-06 > /dev/null 2>&1 && fail "verify-state accepted 'done' with a ticked ledger row citing no test evidence"
+"$VS" T-06 2>&1 | grep -q 'cite no evidence' || fail "done-gate ledger-evidence check failed for the wrong reason"
+python3 - "$TMP/.agents/T-06.md" <<'PY'
+import sys
+p = sys.argv[1]; s = open(p).read()
+s = s.replace('| AC1 | [x] | Pass 1 — a.js:42 | |',
+              '| AC1 | [x] | Pass 1 — a.js:42 | Run 1 — "parses null" |')
+open(p, 'w').write(s)
+PY
+"$VS" T-06 > /dev/null 2>&1 || fail "verify-state rejected a 'done' file whose ticked row cites both kinds of evidence"
+ok "verify-state's done-gate rejects a ticked ledger row with a blank evidence cell"
+
+# 6d. once review has run, a missing/placeholder verdict fails from the file
+# side too — the mirror of the unfilled-placeholder check.
+cat > "$TMP/.agents/T-07.md" <<'EOF'
+**Status:** testing
+**Review loop count:** 1 / 2
+**Test-fix loops:** 0 / 2
+**Spec bounces:** 0 / 1
+
+## Review verdicts
+
+### Pass 1 — 2026-09-10 — verdict: TBD
+EOF
+"$VS" T-07 > /dev/null 2>&1 && fail "verify-state accepted Status 'testing' with no filled review verdict"
+"$VS" T-07 2>&1 | grep -q 'no Review verdicts pass records a filled' || fail "missing-verdict check failed for the wrong reason"
+sed -i.bak 's/verdict: TBD/verdict: PASS/' "$TMP/.agents/T-07.md"
+"$VS" T-07 > /dev/null 2>&1 || fail "verify-state rejected 'testing' once a filled PASS verdict was present"
+ok "verify-state requires a filled review verdict once a task has reached review"
 
 # --- 7. verify-spec.sh -------------------------------------------------------
 # The spec-side equivalent: structure only, run before the human sees a spec.

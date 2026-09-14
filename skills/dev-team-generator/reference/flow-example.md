@@ -172,8 +172,13 @@ and note the substitution in the state file's decisions log.
 The reviewer writes its own verdict into the state file (if its permission
 scope allows writing there; otherwise into its reply, for the lead to
 paste in). **Verify placement with a script, not by eye** — a structural
-check that fails loudly on a misplaced or duplicated heading or an
-unfilled placeholder, not a second LLM pass.
+check that fails loudly on a misplaced or duplicated heading, an unfilled
+placeholder, or a task that reached review with no filled verdict on
+record at all, not a second LLM pass.
+
+The reviewer's reply opens with a machine-readable verdict line
+(`VERDICT: PASS` / `VERDICT: CHANGES_REQUESTED`) — **branch on that line**,
+not on the findings prose or the raw event stream.
 
 If the reviewer flagged anything as true beyond this one task, run the
 findings-promotion script before moving on.
@@ -258,6 +263,18 @@ about whether the task fought back), and the proposed next action
 (commit/merge/etc).
 
 **Then stop and ask before merging.** Never merge on your own judgement.
+
+**Once the user approves, you do the commit** — the one git-mutating
+action anywhere in this pipeline; every implementer's write scope
+hard-denies `git commit`/`git push` precisely so it stays gated on that
+approval. Stage the state file alongside the code so the commit carries
+the spec, decisions, findings, and test results in one place, and **tag
+the commit with the task id** — `[T-<id>]` leading the subject line, or
+appended after it if the project's own commit convention already owns that
+position. It must sit in the one-line subject, not only the body, so
+`git log --oneline` / `git blame` surface it and `git log --grep` can find
+every commit for a task later, from whichever incident sends someone
+looking back at it.
 
 **Then ask once whether anything about *how the pipeline ran* is worth
 recording** — not about the code (that's the reviewer's job, and the

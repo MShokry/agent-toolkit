@@ -1,0 +1,17 @@
+---
+name: toolkit-update
+description: Reconcile upstream agent-toolkit scaffold changes into this project at a task boundary without overwriting local customizations. Use when asked to update this project's agent toolkit.
+---
+
+# Toolkit update
+
+Read this project's root `CLAUDE.md` or `AGENTS.md` first. Then read
+`.claude/commands/toolkit-update.md` in full and follow its reconciliation
+workflow exactly. Treat the file as tool-agnostic instructions: its Claude
+frontmatter and `/toolkit-update` name do not change the gates.
+
+This skill cannot exist on a scaffold from before Codex support until the
+toolkit's plain, flag-free `bin/init.sh --target .` bootstrap has added it.
+
+Never update during an in-flight task, never auto-apply permission changes,
+and never overwrite a local customization without the user's explicit choice.

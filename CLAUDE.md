@@ -2,7 +2,7 @@
 
 A reusable, project-agnostic version of the planner → implement → review →
 test multi-agent pipeline. `bin/init.sh` scaffolds it into any target repo:
-Claude subagents for planning/implementing, OpenCode (any vendor) for
+Claude or Codex as lead, Claude/Codex planning, OpenCode (any vendor) for
 cross-vendor implement/review/test, a state file (`.agents/T-<id>.md`) as the
 one handoff surface between roles, and a `delegate` skill that keeps the
 orchestrating lead's own context small across a long run.
@@ -66,6 +66,7 @@ files are skipped, not clobbered (`render()`'s core guarantee).
 | `.github/workflows/ci.yml` | Runs `test/smoke.sh` + shellcheck (`bin/init.sh`, the test, and every `templates/scripts/*.tmpl`) |
 | `templates/claude/agents/` | `planner.md.tmpl`, `senior-dev.md.tmpl` — Claude subagent role definitions |
 | `templates/claude/commands/` | `feature.md.tmpl` — the `/feature` pipeline command (the lead's own instructions); `toolkit-update.md.tmpl` — the `/toolkit-update` merge command for already-scaffolded projects |
+| `templates/codex/` | Root `AGENTS.md`, a project-scoped planner agent, and `feature` / `toolkit-update` skills. Thin Codex lead adapter over the canonical Claude command flow |
 | `templates/opencode/agent/` | `builder.md.tmpl`, `reviewer.md.tmpl`, `tester.md.tmpl` — OpenCode role definitions |
 | `templates/agents-state/` | `TEMPLATE.md.tmpl` — the `T-<id>` state-file shape every role reads and appends to |
 | `templates/scripts/` | `oc.sh.tmpl` (OpenCode CLI wrapper), `team.sh.tmpl` (+ `team-completion.bash.tmpl`; tmux layout), `verify-state.sh.tmpl` (state file) / `verify-spec.sh.tmpl` (spec, before the approval gate) / `promote-findings.sh.tmpl` — all deterministic, no-LLM-call structural checks |

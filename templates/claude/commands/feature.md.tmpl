@@ -343,9 +343,15 @@ one-time entry explaining *why*, this field is the durable answer to
 If the reviewer's permission block allows writing `.agents/**`, it writes
 its own verdict into *Review verdicts*. Either way, **verify with the
 script, not by eye:** run `scripts/verify-state.sh T-<id>` — it fails
-loudly on a misplaced or duplicated `### Pass N` heading or an unfilled
-placeholder verdict. Only open the file yourself if the script fails; do
-not re-author the findings either way.
+loudly on a misplaced or duplicated `### Pass N` heading, an unfilled
+placeholder verdict, or (once Status is `in-review` or later) no filled
+verdict on record at all. Only open the file yourself if the script fails;
+do not re-author the findings either way.
+
+The reviewer's `--text` reply opens with a machine-readable
+`VERDICT: PASS` or `VERDICT: CHANGES_REQUESTED` line (see `reviewer.md`'s
+Output format). **Branch on that line** — not on a read of the raw `.jsonl`
+event stream and not on a scan of the findings prose.
 
 If the reviewer tagged anything under *Findings for docs* — a platform
 gotcha, a design gap, an incident that outlives this one task — run
@@ -456,6 +462,26 @@ Give the user:
 - the proposed merge.
 
 **Then stop and ask before merging.** Never merge on your own judgement.
+
+**Once the user approves, you do the commit — the only git-mutating action
+any role in this pipeline performs.** Every implementer's permission block
+hard-denies `git commit`/`git push` for exactly this reason: one point of
+control, only after the human has said yes.
+
+- Stage the changed files from *Files in scope*, plus `.agents/T-<id>.md`
+  itself. Committing the state file alongside the code means `git show` on
+  this commit carries the spec, the Decisions log, the review findings, and
+  the test results in one place — not scattered across a file nobody
+  thought to open.
+- **Tag the commit with the task id, `[T-<id>]`, in the subject line** —
+  leading (`[T-<id>] <summary>`) unless this project's own commit
+  convention already owns that position (e.g. Conventional Commits), in
+  which case append it instead (`feat: <summary> [T-<id>]`). Either way it
+  must land in the one-line subject, not only the body: that is what
+  `git log --oneline` and `git blame` show, and what makes
+  `git log --all --grep '\[T-<id>\]'` find every commit for this task —
+  the path back from "something about this commit needs investigating" to
+  the full record in `.agents/T-<id>.md`.
 
 **Then ask, once: is there anything about *how this ran* worth writing
 down?** Not about the code — that is the reviewer's job and *Findings for

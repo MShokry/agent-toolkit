@@ -39,6 +39,9 @@ BUILDER="templates/opencode/agent/builder.md.tmpl"
 REVIEWER="templates/opencode/agent/reviewer.md.tmpl"
 TESTER="templates/opencode/agent/tester.md.tmpl"
 LESSONS="skills/dev-team-generator/reference/lessons-learned.md"
+CODEX_AGENTS="templates/codex/AGENTS.md.tmpl"
+CODEX_FEATURE="templates/codex/skills/feature/SKILL.md.tmpl"
+CODEX_PLANNER="templates/codex/agents/planner.toml.tmpl"
 
 FAIL=0
 CHECKS=0
@@ -90,9 +93,34 @@ rule "non-actionable findings are routed, not looped" \
   'no concrete code defect|names no actionable code change|no code change could address' \
   "$FEATURE" "$SYSTEM" "$FLOW"
 
+rule "branch on the reviewer's machine-readable verdict line" \
+  'branch on that line' \
+  "$FEATURE" "$SYSTEM" "$FLOW"
+
+rule "only the lead commits, tagged with the task id" \
+  'tag the commit with the task id' \
+  "$FEATURE" "$SYSTEM" "$FLOW"
+
 rule "check the spec with a script before approval" \
   'verify-spec|check the spec with a script|spec.{0,40}structural check' \
   "$FEATURE" "$SYSTEM" "$FLOW" "$PLANNER"
+
+# --- Codex lead adapter -----------------------------------------------------
+rule "Codex feature skill delegates to the canonical lead flow" \
+  '\.claude/commands/feature\.md' \
+  "$CODEX_FEATURE"
+
+rule "Codex project instructions route feature work through the skill" \
+  'invoke the `feature` skill' \
+  "$CODEX_AGENTS"
+
+rule "Codex planner discloses its non-enforced source-write boundary" \
+  'cannot enforce a narrower path-only write scope.*never modify source' \
+  "$CODEX_PLANNER"
+
+rule "Codex planner delegates to the canonical planner contract" \
+  '\.claude/agents/planner\.md' \
+  "$CODEX_PLANNER"
 
 # --- the delivery contract --------------------------------------------------
 rule "acceptance-criteria ledger closes the contract" \

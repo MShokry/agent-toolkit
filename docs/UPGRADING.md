@@ -5,13 +5,33 @@
 > it; `--update` is a triage tool (summary-first, `--diff`/`--only`,
 > exit 0/1); `CHANGELOG.md` carries impact-tagged entries; the first real
 > migration lives in `migrations/01-delivery-contract.md`; and
-> `/toolkit-update` is rendered into scaffolded projects. This file is now
+> `/toolkit-update` and `$toolkit-update` are rendered into scaffolded
+> projects for Claude and Codex respectively. This file is now
 > reference documentation for how it works and why.
 
 `bin/init.sh --update` already does the mechanical half: render the
 current templates, `diff -u` each one against the live file in the target,
 write nothing. What is missing is everything *around* it — which is why
 downstream projects drift and stay drifted.
+
+## Bootstrapping a newly supported lead
+
+An update command cannot bootstrap itself into a project that does not have it
+yet. After pulling the toolkit checkout, an existing stamped project can add
+newly introduced template files without repeating its original flags:
+
+```bash
+<toolkit-checkout>/bin/init.sh --update --target <project>  # inspect first
+<toolkit-checkout>/bin/init.sh --target <project>           # missing files only
+```
+
+The plain run now loads values from `.agents/.toolkit-version` and retains
+`render()`'s skip-if-exists guarantee. A Claude user whose older scaffold
+already has `/toolkit-update` can let that command perform these steps. A
+Codex-only user upgrading from before Codex support must run the shell bootstrap
+once; afterward `$toolkit-update` is installed and handles future updates. A
+pre-v0.3.0 scaffold has no stamp, so it still follows README's one-time flag
+recovery procedure.
 
 This is the plan to close that, in five stages. Stages 1–2 are the ones
 worth doing first; each stage is useful on its own and none blocks the
@@ -187,11 +207,11 @@ kind of machinery this toolkit is right to refuse. The value is the note
 existing at all, so an in-flight task does not silently lack a field that
 `verify-state.sh` will later check for.
 
-## Stage 5 — A `/toolkit-update` command in the target project
+## Stage 5 — A lead update command in the target project
 
 The AI-assisted merge path the README already gestures at ("hand the diff
 to your AI lead and ask it to reconcile"), made into a real, templated
-command rendered by `init.sh` alongside `feature.md`:
+command/skill rendered by `init.sh` alongside each lead's feature entry point:
 
 1. Read `.agents/.toolkit-version` for the baseline.
 2. Run `bin/init.sh --update` (flags come from the stamp).
