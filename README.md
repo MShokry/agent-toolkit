@@ -168,20 +168,34 @@ opencode models          # see what's actually configured before picking models
 ~/tools/agent-toolkit/bin/init.sh \
   --target . \
   --project-name "my-project" \
-  --claude-model sonnet \
-  --builder-model "hcnsec/auto" \
-  --reviewer-model "hcnsec/glm-5.3" \
-  --reviewer-fallback-model sonnet \
-  --tester-model "hcnsec/auto" \
   --test-dir e2e
+```
+
+`--project-name` is the only required flag. `--claude-model`,
+`--builder-model`, `--reviewer-model`, `--reviewer-fallback-model`, and
+`--tester-model` all default to the lineup two independent real projects
+converged on: Claude Sonnet lead/planner, `opencode-go/glm-5.3-flash`
+builder, `opencode-go/minimax-m2.7` reviewer,
+`opencode-go/deepseek-v4-flash` reviewer fallback, `hcnsec/auto` tester.
+Override any of them per project once `opencode models` shows your server's
+actual list differs — these are a starting point, not a guarantee those
+exact ids still exist for you:
+
+```bash
+~/tools/agent-toolkit/bin/init.sh \
+  --target . \
+  --project-name "my-project" \
+  --builder-model "<vendor/model>" \
+  --reviewer-model "<vendor/model, different family than builder>" \
+  --reviewer-fallback-model "<vendor/model, different family again>" \
+  --tester-model "<vendor/model>"
 ```
 
 `--reviewer-model` and `--reviewer-fallback-model` should be **different
 model families** — the fallback is what the pipeline switches to when
 `builder` implements and would otherwise share a vendor with the default
-reviewer, which would defeat cross-vendor independence. The `hcnsec/auto`
-values above are flag *shape* only — run `opencode models`, pin real
-strings, and do not use `auto` for the reviewer.
+reviewer, which would defeat cross-vendor independence. Do not use `auto`
+for the reviewer.
 
 Cost/quality picks (Kimi implementer, GLM reviewer, DeepSeek Flash
 tester, Claude Sonnet lead/planner/fallback), and why one OpenCode

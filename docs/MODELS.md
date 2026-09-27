@@ -41,9 +41,11 @@ request volume per 5h window, expensive → cheap:
 | Kimi K3 | Very high on Go (~110 req / 5h) | Rare “actually hard” implementer, not default |
 | GLM-5.3 | High (~220 req / 5h, tighter cap than 5.2) | Best GLM for **one-shot** review |
 | GLM-5.1 / 5.2 | Mid–high (~880 req / 5h) | Review, or planner if Claude credits are tight |
-| Kimi K2.6 / K2.7 Code | Mid (~1k–1.3k req / 5h) | Default implementer — agentic loops |
+| GLM-5.3-flash | Mid, cheaper than full 5.3 | **Default implementer** — agentic loops |
+| Minimax M2.7 | Mid, no published Go cap seen yet | **Default reviewer** — different lab than GLM, one/two calls |
+| Kimi K2.6 / K2.7 Code | Mid (~1k–1.3k req / 5h) | Implementer alternative — agentic loops |
 | DeepSeek V4 Pro | Low | Implementer when the window is tight |
-| DeepSeek V4 Flash | Lowest (~30k req / 5h) | Tester only |
+| DeepSeek V4 Flash | Lowest (~30k req / 5h) | **Default reviewer fallback**; also fine as tester |
 
 These counts are provider estimates, not a promise. GLM-5.3 is usually
 the same *job* as 5.2 at a worse credit rate — prefer 5.2 unless 5.3 is
@@ -51,38 +53,45 @@ clearly better on your list.
 
 ## Recommended lineup
 
-For this toolkit's own work (bash + sed, markdown templates, process
-rules, no app runtime):
+`bin/init.sh`'s own defaults (`apply_defaults()` — override any of them
+with the matching flag per project). This is the lineup two independent
+real projects landed on separately, then converged on deliberately:
 
 | Role | Model | Why |
 | --- | --- | --- |
 | **Lead** | Claude Sonnet | Already the Claude Code session. Opus does not improve dispatch. |
 | **Planner** | Claude Sonnet | One shot. A cheaper model writes mushy ACs or starts designing the implementation. Drop to GLM-5.2 only if the Claude pool is the bottleneck. |
-| **Implementer** (`builder` / `senior-dev`) | **Kimi K2.7 Code** (or K2.6) | Cost/quality for surgical template + `init.sh` work. GLM-5.2 only if Kimi is missing. Not GLM-5.3, not K3, not Opus as the default loop. |
-| **Reviewer** | **GLM-5.3** or **5.2** | Different family than Kimi. One/two calls, so GLM's per-call cost is acceptable. Catches process bugs (leftover placeholders, `render()` skip-if-exists, permission YAML ≠ enforcement) better than Flash. |
-| **Reviewer fallback** | Claude Sonnet (or DeepSeek Pro) | A **third** family, and preferably a **second gateway** (see below). Used when builder would share a family with the default reviewer. |
-| **Tester** | DeepSeek V4 Flash | Smoke `init.sh` into `/tmp`, assert no `__[A-Z_]*__`, second run does not clobber. Flash is enough. |
+| **Implementer** (`builder` / `senior-dev`) | **`opencode-go/glm-5.3-flash`** | Cost/quality for the implementer loop's tool-call volume. Kimi K2.7 Code is a solid alternative if GLM-5.3-flash is missing or underperforming on your codebase. |
+| **Reviewer** | **`opencode-go/minimax-m2.7`** | Different family than the builder's GLM. One/two calls, so per-call cost is acceptable; a different lab's weights catch blind spots the implementer's own family shares. |
+| **Reviewer fallback** | **`opencode-go/deepseek-v4-flash`** | A **third** family. Used when the implementer (e.g. `senior-dev` or a differently-configured builder) would otherwise share a vendor with the default reviewer. |
+| **Tester** | **`hcnsec/auto`** | One shot + a smoke command; faithful reporting matters more than reasoning power here, so a router is fine for this role specifically (never for the reviewer — see below). |
 
-`init.sh` shape (replace with strings from `opencode models`):
+`init.sh` shape (these are the defaults — passing no model flags at all
+gets you exactly this; replace with strings from `opencode models` if your
+server's list differs):
 
 ```bash
 --claude-model sonnet \
---builder-model "<aggregator>/kimi-k2.7-code" \
---reviewer-model "<aggregator>/glm-5.2" \
---reviewer-fallback-model sonnet \
---tester-model "<aggregator>/deepseek-v4-flash"
+--builder-model "opencode-go/glm-5.3-flash" \
+--reviewer-model "opencode-go/minimax-m2.7" \
+--reviewer-fallback-model "opencode-go/deepseek-v4-flash" \
+--tester-model "hcnsec/auto"
 ```
 
 If you implement with GLM, reviewer must **not** be GLM (5.2 vs 5.3
-does not count). Switch reviewer to Kimi or DeepSeek Pro.
+does not count) — that's exactly why the default reviewer is Minimax, a
+different lab, rather than another GLM snapshot. If your implementer
+changes family (e.g. Kimi), re-check that the reviewer still differs from
+it; switch to the fallback family if it does not.
 
 Tight credits: DeepSeek Pro implementer, GLM-5.2 reviewer, Flash tester.
 High-stakes (`render()`, permission blocks, state-file contract): keep
-Kimi on implementer; optionally fire the Sonnet fallback as a second
-review pass — still cheaper than implementing on Opus.
+the default implementer; optionally fire the Sonnet reviewer fallback as
+a second review pass — still cheaper than implementing on Opus.
 
 Do not: Claude on builder **and** reviewer; K3/Opus as default
-implementer; Flash as reviewer; `auto` anywhere independence matters.
+implementer; Flash as reviewer; `auto` anywhere independence matters
+(reviewer, never tester).
 
 ## Provider: one aggregator for workers, not one tool per lab
 

@@ -10,6 +10,49 @@ update workflow. Version bumps mean: **MAJOR** = state-file contract /
 role authority / script interface changed; **MINOR** = new template,
 script, flag, or role rule; **PATCH** = prose and docs.
 
+## v0.9.0 — 2026-09-27
+
+- `[safety]` Synced this toolkit's own opencode v2 migration into the
+  scaffolded pipeline templates: the shell permission key renamed `bash:` →
+  `shell:` in `builder.md.tmpl`/`reviewer.md.tmpl`/`tester.md.tmpl` (under
+  the old key, none of a template's shell `deny`/`ask` rules matched
+  anything under opencode v2, so `rm -rf /*`, `sudo *`, `curl *`, etc. were
+  silently unenforced); `oc.sh.tmpl` now authenticates with
+  `OPENCODE_PASSWORD` (v2's `serve` is always password-gated, v1 had none),
+  polls via `opencode api` against v2's `/api/*` routes, aborts via the
+  renamed `/api/session/<id>/interrupt` endpoint, and picks the *newest*
+  message for watchdog progress instead of the oldest (v2 returns messages
+  newest-first; the old indexing could silently track the wrong message and
+  let a wedged run look like it was still progressing).
+- `[docs]` Corrected an earlier `oc.sh.tmpl`/agent-template comment claiming
+  `--auto` lets a deny-listed shell command run anyway on opencode v2 —
+  re-verified live via `GET /api/agent/<name>` and could not be reproduced;
+  left the correction in place rather than deleting the original claim
+  outright.
+- `[process]` `bin/init.sh` now checks `opencode --version` on every
+  scaffold or `--update` run and warns (non-fatally) when it's missing, v1,
+  or newer than the v2 these templates assume, explaining specifically what
+  breaks on v1 (password auth, the permission-key rename, the `opencode
+  api` subcommand, `--server` replacing the removed `--attach`/`--dir`).
+  `toolkit-update.md.tmpl` now tells the lead to surface this warning to
+  the user rather than let it scroll past.
+- `[process]` `bin/init.sh`'s `--builder-model`, `--reviewer-model`,
+  `--reviewer-fallback-model`, and `--tester-model` are no longer required —
+  `apply_defaults()` now fills them with `opencode-go/glm-5.3-flash` /
+  `opencode-go/minimax-m2.7` / `opencode-go/deepseek-v4-flash` /
+  `hcnsec/auto` when omitted, the same lineup two independently scaffolded
+  projects (resto-agent, relationship) landed on. `--project-name` remains
+  the only required flag; every flag can still be passed explicitly to
+  override the defaults. Backward compatible — a call that already passed
+  all four flags behaves identically.
+- `[safety]` `init.sh` now also adds `.agents/.oc-password` (the local
+  opencode v2 server password `scripts/team.sh` generates) to a scaffolded
+  project's `.gitignore`, alongside the existing `.oc-port` and Claude
+  session-id entries.
+- `[docs]` README's quickstart and `docs/MODELS.md`'s recommended lineup
+  updated to show this lineup as the documented default instead of the
+  older Kimi/GLM-5.2/Sonnet-fallback/DeepSeek-Flash recommendation.
+
 ## v0.8.0 — 2026-09-13
 
 - `[process]` Fresh scaffolds now support Codex as the project lead when Claude
