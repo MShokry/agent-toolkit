@@ -3,9 +3,19 @@
 # BEGIN USAGE
 # Wrapper for every OpenCode invocation in the agent pipeline.
 #
+# Updated 2026-09-27 for opencode v2 (installed: v2.0.18). v2 is a breaking
+# upgrade from the v1.18.x this script was originally written against:
+# `opencode run --attach` is gone (replaced by `--server`, see below), the
+# API moved under /api/* with {"data": ...}-wrapped, cursor-paginated
+# responses, `opencode serve` now always auth-gates the API (v1 had none —
+# see the password section below), and the abort endpoint moved from
+# POST /session/<id>/abort to POST /api/session/<id>/interrupt. Anything
+# below not explicitly marked "verified against v2" is carried over from the
+# v1 design and may need re-checking again on the next major bump.
+#
 # Why this exists rather than calling `opencode run` directly:
 #
-#   1. --attach reuses an already-running `opencode serve`, skipping MCP cold
+#   1. --server reuses an already-running `opencode serve`, skipping MCP cold
 #      boot on every call. Without it each invocation pays startup again.
 #   2. `opencode run` can hang in a non-TTY if the agent hits an unanswerable
 #      permission prompt. Every call is bounded — see the watchdog note below.
@@ -31,17 +41,60 @@
 # inlines the full contents of every file the agent reads, so it is unreadable
 # for a human and expensive to paste back into a state file.
 #
-# --auto passes OpenCode's own --auto through to `opencode run`: it
-# auto-approves any permission not explicitly `deny`d in the dispatched
-# agent's own permission block — a bash "ask" catch-all included — instead
-# of hanging on a prompt nothing can answer non-interactively. `deny`
-# entries (e.g. builder.md's `rm -rf /*` / `sudo *` / `curl *`) still
-# block — OpenCode stays in the loop, this isn't "ignore all permissions."
-# Verified live: a throwaway agent with a deny-listed `curl *` still had
-# that call refused with `--auto` on. OpenCode's own --help calls it
-# "dangerous"; it is off unless passed, and the lead should only pass it
-# for a task the user explicitly confirmed at spec approval (see
-# feature.md's step 1) — not as a standing default.
+# --auto passes OpenCode's own --auto through to `opencode run`: it is
+# documented to auto-approve any permission not explicitly `deny`d in the
+# dispatched agent's own permission block, `deny` entries (e.g. builder.md's
+# `rm -rf /*` / `sudo *` / `curl *`) staying blocked. Verified live on both
+# opencode v1 and opencode v2.0.18 — a deny-listed `curl *` was refused with
+# --auto on, in both cases.
+#
+# A 2026-09-27 scratch-dir test initially seemed to show --auto executing a
+# deny-listed `curl *` anyway on v2.0.18. That could not be reproduced on a
+# same-day re-test that additionally confirmed, via `GET /api/agent/<name>`
+# on a live server, that the dispatched agent's ruleset had actually loaded
+# with the `curl *: deny` rule present — i.e. the builder/reviewer/tester
+# template shape (nested `permission:` block + `temperature:`) loads
+# correctly and --auto enforces it as documented. The original finding is
+# believed to have been a confound (most likely an earlier run whose ruleset
+# silently failed to load — see next paragraph — that just wasn't checked
+# via the API at the time) and should not be relied on; the corrected,
+# verified conclusion is that --auto has NOT been shown to bypass deny rules
+# on this opencode version.
+#
+# ** The real, confirmed opencode v2.0.18 bug, independent of --auto: **
+# mixing `temperature:` (or other non-native keys) with the *newer* native
+# `permissions:` array frontmatter format (as opposed to these templates'
+# nested `permission:` form) silently discards the ENTIRE custom ruleset,
+# falling back to bare `*:* allow` with no error, no warning, and no log
+# line — confirmed by inspecting `GET /api/agent/<name>` before and after
+# removing `temperature:` from a test file. This means an agent's permission
+# block can go from fully enforced to completely unenforced from a single
+# unrelated-looking frontmatter edit, and nothing surfaces it. Because of
+# this, **before trusting any agent's deny rules on this opencode version —
+# with --auto or without it — verify the live ruleset**, not just the YAML:
+#   opencode api GET /api/agent --server <url> --param directory=<repo-root> \
+#     | python3 -c 'import json,sys; d=json.load(sys.stdin); \
+#       print([a for a in d["data"] if a["id"]=="<agent-name>"])'
+# and confirm the expected deny/ask entries are actually present in the
+# returned `permissions` array. These templates use the nested format
+# (verified loading correctly as of 2026-09-27) — do not convert a project
+# generated from them to the native `permissions:` array format without
+# re-running this check afterward.
+#
+# Separately, and true regardless of --auto or format: upstream issue #42436
+# (github.com/anomalyco/opencode, open as of 2026-09-27) documents `deny`
+# rules that DID load still being evadable via CWD-relative scripts and
+# argv-code gadgets (`python3 -c`, `cargo run`, `node -e`, `env <cmd>`) that
+# aren't path-scored by the permission scanner. None of the agent templates
+# here rely on denying those specific gadgets, but treat every permission
+# block generated from these templates as a guardrail against accidents, not
+# a hard sandbox boundary against a determined or compromised agent — that
+# boundary is the environment (scratch dirs, disposable creds, no prod
+# URLs), not this permission block.
+#
+# OpenCode's own --help calls --auto "dangerous"; it is off unless passed,
+# and the lead should only pass it for a task the user explicitly confirmed
+# at spec approval (see feature.md's step 1) — not as a standing default.
 #
 # --- How a run is bounded (idle watchdog, not a flat clock) --------------
 #
@@ -50,8 +103,8 @@
 # genuinely active work, and a flat timeout SIGTERMs them mid-tool-call.
 #
 # So this script backgrounds `opencode run` and polls the OpenCode server for
-# this session's *last message* (GET /session/<id>/message?limit=1). While the
-# agent works, that message's parts and text grow, so its byte-fingerprint
+# this session's *last message* (GET /api/session/<id>/message?limit=1). While
+# the agent works, that message's parts and text grow, so its byte-fingerprint
 # keeps changing; when a turn is genuinely wedged (an unanswered permission
 # prompt, a black-holed provider call) the fingerprint is frozen. The run is
 # aborted only when:
@@ -69,20 +122,34 @@
 #     some step boundaries, sat frozen through 80s of active file-reading.
 #   - GET /event and GET /session/<id>/event SSE: emit only
 #     server.connected / server.heartbeat, never per-message/step/tool events.
-# The /session/<id>/message?limit=1 body is the one thing observed to track
-# sub-turn progress *and* carry the `completed` flag.
+# The /api/session/<id>/message?limit=1 body is the one thing observed to
+# track sub-turn progress *and* carry the `completed` flag. Not re-verified
+# against v2's SSE/event endpoints — carried over from the v1 finding as a
+# reasonable default, not re-tested.
+#
+# v2 note: watchdog polling goes through `opencode api` (see oc_api() below),
+# not raw curl — v2 always auth-gates the API (see the password section
+# below) and plain curl with an Authorization/Basic/custom-header guess
+# returned 401 in testing on this install, while `opencode api` with
+# OPENCODE_PASSWORD set worked. The exact header scheme `opencode api` uses
+# is not documented publicly as of this writing; matches a known open
+# upstream report of broken/unclear v2 Basic Auth. Re-test raw curl if a
+# future opencode release documents the header — `opencode api` adds one
+# process-spawn of latency per poll (~0.15-0.2s observed), immaterial at the
+# default 20s poll interval.
 #
 # If the session id can't be resolved (a fresh --session-less run, server slow
 # to list it) or the message endpoint keeps erroring, the watchdog disables
 # itself and the only bound is the OC_TIMEOUT ceiling — never worse than a
 # flat timeout.
 #
-# Killing the client does NOT cancel the server-side turn (--attach sessions
+# Killing the client does NOT cancel the server-side turn (--server sessions
 # outlive the CLI). So on any abort this script calls POST
-# /session/<id>/abort (verified live against a real OpenCode 1.x server:
-# returns 200, no-ops cleanly if the turn had already finished) before it
-# exits 124. The watchdog resolves the session id even for a fresh run, so
-# this abort now always has a target.
+# /api/session/<id>/interrupt (v1 called this endpoint /session/<id>/abort;
+# v2 renamed it. Verified live against a real v2.0.18 server: returns
+# {"interrupted": bool}, no-ops cleanly if the turn had already finished)
+# before it exits 124. The watchdog resolves the session id even for a fresh
+# run, so this abort now always has a target.
 #
 # --- Pipeline telemetry -----------------------------------------------------
 #
@@ -101,6 +168,10 @@
 #                    scripts/team.sh last started (read from
 #                    .agents/.oc-port) if that file exists and OC_SERVER
 #                    isn't set — see scripts/team.sh's own header for why.
+#   OC_PASSWORD      the OPENCODE_PASSWORD to authenticate with, or read from
+#                    .agents/.oc-password (written by scripts/team.sh) if
+#                    that file exists and OC_PASSWORD isn't set. Required —
+#                    opencode v2 always auth-gates the API (v1 had none).
 #   OC_TIMEOUT       absolute ceiling, seconds. Default 2400. A run still
 #                    making progress is killed here; raise it for a job
 #                    legitimately longer than 40 min.
@@ -132,6 +203,18 @@ elif [ -f "$REPO_ROOT/.agents/.oc-port" ]; then
 else
   SERVER="http://localhost:4096"
 fi
+
+if [ -n "${OC_PASSWORD:-}" ]; then
+  OPENCODE_PASSWORD="$OC_PASSWORD"
+elif [ -f "$REPO_ROOT/.agents/.oc-password" ]; then
+  OPENCODE_PASSWORD="$(cat "$REPO_ROOT/.agents/.oc-password")"
+else
+  # Preserve a password the caller already exported (e.g. hand-launched
+  # `opencode serve` with a chosen OPENCODE_PASSWORD) instead of clobbering
+  # it with an empty string.
+  OPENCODE_PASSWORD="${OPENCODE_PASSWORD:-}"
+fi
+export OPENCODE_PASSWORD
 
 AGENT=""
 MODEL=""
@@ -167,6 +250,16 @@ done
 [ -n "$AGENT" ] || die "--agent is required"
 [ -n "$MODEL" ] || die "--model is required"
 
+# Resolve a relative --raw-out against the caller's CWD now, before this
+# script cd's into $REPO_ROOT below (v2's `opencode run` dropped --dir; the
+# project directory is now whatever the process's CWD is when it runs).
+if [ -n "$RAW_OUT" ]; then
+  case "$RAW_OUT" in
+    /*) : ;;
+    *) RAW_OUT="$(pwd)/$RAW_OUT" ;;
+  esac
+fi
+
 # Prompt from --prompt, --prompt-file, or stdin, in that order.
 if [ -z "$PROMPT" ]; then
   if [ -n "$PROMPT_FILE" ]; then
@@ -188,14 +281,23 @@ else
   die "neither 'timeout' nor 'gtimeout' found — install coreutils (brew install coreutils)"
 fi
 
-# Fail fast with a clear message rather than letting --attach silently fall back
-# to a cold local server, which is the slow path this wrapper exists to avoid.
-if ! curl -sS -o /dev/null -m 5 "$SERVER" 2>/dev/null; then
-  die "no opencode server at $SERVER — start one with:  opencode serve --port 4096
-     (or run scripts/team.sh, which starts it in pane 1)"
+# Fail fast with a clear message rather than letting --server silently fall
+# back to a cold local server, which is the slow path this wrapper exists to
+# avoid. This also validates OPENCODE_PASSWORD — v2 answers 200 with the web
+# UI's HTML on a bare `curl "$SERVER"` regardless of auth, so a plain
+# reachability probe alone would not have caught a missing/wrong password.
+if ! "$TIMEOUT_BIN" 10 opencode api GET /api/session --server "$SERVER" --param limit=1 >/dev/null 2>&1; then
+  die "no opencode server (or bad OPENCODE_PASSWORD) at $SERVER — start one with:
+     OPENCODE_PASSWORD=\"\$(cat .agents/.oc-password)\" opencode serve --port 4096
+     (or run scripts/team.sh, which starts it in pane 1 with the password wired up)"
 fi
 
 printf '%s\n' "oc.sh: agent=$AGENT model=$MODEL ceiling=${CEIL_SECS}s idle=${IDLE_SECS}s server=$SERVER session=${SESSION:-new} auto=$AUTO" >&2
+
+# v2's `opencode run` has no --dir flag; it takes the project directory from
+# its own CWD. RAW_OUT was already resolved to an absolute path above, so
+# this is safe to do now.
+cd "$REPO_ROOT"
 
 RAW_TMP="$(mktemp "${TMPDIR:-/tmp}/oc-raw.XXXXXX")"
 trap 'rm -f "$RAW_TMP"' EXIT
@@ -211,9 +313,17 @@ AUTO_ARGS=()
 # md5 of stdin, portable across macOS (`md5`) and Linux (`md5sum`).
 _md5() { if command -v md5 >/dev/null 2>&1; then md5 -q; else md5sum | cut -d' ' -f1; fi; }
 
-# Every current session id, newest first (empty on any error).
+# `opencode api` authenticates via OPENCODE_PASSWORD (already exported above);
+# plain curl could not reproduce that auth in testing (see usage header).
+# Bounded with $TIMEOUT_BIN since, unlike the old curl calls, `opencode api`
+# has no built-in per-request timeout of its own.
+oc_api() { "$TIMEOUT_BIN" 10 opencode api "$@" --server "$SERVER" 2>/dev/null; }
+
+# Every current session id, newest first (empty on any error). v2 paginates
+# (default page size well under this project's total session count), but
+# newest-first ordering means a just-created session is always on this page.
 list_session_ids() {
-  curl -sS -m 10 "$SERVER/session" 2>/dev/null \
+  oc_api GET /api/session --param limit=100 --param order=desc \
     | grep -o '"id":"ses_[^"]*"' | cut -d'"' -f4
 }
 
@@ -226,29 +336,54 @@ resolve_new_session() {
   return 1
 }
 
-# Fingerprint of a session's last message: "<size>:<md5>", or "" if unreadable.
-# Changes whenever a part is added or streamed text grows; stable when wedged.
-message_fp() {
-  local body
-  body="$(curl -sS -m 10 "$SERVER/session/$1/message?limit=1" 2>/dev/null)" || return 0
-  case "$body" in
-    '['*|'{'*) printf '%s:%s' "$(printf '%s' "$body" | wc -c | tr -d ' ')" "$(printf '%s' "$body" | _md5)" ;;
-    *) : ;;  # HTML / error page — treat as unreadable, watchdog stays passive
-  esac
-}
-
-# Exit 0 if that last message carries a `completed` timestamp.
-turn_completed() {
-  curl -sS -m 10 "$SERVER/session/$1/message?limit=1" 2>/dev/null | python3 -c '
+# The newest message in a session, as compact JSON on stdout (or nothing).
+# `--param limit=1`/`order=desc` are passed as a hint, but verified live to be
+# ignored by this endpoint on the installed v2.0.18 (it always returns full
+# history) — so this never trusts server-side limiting/ordering and instead
+# picks by max(time.created) itself, client-side, over whatever came back.
+# v1's equivalent code took the last array element, which was correct when v1
+# returned messages oldest-first; v2 returns them newest-first, so blindly
+# porting that indexing (`d[-1]`) would have silently picked the *oldest*
+# message instead — caught by live testing before this shipped.
+latest_message_json() {
+  oc_api GET "/api/session/$1/message" --param order=desc --param limit=1 | python3 -c '
 import json, sys
 try:
     d = json.load(sys.stdin)
 except Exception:
+    sys.exit(0)
+if isinstance(d, dict) and "data" in d:
+    d = d["data"]
+if isinstance(d, list) and d:
+    def created(m):
+        info = m.get("info", m) if isinstance(m, dict) else {}
+        return (info.get("time", {}) or {}).get("created", 0)
+    print(json.dumps(max(d, key=created), sort_keys=True))
+' 2>/dev/null
+}
+
+# Fingerprint of a session's newest message: "<size>:<md5>", or "" if
+# unreadable. Changes whenever that message's parts/text grow; stable once a
+# turn stops producing new content — that stability is what "wedged" means.
+message_fp() {
+  local body
+  body="$(latest_message_json "$1")" || return 0
+  [ -n "$body" ] && printf '%s:%s' "$(printf '%s' "$body" | wc -c | tr -d ' ')" "$(printf '%s' "$body" | _md5)"
+  return 0
+}
+
+# Exit 0 if the newest message carries a `completed` timestamp.
+turn_completed() {
+  local body
+  body="$(latest_message_json "$1")" || return 1
+  [ -n "$body" ] || return 1
+  printf '%s' "$body" | python3 -c '
+import json, sys
+try:
+    m = json.load(sys.stdin)
+except Exception:
     raise SystemExit(1)
-m = d[-1] if isinstance(d, list) and d else d
-if not isinstance(m, dict):
-    raise SystemExit(1)
-info = m.get("info", m)
+info = m.get("info", m) if isinstance(m, dict) else {}
 raise SystemExit(0 if (info.get("time", {}) or {}).get("completed") else 1)
 ' 2>/dev/null
 }
@@ -263,8 +398,7 @@ set +e
 # the watchdog itself enforces the real OC_TIMEOUT ceiling below.
 printf '%s' "$PROMPT" | "$TIMEOUT_BIN" "$((CEIL_SECS + 300))" \
   opencode run \
-    --attach "$SERVER" \
-    --dir "$REPO_ROOT" \
+    --server "$SERVER" \
     --agent "$AGENT" \
     --model "$MODEL" \
     ${SESSION_ARGS[@]+"${SESSION_ARGS[@]}"} \
@@ -330,11 +464,13 @@ USED_SESSION="$WATCH_SID"
 {
   TELEMETRY_DIR="$REPO_ROOT/.agents/logs"
   if mkdir -p "$TELEMETRY_DIR" 2>/dev/null; then
-    curl -sS -m 10 "$SERVER/session/${USED_SESSION:-none}" 2>/dev/null | python3 -c '
+    "$TIMEOUT_BIN" 10 opencode api GET "/api/session/${USED_SESSION:-none}" --server "$SERVER" 2>/dev/null | python3 -c '
 import json, sys, datetime
 extra = {}
 try:
     d = json.loads(sys.stdin.read())
+    if isinstance(d, dict) and "data" in d:
+        d = d["data"]
     d = d[0] if isinstance(d, list) and d else d
     if isinstance(d, dict):
         for k in ("cost", "tokens"):
@@ -385,7 +521,7 @@ if [ -n "$KILL_REASON" ] || [ "$STATUS" -eq 124 ]; then
   [ -n "$KILL_REASON" ] || KILL_REASON="ceiling"
   ABORT_SESSION="${WATCH_SID:-$USED_SESSION}"
   if [ -n "$ABORT_SESSION" ]; then
-    curl -sS -X POST -m 10 "$SERVER/session/$ABORT_SESSION/abort" -o /dev/null 2>/dev/null || true
+    "$TIMEOUT_BIN" 10 opencode api POST "/api/session/$ABORT_SESSION/interrupt" --server "$SERVER" >/dev/null 2>&1 || true
     ABORT_NOTE="Aborted server-side session $ABORT_SESSION so it won't orphan the next call — retrying is safe."
   else
     ABORT_NOTE="No session id was known to abort. If this session gets reused, check it isn't still running server-side before sending the next message."
@@ -395,10 +531,16 @@ if [ -n "$KILL_REASON" ] || [ "$STATUS" -eq 124 ]; then
     WHY="the session's last message did not change for ${IDLE_SECS}s while a turn was still open"
     HINT="That is what a wedged run looks like — almost always a permission prompt
   with no TTY to answer it:
-    - Widen .opencode/agent/$AGENT.md's bash permissions to cover the command
+    - Widen .opencode/agent/$AGENT.md's shell permissions to cover the command
       that stopped it, and set 'question: deny'.
-    - Or pass --auto to this script (only for a task the user has confirmed) —
-      it auto-approves anything not explicitly 'deny'd instead of hanging.
+    - --auto is a reasonable workaround here (see this script's own --auto
+      comment above): re-verified live, it correctly auto-approves only
+      'ask' entries and still honors 'deny' — it is not, as an earlier
+      version of this comment claimed, a way to bypass deny rules. Before
+      relying on it for an unattended run, confirm via 'GET /api/agent/$AGENT'
+      (see the --auto comment above) that the expected deny rules actually
+      loaded — a silent ruleset-load failure is the real risk on this
+      opencode version, not --auto itself.
   If neither applies the provider call may have hung — check --raw-out for the
   last event before the stall, then resume the same --session id."
   else
@@ -417,7 +559,7 @@ oc.sh: ABORTED — $WHY (agent=$AGENT model=$MODEL)
   $HINT
 
   Reproduce interactively to watch it run:
-    opencode run --attach $SERVER --agent $AGENT --model $MODEL "<prompt>"
+    opencode run --server $SERVER --agent $AGENT --model $MODEL "<prompt>"
 
 MSG
   exit 124

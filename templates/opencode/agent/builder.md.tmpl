@@ -18,7 +18,35 @@ permission:
   todowrite: allow
   task: deny
   doom_loop: deny
-  bash:
+  # RESOLVED (2026-09-27, opencode v2.0.18): an earlier note here claimed
+  # --auto let a deny-listed `curl *` run anyway. Re-verified live with this
+  # exact permission block (nested `permission:` + `temperature:`, same as
+  # below) via `GET /api/agent/<name>` on a real server: the ruleset loads
+  # with `curl *: deny` present, and --auto correctly refused it
+  # ("Permission denied: shell"), matching the documented contract
+  # (opencode.ai/docs/permissions — "deny rules are still enforced" under
+  # --auto). The original finding could not be reproduced and is believed to
+  # have been a confound, not a real --auto bug; the old warning text is
+  # wrong and has been removed.
+  #
+  # The bug that IS real and confirmed: opencode v2 can silently DISCARD an
+  # agent's entire custom ruleset (falling back to bare `*:* allow`, no
+  # warning) if the file mixes `temperature:` with the newer native
+  # `permissions:` (array) frontmatter key instead of this nested
+  # `permission:` form. This file uses the nested form, which is unaffected.
+  # Do NOT convert this file to the `permissions: [...]` array format without
+  # re-checking `GET /api/agent/<name>` afterward for exactly this failure
+  # mode. See scripts/oc.sh's --auto comment for the full writeup and how to
+  # check any agent's live ruleset before trusting it.
+  #
+  # Separately, and regardless of --auto or format: upstream issue #42436
+  # (open) documents `deny` rules on loaded rulesets being evadable via
+  # CWD-relative scripts and argv-code gadgets (`python3 -c`, `cargo run`,
+  # `node -e`, `env <cmd>`). None of those are allowed above, but none of the
+  # denies below are a hard sandboxing boundary against a determined or
+  # compromised agent — real isolation is the environment (scratch dirs,
+  # disposable creds, no prod URLs), not this permission block.
+  shell:
     "*": ask
     "node *": allow
     "npm test*": allow

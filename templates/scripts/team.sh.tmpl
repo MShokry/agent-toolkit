@@ -45,6 +45,23 @@
 # adds .agents/.oc-port to this project's .gitignore; it's local machine
 # state, not something to commit.
 #
+# opencode v2's `serve` always auth-gates the API (v1 had none): unless
+# OPENCODE_PASSWORD/OPENCODE_SERVER_PASSWORD is set, it mints a random one
+# and only prints it once to the pane. This script generates one instead and
+# writes it to .agents/.oc-password (same gitignore treatment as
+# .oc-port) so scripts/oc.sh can read it on every call without you copying
+# it out of pane 1 by hand. The server is launched with a command that reads
+# the file at runtime (`$(cat .agents/.oc-password)`) rather than the literal
+# secret, so the password itself never appears in the pane's typed-command
+# echo or tmux scrollback.
+#
+# Note this password sits in the project's own working tree, readable by any
+# agent's shell tool — an agent that read it could call the API directly
+# (list/abort *other* sessions, not just its own), beyond what it's supposed
+# to touch. Low severity today (these agents already have source + git
+# access), but don't treat the password as secret from the agents themselves,
+# only from the outside.
+#
 # See docs/TEAM.md for more.
 # END USAGE
 
@@ -114,8 +131,25 @@ gen_uuid() {
   fi
 }
 
+gen_password() {
+  if command -v openssl >/dev/null 2>&1; then
+    openssl rand -hex 32
+  elif [ -r /dev/urandom ]; then
+    od -An -tx1 -N32 /dev/urandom | tr -d ' \n'
+  elif command -v python3 >/dev/null 2>&1; then
+    python3 -c 'import secrets; print(secrets.token_hex(32))'
+  else
+    echo "team.sh: need openssl, /dev/urandom, or python3 to mint a server password" >&2
+    exit 1
+  fi
+}
+
 mkdir -p "$REPO_ROOT/.agents"
 printf '%s' "$PORT" > "$REPO_ROOT/.agents/.oc-port"
+PASSWORD_FILE="$REPO_ROOT/.agents/.oc-password"
+# umask before the write, not chmod after, so the file is never briefly
+# world/group-readable between creation and permission-fixing.
+( umask 077; gen_password > "$PASSWORD_FILE" )
 
 if [ "$LEAD" = "claude" ]; then
   # Pin pane 0 to one Claude conversation per tmux session name (see usage
@@ -146,7 +180,8 @@ fi
 tmux new-session -d -s "$SESSION" -c "$REPO_ROOT" -n team
 
 tmux split-window -h -t "$SESSION:team" -c "$REPO_ROOT"
-tmux send-keys -t "$SESSION:team.1" "opencode serve --port $PORT" C-m
+tmux send-keys -t "$SESSION:team.1" \
+  "OPENCODE_PASSWORD=\"\$(cat '$PASSWORD_FILE')\" opencode serve --port $PORT" C-m
 
 tmux split-window -v -t "$SESSION:team.1" -c "$REPO_ROOT"
 tmux send-keys -t "$SESSION:team.2" \

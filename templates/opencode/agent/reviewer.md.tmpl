@@ -17,6 +17,29 @@ temperature: 0.1
 # is not the same as a permission block that is actually enforced by the
 # runtime — confirm before you rely on "the reviewer cannot touch source" as
 # a guarantee.
+#
+# A finding recorded here on 2026-09-27 claimed --auto let a deny-listed
+# `curl *` run anyway for the builder template's shell block. That was
+# re-verified live the same day via `GET /api/agent/<name>` and could not be
+# reproduced with the builder template's actual permission shape (nested
+# `permission:` + `temperature`) — the ruleset loaded correctly and --auto
+# correctly denied it, matching opencode's documented contract. The original
+# finding is believed to have been a confound; the claim above it (that
+# YAML-looking-right isn't the same as runtime-enforced) still stands as
+# general practice, but don't assume --auto itself is broken.
+#
+# What IS a confirmed opencode v2 bug: mixing `temperature:` with the newer
+# native `permissions:` (array) frontmatter key — instead of this file's
+# nested `permission:` form — silently drops the entire custom ruleset to
+# bare allow-all, no warning. Don't convert this file's format without
+# re-checking `GET /api/agent/<name>` afterward. See scripts/oc.sh's --auto
+# comment for the full writeup and how to check any agent's live ruleset.
+#
+# Separately: upstream issue #42436 (open) documents loaded `deny` rules
+# still being evadable via CWD-relative scripts and argv-code gadgets
+# (`python3 -c`, `cargo run`, `node -e`, `env <cmd>`) — a real, ongoing gap
+# independent of --auto. Treat this permission block as a guardrail, not a
+# hard sandboxing boundary.
 permission:
   edit: deny
   write: deny
@@ -32,7 +55,7 @@ permission:
   todowrite: deny
   task: deny
   doom_loop: deny
-  bash:
+  shell:
     "*": deny
     "git diff*": allow
     "git log*": allow

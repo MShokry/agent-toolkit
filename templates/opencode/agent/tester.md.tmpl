@@ -24,7 +24,27 @@ permission:
   doom_loop: deny
   webfetch: allow
   websearch: deny
-  bash:
+  # RESOLVED (2026-09-27, opencode v2.0.18): a warning here previously
+  # claimed --auto let a deny-listed shell call run anyway (builder's, which
+  # does deny curl — this template's own denies are `sudo *` / `rm -rf /*`
+  # below). Re-verified live via `GET /api/agent/<name>` with this file's
+  # actual shape (nested `permission:` + `temperature:`): the ruleset loads
+  # correctly and --auto correctly enforces its denies, matching opencode's
+  # documented contract. The original finding could not be reproduced and is
+  # believed to have been a confound.
+  #
+  # What IS a confirmed opencode v2 bug: mixing `temperature:` with the newer
+  # native `permissions:` (array) frontmatter key — instead of this nested
+  # `permission:` form — silently drops the whole custom ruleset to bare
+  # allow-all, no warning. Don't convert this file's format without
+  # re-checking `GET /api/agent/<name>` afterward. See scripts/oc.sh's --auto
+  # comment for the full writeup.
+  #
+  # Separately: upstream issue #42436 (open) documents loaded `deny` rules
+  # still being evadable via CWD-relative scripts and argv-code gadgets
+  # (`python3 -c`, `cargo run`, `node -e`, `env <cmd>`), independent of
+  # --auto — this block is a guardrail, not a hard sandbox boundary.
+  shell:
     # "npm install *" is allowed on purpose: a missing dev dependency is an
     # environmental failure the tester must be able to resolve to run the
     # suite at all. The tradeoff (postinstall code execution) is accepted
