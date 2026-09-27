@@ -8,11 +8,21 @@
 #
 # Usage:
 #   bin/init.sh --target <path> --project-name <name> \
-#     --builder-model <vendor/model> \
-#     --reviewer-model <vendor/model> \
-#     --reviewer-fallback-model <vendor/model> \
-#     --tester-model <vendor/model> \
+#     [--builder-model <vendor/model>] \
+#     [--reviewer-model <vendor/model>] \
+#     [--reviewer-fallback-model <vendor/model>] \
+#     [--tester-model <vendor/model>] \
 #     [--claude-model sonnet] [--test-dir e2e]
+#
+#   The four model flags and --claude-model/--test-dir all default (see
+#   apply_defaults() below) to the lineup two independent real projects
+#   converged on: --claude-model sonnet, --builder-model
+#   opencode-go/glm-5.3-flash, --reviewer-model opencode-go/minimax-m2.7,
+#   --reviewer-fallback-model opencode-go/deepseek-v4-flash, --tester-model
+#   hcnsec/auto, --test-dir e2e. Pin your own strings from `opencode models`
+#   when your server's list differs — these are a starting point, not a
+#   guarantee those exact ids still exist. --project-name has no default
+#   and is still required.
 #
 # On a fresh scaffold this also writes .agents/.toolkit-version — a stamp
 # recording the toolkit SHA/tag and every flag used. It is committed (it
@@ -40,6 +50,10 @@
 # Requires: bash, sed, diff, git (for the stamp's SHA/tag; falls back to
 # "unknown"). Matches the rest of this toolkit's zero-runtime-dependency
 # stance.
+#
+# Every run (scaffold or --update) checks `opencode --version` on PATH and
+# warns (non-fatally) if it's missing, v1, or newer than the v2 these
+# templates were written and verified against.
 # END USAGE
 
 set -eu
@@ -92,6 +106,68 @@ TARGET="$(cd "$TARGET" && pwd)"
 
 [ "$TARGET" != "$TOOLKIT_ROOT" ] || die "refusing to scaffold into the toolkit's own checkout — pick another --target"
 
+# These templates assume opencode v2 (password-gated `serve`, the `shell`
+# permission action name, the hardcoded Basic Auth username `opencode`, the
+# `opencode api` CLI subcommand scripts/oc.sh polls with — see
+# templates/scripts/oc.sh.tmpl's own --auto comment for the full v1→v2
+# migration writeup). Warn loudly rather than let someone hit a wall of 401s
+# and "unrecognized flag" errors with no idea why. Non-fatal: this is
+# information for the human running init.sh, not a reason to abort a
+# scaffold or update.
+# Extracts the major version number from an `opencode --version` line. Two
+# passes: first anchored on the literal "opencode" prefix real builds use
+# ("opencode v2.0.18") so a trailing runtime/build version in the same line
+# (e.g. "opencode v2.0.18 (go v1.22.1)") can't be mistaken for opencode's own
+# — a naive `.*[vV]<digits>.` pattern is greedy and matches the LAST such
+# token in the line, not opencode's; anchoring avoids that class of bug
+# entirely instead of just handling the one example found in review. Second
+# pass (only if the first finds nothing) falls back to the first bare X.Y
+# version-looking token anywhere in the line, in case some build prints a
+# version with no leading "opencode"/"v" at all.
+parse_opencode_major() {
+  local s major
+  s="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')"
+  major="$(printf '%s' "$s" | sed -n 's/^opencode[[:space:]]\{1,\}v\{0,1\}\([0-9][0-9]*\)\..*/\1/p')"
+  if [ -z "$major" ]; then
+    major="$(printf '%s' "$s" | grep -oE '[0-9]+\.[0-9]+' | head -1 | cut -d. -f1)"
+  fi
+  printf '%s' "$major"
+}
+
+check_opencode_version() {
+  if ! command -v opencode >/dev/null 2>&1; then
+    printf '\ninit.sh: NOTE — opencode CLI not found on PATH.\n' >&2
+    printf 'init.sh: scripts/oc.sh and scripts/team.sh need opencode v2 installed to run the pipeline (not to scaffold it). Install it before your first /feature or $feature run.\n\n' >&2
+    return 0
+  fi
+  local ver_str major
+  # No timeout here: a hung `opencode --version` hangs init.sh with it. Left
+  # as-is because macOS ships no `timeout` by default and this toolkit has
+  # no other cross-platform timeout resolution outside templates/scripts/
+  # (see oc.sh.tmpl's $TIMEOUT_BIN) — acceptable for a one-shot version
+  # check that every real build answers instantly.
+  ver_str="$(opencode --version 2>/dev/null | head -1)"
+  major="$(parse_opencode_major "$ver_str")"
+  case "$major" in
+    1)
+      printf '\ninit.sh: WARNING — installed opencode is v1 (%s); these templates assume opencode v2.\n' "$ver_str" >&2
+      printf 'init.sh: v1 lacks v2'"'"'s password-gated `serve` (auth will just fail), the `shell` permission action name (v1 used `bash`, so deny/ask rules silently will not match), the `opencode api` CLI subcommand scripts/oc.sh polls with, and the `--server` flag scripts/oc.sh passes to `opencode run` (v1 used `--attach`/`--dir`, both removed in v2). Running this toolkit'"'"'s generated scripts against opencode v1 as-is will fail or silently under-enforce permissions.\n' >&2
+      printf 'init.sh: upgrade opencode first — `opencode upgrade` (or however you installed it) — then re-run.\n\n' >&2
+      ;;
+    2)
+      : # current baseline these templates were written and verified against — nothing to say
+      ;;
+    '')
+      printf '\ninit.sh: NOTE — could not parse an opencode version from %s — skipping the v1/v2 check.\n\n' "${ver_str:-<empty output>}" >&2
+      ;;
+    *)
+      printf '\ninit.sh: NOTE — installed opencode is v%s (%s); these templates were last verified against v2.0.18.\n' "$major" "$ver_str" >&2
+      printf 'init.sh: a newer major version may have changed the server API, permission schema, or --auto behavior again the way v1->v2 did. Check opencode'"'"'s own changelog and this toolkit'"'"'s CHANGELOG.md before trusting the generated scripts unchanged.\n\n' >&2
+      ;;
+  esac
+}
+check_opencode_version
+
 STAMP="$TARGET/.agents/.toolkit-version"
 
 # Keep in sync with the number of check_pair/render lines below.
@@ -125,6 +201,13 @@ write_stamp() {
 apply_defaults() {
   [ -n "$CLAUDE_MODEL" ] || CLAUDE_MODEL="sonnet"
   [ -n "$TEST_DIR" ] || TEST_DIR="e2e"
+  # Lineup two independent real projects converged on. Not a guarantee these
+  # exact ids exist on your OpenCode server — run `opencode models` and pass
+  # explicit flags when they don't.
+  [ -n "$BUILDER_MODEL" ] || BUILDER_MODEL="opencode-go/glm-5.3-flash"
+  [ -n "$REVIEWER_MODEL" ] || REVIEWER_MODEL="opencode-go/minimax-m2.7"
+  [ -n "$REVIEWER_FALLBACK_MODEL" ] || REVIEWER_FALLBACK_MODEL="opencode-go/deepseek-v4-flash"
+  [ -n "$TESTER_MODEL" ] || TESTER_MODEL="hcnsec/auto"
 }
 
 load_stamp_value() { # $1 = key, sets REPLY
@@ -211,26 +294,12 @@ if [ "$UPDATE" -eq 1 ]; then
     [ -n "$RECOVERED" ] && printf 'init.sh: no stamp — inferred init values from the target%s\n  (verify these, then make it permanent: bin/init.sh --refresh-stamp --target %s)\n' "$RECOVERED" "$TARGET"
   fi
 
-  missing=""
-  for spec in \
-    "project_name|--project-name" \
-    "builder_model|--builder-model" \
-    "reviewer_model|--reviewer-model" \
-    "reviewer_fallback_model|--reviewer-fallback-model" \
-    "tester_model|--tester-model"; do
-    key="${spec%%|*}"; flag="${spec##*|}"
-    val=""
-    case "$key" in
-      project_name)             val="$PROJECT_NAME" ;;
-      builder_model)            val="$BUILDER_MODEL" ;;
-      reviewer_model)           val="$REVIEWER_MODEL" ;;
-      reviewer_fallback_model)  val="$REVIEWER_FALLBACK_MODEL" ;;
-      tester_model)             val="$TESTER_MODEL" ;;
-    esac
-    [ -n "$val" ] || missing="$missing $flag"
-  done
-  [ -z "$missing" ] || die "no provenance stamp at $STAMP and these flags are unset:$missing
-  (pass them once, exactly as at the original init, or scaffold freshly to get a stamp)"
+  # The model flags and --test-dir/--claude-model always end up set by
+  # apply_defaults() above; only --project-name has no default and can
+  # still be genuinely missing here (no stamp, and nothing recoverable from
+  # the target's own files).
+  [ -n "$PROJECT_NAME" ] || die "no provenance stamp at $STAMP and --project-name is unset
+  (pass it once, exactly as at the original init, or scaffold freshly to get a stamp)"
 
   if [ "$REFRESH_STAMP" -eq 1 ]; then
     apply_defaults
@@ -242,10 +311,6 @@ if [ "$UPDATE" -eq 1 ]; then
 else
   apply_defaults
   [ -n "$PROJECT_NAME" ] || die "--project-name is required"
-  [ -n "$BUILDER_MODEL" ] || die "--builder-model is required"
-  [ -n "$REVIEWER_MODEL" ] || die "--reviewer-model is required"
-  [ -n "$REVIEWER_FALLBACK_MODEL" ] || die "--reviewer-fallback-model is required"
-  [ -n "$TESTER_MODEL" ] || die "--tester-model is required"
 fi
 
 # Captured before any render() call touches the target, so it reflects
@@ -422,6 +487,15 @@ if [ -d "$TARGET/.git" ]; then
       printf '.agents/.oc-port\n'
     } >> "$GITIGNORE"
     printf 'init.sh: added .agents/.oc-port to %s\n' "$GITIGNORE"
+  fi
+  # opencode v2's `serve` always requires a password (v1 had none); this is
+  # the secret scripts/team.sh generates for it — never commit it.
+  if ! grep -qxF '.agents/.oc-password' "$GITIGNORE" 2>/dev/null; then
+    {
+      printf '\n# local opencode server password written by scripts/team.sh\n'
+      printf '.agents/.oc-password\n'
+    } >> "$GITIGNORE"
+    printf 'init.sh: added .agents/.oc-password to %s\n' "$GITIGNORE"
   fi
   if ! grep -qxF '.agents/.claude-session-id.*' "$GITIGNORE" 2>/dev/null; then
     {

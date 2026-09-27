@@ -23,6 +23,18 @@ project's own copies.
 - **Never overwrite a local customization silently.** Where upstream and
   local both changed, present three options: take upstream, keep local, or
   hand-merge. The user picks.
+- **Surface the opencode version check.** `bin/init.sh` (both the scaffold
+  and `--update` paths) checks `opencode --version` on PATH and prints a
+  warning if it's missing, v1, unparseable, or newer than the v2 these
+  templates are written and verified against — templates assume v2's
+  password-gated `serve`, the `shell` permission action name, and the
+  `opencode api` CLI subcommand `scripts/oc.sh` polls with (see that
+  script's own --auto comment). Don't let this warning scroll past
+  unmentioned, including when step 3 below exits 0 (no template drift):
+  mention it to the user before proceeding, since a v1 opencode makes the
+  generated scripts fail outright on some calls (auth errors, unrecognized
+  flags) and silently under-enforce permissions on others (renamed action
+  keys not matching) — not just a subtler behavior change.
 
 ## Steps
 
