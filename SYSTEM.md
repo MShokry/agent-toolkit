@@ -40,7 +40,7 @@ actually enforce, rather than pasting a file in and hoping.
   Never fixes anything, never edits source.
 
 **The state file is the only handoff surface.** One file per task/feature —
-`.agents/T-<id>.md`, shape at `templates/agents-state/TEMPLATE.md.tmpl` —
+`.pipeline/T-<id>.md`, shape at `templates/agents-state/TEMPLATE.md.tmpl` —
 holding Status, Goal, Acceptance criteria, Files in scope, a Decisions log,
 Review verdicts, Test results, Findings for docs, and Open questions.
 Nothing is passed between roles by prose alone: if a fact isn't written in
@@ -240,13 +240,13 @@ mechanism. You need three things:
 
 0. **First, check whether this project was just scaffolded.** If a
    first-run customization marker exists (this toolkit writes
-   `.agents/.needs-customization`), the role files still carry generic
+   `.pipeline/.needs-customization`), the role files still carry generic
    pitfalls/hard-rules text rather than this codebase's real ones — do that
    customization pass with the human before running anything, then delete
    the marker. It is written once, on a fresh scaffold only, and the check
    otherwise lives in a Claude-Code-specific command file that you, as a
    different lead, will never execute.
-1. **A way to read and write `.agents/T-<id>.md`** — any tool with file
+1. **A way to read and write `.pipeline/T-<id>.md`** — any tool with file
    access can do this.
 2. **A way to run each worker role** — either do the work yourself inline
    (weaker: no cross-vendor independence for review), or shell out to a
@@ -289,3 +289,7 @@ root `AGENTS.md`, a project-scoped planner, and `feature` / `toolkit-update`
 skills; it executes the same canonical flow as Claude. For any other tool, this
 file plus `docs/ADDING-A-TOOL.md` is the path — there's no flag for "generate my
 tool's shim," so research its real discovery and permission surfaces first.
+
+Record approvals in the Decisions log. On restart or compaction, recover
+status, counters, approvals, and worker activity from the task record before
+dispatching. Do not repeat recorded approvals or start a competing writer.

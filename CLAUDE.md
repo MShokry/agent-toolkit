@@ -3,7 +3,7 @@
 A reusable, project-agnostic version of the planner → implement → review →
 test multi-agent pipeline. `bin/init.sh` scaffolds it into any target repo:
 Claude or Codex as lead, Claude/Codex planning, OpenCode (any vendor) for
-cross-vendor implement/review/test, a state file (`.agents/T-<id>.md`) as the
+cross-vendor implement/review/test, a state file (`.pipeline/T-<id>.md`) as the
 one handoff surface between roles, and a `delegate` skill that keeps the
 orchestrating lead's own context small across a long run.
 
@@ -18,12 +18,14 @@ toolkit's own code.
 
 ## Commands
 
-No build step, no dependencies, no LLM calls in the test path. Verify a
+No build step or package dependencies, no LLM calls in the default test path.
+Tests use Bash plus Python's standard library. Verify a
 change with the automated smoke run:
 
 ```bash
 bash test/smoke.sh        # scaffolder guarantees + the two structural scripts
 bash test/invariants.sh   # every load-bearing rule present in every copy
+bash test/codex.sh        # generated launcher/hooks/preflight, no model calls
 ```
 
 `smoke.sh` scaffolds into a throwaway directory and asserts the core
@@ -63,6 +65,7 @@ files are skipped, not clobbered (`render()`'s core guarantee).
 | `skills/toolkit-release/` | Conversational release flow: classify commits since the last tag into `[contract]›[safety]›[process]›[docs]`, propose a semver-ish version, get user approval, write the CHANGELOG section, run `bin/release.sh` |
 | `test/smoke.sh` | The automated smoke run (see Commands). CI runs it plus shellcheck on every push |
 | `test/invariants.sh` | Cross-file rule presence check: one grep per (rule, file) pair over the hand-synced copies. Add a rule = one line in its table |
+| `test/codex.sh` | Behavioral checks for the generated launcher, lifecycle hooks, preflight, inheritance, and migration failures, using CLI doubles and no model calls |
 | `.github/workflows/ci.yml` | Runs `test/smoke.sh` + shellcheck (`bin/init.sh`, the test, and every `templates/scripts/*.tmpl`) |
 | `templates/claude/agents/` | `planner.md.tmpl`, `senior-dev.md.tmpl` — Claude subagent role definitions |
 | `templates/claude/commands/` | `feature.md.tmpl` — the `/feature` pipeline command (the lead's own instructions); `toolkit-update.md.tmpl` — the `/toolkit-update` merge command for already-scaffolded projects |
@@ -108,7 +111,7 @@ files are skipped, not clobbered (`render()`'s core guarantee).
   "report your findings/output to the lead."
 - **Keep `templates/` and any applied copy of this toolkit in sync** (any
   repo that has scaffolded it, with its own `.claude/` + `.opencode/` +
-  `.agents/TEMPLATE.md`) when one side gets a
+  `.pipeline/TEMPLATE.md`) when one side gets a
   structural fix — a new state-file field, a new script, a report-back
   change. They're meant to be the same mechanism, generic vs. applied.
   `test/invariants.sh` covers the state-file contract's two copies; the
@@ -155,11 +158,11 @@ files are skipped, not clobbered (`render()`'s core guarantee).
   destination already exists — if an edit to a `.tmpl` file doesn't show up
   after a re-run against an existing target, that's why, not a bug in
   `init.sh`. Use `init.sh --update` to see what changed instead.
-- `.agents/.needs-customization` is written only when `FRESH_SCAFFOLD` was
+- `.pipeline/.needs-customization` is written only when `FRESH_SCAFFOLD` was
   true *before* any `render()` call ran (checked via whether
   `.claude/commands/feature.md` already existed) — never on `--update`,
   and never again once deleted. The provenance stamp
-  (`.agents/.toolkit-version`) follows the same ordering rule: written
+  (`.pipeline/.toolkit-version`) follows the same ordering rule: written
   exactly once on a fresh scaffold, never by `--update` (that would erase
   the baseline it exists to record), rewritten only by an explicit
   `--refresh-stamp` after a merge is accepted. If you add a new
@@ -168,7 +171,7 @@ files are skipped, not clobbered (`render()`'s core guarantee).
 - `templates/opencode/agent/reviewer.md.tmpl` defaults to blanket
   `edit: deny` / `write: deny`, unlike a project that has since widened its
   own copy (e.g. an applied copy's reviewer allows
-  `.agents/**`). That gap is intentional — see README's "Design decisions"
+  `.pipeline/**`). That gap is intentional — see README's "Design decisions"
   — not drift to fix by copying the widened version back over the
   template.
 - A permission block that reads correctly in YAML is not proof it's
@@ -182,8 +185,13 @@ files are skipped, not clobbered (`render()`'s core guarantee).
 
 Actively developed; history in git. The scaffolder's core guarantees are
 covered by `test/smoke.sh`, and cross-copy rule presence by
-`test/invariants.sh` (CI: both + shellcheck). What's *not*
+`test/invariants.sh` (CI: smoke + invariants + Codex behavior + shellcheck). What's *not*
 automated: a live end-to-end pipeline run against a real OpenCode server,
 and live permission-enforcement verification — those stay manual per
 README's "Design decisions". Treat README.md's "Known gaps" and
 REVIEW.md's open items as the backlog.
+
+`test/codex.sh` adds behavioral coverage of the generated Codex integration.
+`test/codex-sandbox.sh` is an opt-in real CLI sandbox check without model calls.
+Live planner discovery and full workflow execution remain manual; do not call
+the CLI-double suite an end-to-end model run.

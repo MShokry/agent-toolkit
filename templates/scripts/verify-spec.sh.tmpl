@@ -28,7 +28,7 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_ROOT"
 
 ID="${1:?usage: verify-spec.sh <task-id, e.g. T-01>}"
-FILE=".agents/${ID}.md"
+FILE=".pipeline/${ID}.md"
 
 [ -f "$FILE" ] || { echo "verify-spec.sh: no such file: $FILE" >&2; exit 1; }
 

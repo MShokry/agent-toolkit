@@ -20,12 +20,17 @@ An update command cannot bootstrap itself into a project that does not have it
 yet. After pulling the toolkit checkout, an existing stamped project can add
 newly introduced template files without repeating its original flags:
 
+For a runtime still under `.agents/`, apply
+[migration 02](../migrations/02-pipeline-directory.md) between inspection and
+bootstrap. Update triage reads the legacy stamp; a plain run refuses to create
+new runtime state before migration is complete.
+
 ```bash
 <toolkit-checkout>/bin/init.sh --update --target <project>  # inspect first
 <toolkit-checkout>/bin/init.sh --target <project>           # missing files only
 ```
 
-The plain run now loads values from `.agents/.toolkit-version` and retains
+The plain run now loads values from `.pipeline/.toolkit-version` and retains
 `render()`'s skip-if-exists guarantee. A Claude user whose older scaffold
 already has `/toolkit-update` can let that command perform these steps. A
 Codex-only user upgrading from before Codex support must run the shell bootstrap
@@ -56,7 +61,7 @@ four problems in a row:
 4. **No migrations.** When the state-file contract gains a field or a
    section — as it has now, substantially (the acceptance-criteria ledger,
    three budget counters, a split blocked status) — existing
-   `.agents/T-*.md` files in flight silently lack it, and nothing says so.
+   `.pipeline/T-*.md` files in flight silently lack it, and nothing says so.
    Stage 4 below now carries the real migration note for that change.
 
 Consequence: `--update` is technically correct and practically unused. A
@@ -70,7 +75,7 @@ lesson this toolkit earns after the scaffold date stays upstream.
 **The single highest-value change.** `init.sh` writes, on a real scaffold:
 
 ```
-.agents/.toolkit-version
+.pipeline/.toolkit-version
 ```
 
 ```
@@ -95,7 +100,7 @@ Then:
   (2026-08-26); toolkit is now at `a1b2c3d` (14 commits ahead)". Problem 2
   disappears.
 - A successful merge updates the stamp; `--update` alone never writes it.
-- It is committed (unlike `.agents/.oc-port`) — it describes the project,
+- It is committed (unlike `.pipeline/.oc-port`) — it describes the project,
   not the laptop.
 
 Follow the existing conventions: written only when `FRESH_SCAFFOLD` was
@@ -148,7 +153,7 @@ With Stages 1–2 in place, `--update` gets three cheap upgrades:
   ```
   init.sh: 3 of 12 files differ from toolkit v0.3.0 (you are on v0.2.0)
     [safety]   .opencode/agent/builder.md      — permission block
-    [contract] .agents/TEMPLATE.md             — 2 new fields
+    [contract] .pipeline/TEMPLATE.md             — 2 new fields
     [docs]     scripts/team.sh                 — comment only
   run with --diff to see hunks, or --diff <path> for one file
   ```
@@ -170,8 +175,8 @@ state file more than anything since the toolkit was extracted:
 
 ```markdown
 # 01 — Delivery contract (ledger, budgets, split blocked status)
-Applies to: .agents/TEMPLATE.md, scripts/verify-state.sh, every role file,
-            and any in-flight .agents/T-*.md
+Applies to: .pipeline/TEMPLATE.md, scripts/verify-state.sh, every role file,
+            and any in-flight .pipeline/T-*.md
 
 New header fields (add under **Implementer for this task:**):
   **Reviewer for this task:** / **Tester for this task:**
@@ -213,7 +218,7 @@ The AI-assisted merge path the README already gestures at ("hand the diff
 to your AI lead and ask it to reconcile"), made into a real, templated
 command/skill rendered by `init.sh` alongside each lead's feature entry point:
 
-1. Read `.agents/.toolkit-version` for the baseline.
+1. Read `.pipeline/.toolkit-version` for the baseline.
 2. Run `bin/init.sh --update` (flags come from the stamp).
 3. Read the toolkit's `CHANGELOG.md` for entries after the baseline.
 4. Work the diffs **in impact order** — `contract`, then `safety`, then

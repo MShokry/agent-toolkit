@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+# Run from the lead's CURRENT sandbox before feature work. An outside-shell
+# pass is not proof that the lead or a planner has the same capabilities.
+set -eu
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$REPO_ROOT"
+die() { printf 'codex-preflight.sh: %s\n' "$*" >&2; exit 1; }
+for dependency in codex opencode python3; do
+  command -v "$dependency" >/dev/null 2>&1 || die "$dependency not installed"
+done
+VERSION="$(codex --version)"
+printf 'codex-preflight.sh: %s (toolkit baseline: 0.160.0)\n' "$VERSION"
+FEATURES="$(codex features list)" || die "cannot inspect Codex runtime capabilities"
+for feature in hooks multi_agent; do
+  printf '%s\n' "$FEATURES" | grep -qE "^$feature[[:space:]].*[[:space:]]true$" \
+    || die "Codex $feature capability is unavailable or disabled; review your runtime configuration before starting"
+done
+codex resume --help | grep -q -- '--no-daemon' \
+  || die "installed Codex lacks the launcher environment isolation option --no-daemon; update Codex before starting"
+for path in .codex/agents/planner.toml .codex/hooks.json scripts/codex-session.py \
+  .agents/skills/feature/SKILL.md .agents/skills/delegate/SKILL.md \
+  .agents/skills/status-board/SKILL.md .agents/skills/karpathy-guidelines/SKILL.md \
+  .pipeline/TEMPLATE.md; do
+  [ -f "$path" ] || die "missing $path; finish scaffold/update before starting"
+done
+grep -q '^name = "planner"' .codex/agents/planner.toml || die "planner definition has no planner name"
+if [ -f .agents/TEMPLATE.md ] || compgen -G ".agents/T-*.md" >/dev/null; then
+  die "legacy .agents runtime state remains; complete the pipeline-directory migration first"
+fi
+PROBE="$(mktemp .pipeline/.write-probe.XXXXXX)" || die "cannot write .pipeline; request approval for this path"
+rm -f "$PROBE"
+if [ -n "${OC_SERVER:-}" ]; then
+  SERVER="$OC_SERVER"
+elif [ -f .pipeline/.oc-port ]; then
+  SERVER="http://localhost:$(cat .pipeline/.oc-port)"
+else
+  SERVER="http://localhost:4096"
+fi
+if [ -n "${OC_PASSWORD:-}" ]; then
+  OPENCODE_PASSWORD="$OC_PASSWORD"
+elif [ -f .pipeline/.oc-password ]; then
+  OPENCODE_PASSWORD="$(cat .pipeline/.oc-password)"
+else
+  OPENCODE_PASSWORD="${OPENCODE_PASSWORD:-}"
+fi
+export OPENCODE_PASSWORD
+if command -v timeout >/dev/null 2>&1; then
+  TIMEOUT=timeout
+elif command -v gtimeout >/dev/null 2>&1; then
+  TIMEOUT=gtimeout
+else
+  die "timeout/gtimeout not installed; install coreutils for the OpenCode wrapper"
+fi
+"$TIMEOUT" 10 opencode api GET /api/session --server "$SERVER" --param limit=1 >/dev/null 2>&1 \
+  || die "OpenCode API unavailable at $SERVER (server, authentication, or sandbox network policy); authorize this exact operation if policy blocks it"
+printf 'codex-preflight.sh: state writes and authenticated OpenCode access passed; verify planner discovery in Codex before dispatch.\n'
+printf 'codex-preflight.sh: git writes and protected config updates may require runtime approval; spec/merge consent remains a separate gate.\n'

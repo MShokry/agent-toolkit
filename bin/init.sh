@@ -13,6 +13,9 @@
 #     [--reviewer-fallback-model <vendor/model>] \
 #     [--tester-model <vendor/model>] \
 #     [--claude-model sonnet] [--test-dir e2e]
+#     [--codex-model <id|inherit>] [--codex-reasoning <effort|inherit>]
+#     [--codex-planner-model <id|inherit>] [--codex-planner-reasoning <effort|inherit>]
+#   Codex settings default to inherit: preserve local/parent choices.
 #
 #   The four model flags and --claude-model/--test-dir all default (see
 #   apply_defaults() below) to the lineup two independent real projects
@@ -24,7 +27,7 @@
 #   guarantee those exact ids still exist. --project-name has no default
 #   and is still required.
 #
-# On a fresh scaffold this also writes .agents/.toolkit-version — a stamp
+# On a fresh scaffold this also writes .pipeline/.toolkit-version — a stamp
 # recording the toolkit SHA/tag and every flag used. It is committed (it
 # describes the project, not the laptop); never written again by --update.
 #
@@ -41,7 +44,7 @@
 #                then refresh the stamp:
 #
 #   bin/init.sh --refresh-stamp [--target <path>] [flags]
-#     Rewrites .agents/.toolkit-version after you have accepted a merge.
+#     Rewrites .pipeline/.toolkit-version after you have accepted a merge.
 #     This is the ONLY thing that updates the stamp besides a fresh scaffold.
 #
 # See docs/UPGRADING.md for the full workflow, CHANGELOG.md for what changed
@@ -64,6 +67,10 @@ TEMPLATES="$TOOLKIT_ROOT/templates"
 TARGET=""
 PROJECT_NAME=""
 CLAUDE_MODEL=""
+CODEX_MODEL=""
+CODEX_REASONING=""
+CODEX_PLANNER_MODEL=""
+CODEX_PLANNER_REASONING=""
 BUILDER_MODEL=""
 REVIEWER_MODEL=""
 REVIEWER_FALLBACK_MODEL=""
@@ -86,6 +93,10 @@ while [ $# -gt 0 ]; do
     --target)                  [ $# -ge 2 ] || die "--target needs a value"; TARGET="$2"; shift 2 ;;
     --project-name)             [ $# -ge 2 ] || die "--project-name needs a value"; PROJECT_NAME="$2"; shift 2 ;;
     --claude-model)              [ $# -ge 2 ] || die "--claude-model needs a value"; CLAUDE_MODEL="$2"; shift 2 ;;
+    --codex-model)              [ $# -ge 2 ] || die "--codex-model needs a value"; CODEX_MODEL="$2"; shift 2 ;;
+    --codex-reasoning)          [ $# -ge 2 ] || die "--codex-reasoning needs a value"; CODEX_REASONING="$2"; shift 2 ;;
+    --codex-planner-model)      [ $# -ge 2 ] || die "--codex-planner-model needs a value"; CODEX_PLANNER_MODEL="$2"; shift 2 ;;
+    --codex-planner-reasoning)  [ $# -ge 2 ] || die "--codex-planner-reasoning needs a value"; CODEX_PLANNER_REASONING="$2"; shift 2 ;;
     --builder-model)             [ $# -ge 2 ] || die "--builder-model needs a value"; BUILDER_MODEL="$2"; shift 2 ;;
     --reviewer-model)            [ $# -ge 2 ] || die "--reviewer-model needs a value"; REVIEWER_MODEL="$2"; shift 2 ;;
     --reviewer-fallback-model)   [ $# -ge 2 ] || die "--reviewer-fallback-model needs a value"; REVIEWER_FALLBACK_MODEL="$2"; shift 2 ;;
@@ -168,10 +179,16 @@ check_opencode_version() {
 }
 check_opencode_version
 
-STAMP="$TARGET/.agents/.toolkit-version"
+STAMP="$TARGET/.pipeline/.toolkit-version"
+STAMP_SOURCE="$STAMP"
+[ -f "$STAMP_SOURCE" ] || STAMP_SOURCE="$TARGET/.agents/.toolkit-version"
+# Never bootstrap a half-migrated runtime or move customized state implicitly.
+if [ "$UPDATE" -eq 0 ] && { [ -f "$TARGET/.agents/TEMPLATE.md" ] || compgen -G "$TARGET/.agents/T-*.md" >/dev/null; }; then
+  die "legacy .agents runtime state: complete migrations/02-pipeline-directory.md at a task boundary before bootstrapping"
+fi
 
 # Keep in sync with the number of check_pair/render lines below.
-RENDER_TOTAL=18
+RENDER_TOTAL=25
 
 write_stamp() {
   local sha tag
@@ -183,6 +200,10 @@ write_stamp() {
     printf 'scaffolded:    %s\n' "$(date +%F)"
     printf 'project_name:  %s\n' "$PROJECT_NAME"
     printf 'claude_model:  %s\n' "$CLAUDE_MODEL"
+    printf 'codex_model: %s\n' "$CODEX_MODEL"
+    printf 'codex_reasoning: %s\n' "$CODEX_REASONING"
+    printf 'codex_planner_model: %s\n' "$CODEX_PLANNER_MODEL"
+    printf 'codex_planner_reasoning: %s\n' "$CODEX_PLANNER_REASONING"
     printf 'builder_model: %s\n' "$BUILDER_MODEL"
     printf 'reviewer_model: %s\n' "$REVIEWER_MODEL"
     printf 'reviewer_fallback_model: %s\n' "$REVIEWER_FALLBACK_MODEL"
@@ -200,6 +221,17 @@ write_stamp() {
 
 apply_defaults() {
   [ -n "$CLAUDE_MODEL" ] || CLAUDE_MODEL="sonnet"
+  [ -n "$CODEX_MODEL" ] || CODEX_MODEL="inherit"
+  [ -n "$CODEX_REASONING" ] || CODEX_REASONING="inherit"
+  [ -n "$CODEX_PLANNER_MODEL" ] || CODEX_PLANNER_MODEL="inherit"
+  [ -n "$CODEX_PLANNER_REASONING" ] || CODEX_PLANNER_REASONING="inherit"
+
+  for value in "$CODEX_MODEL" "$CODEX_PLANNER_MODEL"; do
+    [[ "$value" =~ ^[a-zA-Z0-9][a-zA-Z0-9._/-]*$ ]] || die "invalid Codex model id: $value"
+  done
+  for value in "$CODEX_REASONING" "$CODEX_PLANNER_REASONING"; do
+    case "$value" in inherit|minimal|low|medium|high|xhigh|max|ultra) ;; *) die "invalid Codex reasoning effort: $value" ;; esac
+  done
   [ -n "$TEST_DIR" ] || TEST_DIR="e2e"
   # Lineup two independent real projects converged on. Not a guarantee these
   # exact ids exist on your OpenCode server — run `opencode models` and pass
@@ -211,13 +243,17 @@ apply_defaults() {
 }
 
 load_stamp_value() { # $1 = key, sets REPLY
-  REPLY="$(sed -n "s/^$1: *//p" "$STAMP" | head -1)"
+  REPLY="$(sed -n "s/^$1: *//p" "$STAMP_SOURCE" | head -1)"
 }
 
 load_flags_from_stamp() {
   for spec in \
     "project_name|PROJECT_NAME" \
     "claude_model|CLAUDE_MODEL" \
+    "codex_model|CODEX_MODEL" \
+    "codex_reasoning|CODEX_REASONING" \
+    "codex_planner_model|CODEX_PLANNER_MODEL" \
+    "codex_planner_reasoning|CODEX_PLANNER_REASONING" \
     "builder_model|BUILDER_MODEL" \
     "reviewer_model|REVIEWER_MODEL" \
     "reviewer_fallback_model|REVIEWER_FALLBACK_MODEL" \
@@ -251,6 +287,14 @@ recover_from_target() { # $1 = key
       REPLY="$(sed -n 's/^model: //p' "$TARGET/.opencode/agent/tester.md" | head -1)" ;;
     claude_model)
       REPLY="$(sed -n 's/^model: //p' "$TARGET/.claude/agents/planner.md" 2>/dev/null | head -1)" ;;
+    codex_model)
+      REPLY="$(sed -n 's/^MODEL="\(.*\)"/\1/p' "$TARGET/scripts/codex-lead.sh" 2>/dev/null | head -1)" ;;
+    codex_reasoning)
+      REPLY="$(sed -n 's/^REASONING="\(.*\)"/\1/p' "$TARGET/scripts/codex-lead.sh" 2>/dev/null | head -1)" ;;
+    codex_planner_model)
+      REPLY="$(sed -n 's/^model = "\(.*\)"/\1/p' "$TARGET/.codex/agents/planner.toml" 2>/dev/null | head -1)" ;;
+    codex_planner_reasoning)
+      REPLY="$(sed -n 's/^model_reasoning_effort = "\(.*\)"/\1/p' "$TARGET/.codex/agents/planner.toml" 2>/dev/null | head -1)" ;;
     project_name)
       # team.sh: SESSION="__PROJECT_NAME__"
       REPLY="$(sed -n 's/^SESSION="\(.*\)"/\1/p' \
@@ -262,12 +306,12 @@ recover_from_target() { # $1 = key
   esac
 }
 
-if [ -f "$STAMP" ]; then
+if [ -f "$STAMP_SOURCE" ]; then
   load_flags_from_stamp
 fi
 
 if [ "$UPDATE" -eq 1 ]; then
-  if [ ! -f "$STAMP" ]; then
+  if [ ! -f "$STAMP_SOURCE" ]; then
     # No stamp (pre-v0.3.0 scaffold): recover the original values from the
     # target's own scaffolded files — they carry the substituted forms of the
     # same tokens. Anything still missing falls back to defaults, then to an
@@ -275,6 +319,10 @@ if [ "$UPDATE" -eq 1 ]; then
     for spec in \
       "project_name|PROJECT_NAME" \
       "claude_model|CLAUDE_MODEL" \
+      "codex_model|CODEX_MODEL" \
+      "codex_reasoning|CODEX_REASONING" \
+      "codex_planner_model|CODEX_PLANNER_MODEL" \
+      "codex_planner_reasoning|CODEX_PLANNER_REASONING" \
       "builder_model|BUILDER_MODEL" \
       "reviewer_model|REVIEWER_MODEL" \
       "reviewer_fallback_model|REVIEWER_FALLBACK_MODEL" \
@@ -313,6 +361,12 @@ else
   [ -n "$PROJECT_NAME" ] || die "--project-name is required"
 fi
 
+apply_defaults
+CODEX_PLANNER_MODEL_LINE="# model inherits from the lead"
+CODEX_PLANNER_REASONING_LINE="# reasoning effort inherits from the lead"
+[ "$CODEX_PLANNER_MODEL" = inherit ] || CODEX_PLANNER_MODEL_LINE="model = \"$CODEX_PLANNER_MODEL\""
+[ "$CODEX_PLANNER_REASONING" = inherit ] || CODEX_PLANNER_REASONING_LINE="model_reasoning_effort = \"$CODEX_PLANNER_REASONING\""
+
 # Captured before any render() call touches the target, so it reflects
 # whether this is the very first scaffold of this project — used below to
 # decide whether to drop the first-run customization marker and write the
@@ -325,6 +379,10 @@ FRESH_SCAFFOLD=0
 SED_ARGS=(
   -e "s|__PROJECT_NAME__|$PROJECT_NAME|g"
   -e "s|__CLAUDE_MODEL__|$CLAUDE_MODEL|g"
+  -e "s|__CODEX_MODEL__|$CODEX_MODEL|g"
+  -e "s|__CODEX_REASONING__|$CODEX_REASONING|g"
+  -e "s|__CODEX_PLANNER_MODEL_LINE__|$CODEX_PLANNER_MODEL_LINE|g"
+  -e "s|__CODEX_PLANNER_REASONING_LINE__|$CODEX_PLANNER_REASONING_LINE|g"
   -e "s|__BUILDER_MODEL__|$BUILDER_MODEL|g"
   -e "s|__REVIEWER_MODEL__|$REVIEWER_MODEL|g"
   -e "s|__REVIEWER_FALLBACK_MODEL__|$REVIEWER_FALLBACK_MODEL|g"
@@ -379,12 +437,19 @@ if [ "$UPDATE" -eq 1 ]; then
   check_pair "$TEMPLATES/claude/commands/toolkit-update.md.tmpl" "$TARGET/.claude/commands/toolkit-update.md"
   check_pair "$TEMPLATES/codex/AGENTS.md.tmpl"              "$TARGET/AGENTS.md"
   check_pair "$TEMPLATES/codex/agents/planner.toml.tmpl"   "$TARGET/.codex/agents/planner.toml"
+  check_pair "$TEMPLATES/codex/hooks.json.tmpl" "$TARGET/.codex/hooks.json"
+  check_pair "$TEMPLATES/codex/hooks/session.py.tmpl" "$TARGET/scripts/codex-session.py"
+  check_pair "$TEMPLATES/scripts/codex-lead.sh.tmpl" "$TARGET/scripts/codex-lead.sh"
+  check_pair "$TEMPLATES/scripts/codex-preflight.sh.tmpl" "$TARGET/scripts/codex-preflight.sh"
+  check_pair "$TOOLKIT_ROOT/skills/delegate/SKILL.md" "$TARGET/.agents/skills/delegate/SKILL.md"
+  check_pair "$TOOLKIT_ROOT/skills/status-board/SKILL.md" "$TARGET/.agents/skills/status-board/SKILL.md"
+  check_pair "$TOOLKIT_ROOT/skills/karpathy-guidelines/SKILL.md" "$TARGET/.agents/skills/karpathy-guidelines/SKILL.md"
   check_pair "$TEMPLATES/codex/skills/feature/SKILL.md.tmpl" "$TARGET/.agents/skills/feature/SKILL.md"
   check_pair "$TEMPLATES/codex/skills/toolkit-update/SKILL.md.tmpl" "$TARGET/.agents/skills/toolkit-update/SKILL.md"
   check_pair "$TEMPLATES/opencode/agent/builder.md.tmpl"   "$TARGET/.opencode/agent/builder.md"
   check_pair "$TEMPLATES/opencode/agent/reviewer.md.tmpl"  "$TARGET/.opencode/agent/reviewer.md"
   check_pair "$TEMPLATES/opencode/agent/tester.md.tmpl"    "$TARGET/.opencode/agent/tester.md"
-  check_pair "$TEMPLATES/agents-state/TEMPLATE.md.tmpl"    "$TARGET/.agents/TEMPLATE.md"
+  check_pair "$TEMPLATES/agents-state/TEMPLATE.md.tmpl"    "$TARGET/.pipeline/TEMPLATE.md"
   check_pair "$TEMPLATES/scripts/oc.sh.tmpl"               "$TARGET/scripts/oc.sh"
   check_pair "$TEMPLATES/scripts/team.sh.tmpl"             "$TARGET/scripts/team.sh"
   check_pair "$TEMPLATES/scripts/team-completion.bash.tmpl" "$TARGET/scripts/team-completion.bash"
@@ -395,7 +460,7 @@ if [ "$UPDATE" -eq 1 ]; then
   CUR_SHA="$(git -C "$TOOLKIT_ROOT" rev-parse --short HEAD 2>/dev/null || echo unknown)"
   printf 'init.sh: toolkit is at %s; checking %s rendered file(s)%s\n' \
     "$CUR_SHA" "$TOTAL" "${ONLY:+ (filtered by --only '$ONLY'; full set is $RENDER_TOTAL)}"
-  if [ -f "$STAMP" ]; then
+  if [ -f "$STAMP_SOURCE" ]; then
     load_stamp_value toolkit_sha
     STAMPED_SHA="$REPLY"
     load_stamp_value scaffolded
@@ -440,12 +505,19 @@ render "$TEMPLATES/claude/commands/feature.md.tmpl"  "$TARGET/.claude/commands/f
 render "$TEMPLATES/claude/commands/toolkit-update.md.tmpl" "$TARGET/.claude/commands/toolkit-update.md"
 render "$TEMPLATES/codex/AGENTS.md.tmpl"              "$TARGET/AGENTS.md"
 render "$TEMPLATES/codex/agents/planner.toml.tmpl"   "$TARGET/.codex/agents/planner.toml"
+render "$TEMPLATES/codex/hooks.json.tmpl" "$TARGET/.codex/hooks.json"
+render "$TEMPLATES/codex/hooks/session.py.tmpl" "$TARGET/scripts/codex-session.py"
+render "$TEMPLATES/scripts/codex-lead.sh.tmpl" "$TARGET/scripts/codex-lead.sh"
+render "$TEMPLATES/scripts/codex-preflight.sh.tmpl" "$TARGET/scripts/codex-preflight.sh"
+render "$TOOLKIT_ROOT/skills/delegate/SKILL.md" "$TARGET/.agents/skills/delegate/SKILL.md"
+render "$TOOLKIT_ROOT/skills/status-board/SKILL.md" "$TARGET/.agents/skills/status-board/SKILL.md"
+render "$TOOLKIT_ROOT/skills/karpathy-guidelines/SKILL.md" "$TARGET/.agents/skills/karpathy-guidelines/SKILL.md"
 render "$TEMPLATES/codex/skills/feature/SKILL.md.tmpl" "$TARGET/.agents/skills/feature/SKILL.md"
 render "$TEMPLATES/codex/skills/toolkit-update/SKILL.md.tmpl" "$TARGET/.agents/skills/toolkit-update/SKILL.md"
 render "$TEMPLATES/opencode/agent/builder.md.tmpl"   "$TARGET/.opencode/agent/builder.md"
 render "$TEMPLATES/opencode/agent/reviewer.md.tmpl"  "$TARGET/.opencode/agent/reviewer.md"
 render "$TEMPLATES/opencode/agent/tester.md.tmpl"    "$TARGET/.opencode/agent/tester.md"
-render "$TEMPLATES/agents-state/TEMPLATE.md.tmpl"    "$TARGET/.agents/TEMPLATE.md"
+render "$TEMPLATES/agents-state/TEMPLATE.md.tmpl"    "$TARGET/.pipeline/TEMPLATE.md"
 render "$TEMPLATES/scripts/oc.sh.tmpl"               "$TARGET/scripts/oc.sh"
 render "$TEMPLATES/scripts/team.sh.tmpl"             "$TARGET/scripts/team.sh"
 render "$TEMPLATES/scripts/team-completion.bash.tmpl" "$TARGET/scripts/team-completion.bash"
@@ -455,11 +527,12 @@ render "$TEMPLATES/scripts/promote-findings.sh.tmpl" "$TARGET/scripts/promote-fi
 
 chmod +x "$TARGET/scripts/oc.sh" "$TARGET/scripts/team.sh" \
          "$TARGET/scripts/verify-state.sh" "$TARGET/scripts/verify-spec.sh" \
-         "$TARGET/scripts/promote-findings.sh" 2>/dev/null || true
+         "$TARGET/scripts/promote-findings.sh" "$TARGET/scripts/codex-lead.sh" \
+         "$TARGET/scripts/codex-preflight.sh" 2>/dev/null || true
 
-mkdir -p "$TARGET/.agents"
+mkdir -p "$TARGET/.pipeline"
 if [ "$FRESH_SCAFFOLD" -eq 1 ]; then
-  touch "$TARGET/.agents/.needs-customization"
+  touch "$TARGET/.pipeline/.needs-customization"
 fi
 
 # Provenance stamp — written exactly once, on a genuine fresh scaffold,
@@ -471,45 +544,50 @@ if [ "$FRESH_SCAFFOLD" -eq 1 ] && [ ! -f "$STAMP" ]; then
   printf 'init.sh: wrote %s\n' "$STAMP"
 fi
 
-# .agents/.oc-port and .agents/.claude-session-id.* are local machine state
+# .pipeline/.oc-port and .pipeline/.claude-session-id.* are local machine state
 # (which port scripts/team.sh last bound; which Claude conversation each
-# tmux session name is pinned to), never something to commit. Codex resumes
-# its most recent conversation scoped to the current project and needs no
-# toolkit-owned session-id file.
+# tmux session name is pinned to), never something to commit. Codex also
+# pins the exact lead id through its reviewed lifecycle hooks.
 # Append-if-missing when the target is a git repo — additive only, in
 # keeping with this script's never-overwrite stance; a project that ignores
 # these differently is left alone.
 if [ -d "$TARGET/.git" ]; then
   GITIGNORE="$TARGET/.gitignore"
-  if ! grep -qxF '.agents/.oc-port' "$GITIGNORE" 2>/dev/null; then
+  if ! grep -qxF '.pipeline/.oc-port' "$GITIGNORE" 2>/dev/null; then
     {
       printf '\n# local opencode server port written by scripts/team.sh\n'
-      printf '.agents/.oc-port\n'
+      printf '.pipeline/.oc-port\n'
     } >> "$GITIGNORE"
-    printf 'init.sh: added .agents/.oc-port to %s\n' "$GITIGNORE"
+    printf 'init.sh: added .pipeline/.oc-port to %s\n' "$GITIGNORE"
   fi
   # opencode v2's `serve` always requires a password (v1 had none); this is
   # the secret scripts/team.sh generates for it — never commit it.
-  if ! grep -qxF '.agents/.oc-password' "$GITIGNORE" 2>/dev/null; then
+  if ! grep -qxF '.pipeline/.oc-password' "$GITIGNORE" 2>/dev/null; then
     {
       printf '\n# local opencode server password written by scripts/team.sh\n'
-      printf '.agents/.oc-password\n'
+      printf '.pipeline/.oc-password\n'
     } >> "$GITIGNORE"
-    printf 'init.sh: added .agents/.oc-password to %s\n' "$GITIGNORE"
+    printf 'init.sh: added .pipeline/.oc-password to %s\n' "$GITIGNORE"
   fi
-  if ! grep -qxF '.agents/.claude-session-id.*' "$GITIGNORE" 2>/dev/null; then
+  if ! grep -qxF '.pipeline/.claude-session-id.*' "$GITIGNORE" 2>/dev/null; then
     {
       printf '\n# local Claude session ids pinned per tmux session name by scripts/team.sh\n'
-      printf '.agents/.claude-session-id.*\n'
+      printf '.pipeline/.claude-session-id.*\n'
     } >> "$GITIGNORE"
-    printf 'init.sh: added .agents/.claude-session-id.* to %s\n' "$GITIGNORE"
+    printf 'init.sh: added .pipeline/.claude-session-id.* to %s\n' "$GITIGNORE"
   fi
-  if ! grep -qxF '.agents/logs/' "$GITIGNORE" 2>/dev/null; then
+  for pattern in '.pipeline/.codex-session-id.*' '.pipeline/.codex-started.*' '.pipeline/.codex-lead-lock.*'; do
+    if ! grep -qxF "$pattern" "$GITIGNORE" 2>/dev/null; then
+      printf '\n%s\n' "$pattern" >> "$GITIGNORE"
+      printf 'init.sh: added %s to %s\n' "$pattern" "$GITIGNORE"
+    fi
+  done
+  if ! grep -qxF '.pipeline/logs/' "$GITIGNORE" 2>/dev/null; then
     {
       printf '\n# per-call pipeline telemetry written by scripts/oc.sh\n'
-      printf '.agents/logs/\n'
+      printf '.pipeline/logs/\n'
     } >> "$GITIGNORE"
-    printf 'init.sh: added .agents/logs/ to %s\n' "$GITIGNORE"
+    printf 'init.sh: added .pipeline/logs/ to %s\n' "$GITIGNORE"
   fi
 fi
 
@@ -530,11 +608,14 @@ Next steps:
      \$feature). scripts/team.sh makes the same Claude-first choice.
      Load the "delegate" skill when available; it is the context-discipline
      half of this.
-  4. Make sure $TARGET has real project-specific guidance. The generated
+  4. In Codex, review/trust the generated hooks with /hooks (existing hooks
+     are never overwritten). Run scripts/codex-preflight.sh from the lead
+     sandbox. Git/config writes may need runtime approval after pipeline consent.
+     Make sure $TARGET has real project-specific guidance. The generated
      AGENTS.md is Codex integration plus an explicitly unpopulated guidance
      section; fill it when no project CLAUDE.md already supplies constraints.
   5. On the first feature run, either lead will notice
-     .agents/.needs-customization and ask whether to fill the role files'
+     .pipeline/.needs-customization and ask whether to fill the role files'
      generic pitfalls/hard-rules sections with this project's real ones.
   6. Later, once the toolkit itself has moved on: bin/init.sh --update
      --target $TARGET shows a drift summary (exit 1 = something to merge),

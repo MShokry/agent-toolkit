@@ -15,7 +15,7 @@ programmatically from inside the loop.
 
 **Everything a delegate produces lands on disk, not in your context.** A
 subagent's chat reply is a receipt, not the record. The record is the file
-it wrote — a state file (`.agents/T-<id>.md`), a diff, a test report. Read
+it wrote — a state file (`.pipeline/T-<id>.md`), a diff, a test report. Read
 the file to verify placement and content; do not ask the delegate to repeat
 itself into the conversation, and do not re-paste what is already on disk.
 

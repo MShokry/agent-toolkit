@@ -42,6 +42,8 @@ LESSONS="skills/dev-team-generator/reference/lessons-learned.md"
 CODEX_AGENTS="templates/codex/AGENTS.md.tmpl"
 CODEX_FEATURE="templates/codex/skills/feature/SKILL.md.tmpl"
 CODEX_PLANNER="templates/codex/agents/planner.toml.tmpl"
+CODEX_UPDATE="templates/codex/skills/toolkit-update/SKILL.md.tmpl"
+UPDATE="templates/claude/commands/toolkit-update.md.tmpl"
 
 FAIL=0
 CHECKS=0
@@ -115,12 +117,26 @@ rule "Codex project instructions route feature work through the skill" \
   "$CODEX_AGENTS"
 
 rule "Codex planner discloses its non-enforced source-write boundary" \
-  'cannot enforce a narrower path-only write scope.*never modify source' \
+  'does not enforce a narrower path-only write scope.*never modify source' \
   "$CODEX_PLANNER"
 
 rule "Codex planner delegates to the canonical planner contract" \
   '\.claude/agents/planner\.md' \
   "$CODEX_PLANNER"
+
+rule "writable pipeline records are separate from skill discovery" \
+  '\.pipeline/' \
+  "$FEATURE" "$SYSTEM" "$FLOW" "$STATE" "$STATE_EX" "$PLANNER" "$CODEX_PLANNER" "$CODEX_AGENTS"
+rule "Codex planner corrections reuse the task thread" \
+  'Same task.*same planner thread' "$CODEX_FEATURE"
+rule "Codex separates workflow consent from runtime permissions" \
+  'runtime approval|runtime permission approval' "$CODEX_FEATURE" "$CODEX_AGENTS" "$CODEX_UPDATE"
+rule "Codex update permission gate covers TOML and hooks" \
+  'sandbox_mode.*approval policy/reviewer' "$UPDATE"
+rule "planner thread identity is recorded in both state contracts" \
+  'planner thread id' "$STATE" "$STATE_EX"
+rule "approval decisions survive restart" \
+  'Record approvals|record the approval' "$FEATURE" "$SYSTEM" "$FLOW"
 
 # --- the delivery contract --------------------------------------------------
 rule "acceptance-criteria ledger closes the contract" \

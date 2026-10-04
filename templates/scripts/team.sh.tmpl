@@ -5,7 +5,7 @@
 #
 #   pane 0 (left, big)    claude/codex    <- you talk to the lead here
 #   pane 1 (top right)    opencode serve  <- the server oc.sh attaches to
-#   pane 2 (mid right)    .agents/ activity tail
+#   pane 2 (mid right)    .pipeline/ activity tail
 #   pane 3 (bottom right) free pane
 #
 # Usage:
@@ -20,7 +20,7 @@
 #
 # Resuming is the default, not an opt-in. For Claude, pane 0 resumes the
 # lead's conversation pinned to this session name via a stored UUID (see
-# .agents/.claude-session-id.<session-name>) rather than `claude --continue`
+# .pipeline/.claude-session-id.<session-name>) rather than `claude --continue`
 # (which just means "the most recent conversation in this directory" — with
 # no notion of *which* tmux session started it, so a second team.sh session
 # name in the same repo, or even a one-off `claude` run there, could steal
@@ -32,26 +32,26 @@
 # scripts/team.sh again, the lead picks up its own thread — never someone
 # else's. Pass --fresh on the rare run where you actually want a clean
 # slate (this also mints a new pinned id, so future resumes follow it). Codex
-# has no create-with-id equivalent, so it resumes the latest conversation
-# scoped to this project and --fresh starts a new one.
+# captures its actual id with reviewed lifecycle hooks and resumes that exact
+# id through codex-lead.sh. Missing/failed pins require explicit recovery.
 #
 # Running two projects at once: opencode's server binds one port per
 # process, so two projects both defaulting to --port 4096 collide — the
 # second scripts/team.sh's `opencode serve` fails to bind. Give the second
 # project its own port: `scripts/team.sh --port 4097`. That port is written
-# to .agents/.oc-port in this repo, and scripts/oc.sh reads it automatically
+# to .pipeline/.oc-port in this repo, and scripts/oc.sh reads it automatically
 # (when OC_SERVER isn't set) — so oc.sh calls in this project just work
 # without you having to export OC_SERVER by hand every time. bin/init.sh
-# adds .agents/.oc-port to this project's .gitignore; it's local machine
+# adds .pipeline/.oc-port to this project's .gitignore; it's local machine
 # state, not something to commit.
 #
 # opencode v2's `serve` always auth-gates the API (v1 had none): unless
 # OPENCODE_PASSWORD/OPENCODE_SERVER_PASSWORD is set, it mints a random one
 # and only prints it once to the pane. This script generates one instead and
-# writes it to .agents/.oc-password (same gitignore treatment as
+# writes it to .pipeline/.oc-password (same gitignore treatment as
 # .oc-port) so scripts/oc.sh can read it on every call without you copying
 # it out of pane 1 by hand. The server is launched with a command that reads
-# the file at runtime (`$(cat .agents/.oc-password)`) rather than the literal
+# the file at runtime (`$(cat .pipeline/.oc-password)`) rather than the literal
 # secret, so the password itself never appears in the pane's typed-command
 # echo or tmux scrollback.
 #
@@ -144,9 +144,9 @@ gen_password() {
   fi
 }
 
-mkdir -p "$REPO_ROOT/.agents"
-printf '%s' "$PORT" > "$REPO_ROOT/.agents/.oc-port"
-PASSWORD_FILE="$REPO_ROOT/.agents/.oc-password"
+mkdir -p "$REPO_ROOT/.pipeline"
+printf '%s' "$PORT" > "$REPO_ROOT/.pipeline/.oc-port"
+PASSWORD_FILE="$REPO_ROOT/.pipeline/.oc-password"
 # umask before the write, not chmod after, so the file is never briefly
 # world/group-readable between creation and permission-fixing.
 ( umask 077; gen_password > "$PASSWORD_FILE" )
@@ -154,7 +154,7 @@ PASSWORD_FILE="$REPO_ROOT/.agents/.oc-password"
 if [ "$LEAD" = "claude" ]; then
   # Pin pane 0 to one Claude conversation per tmux session name (see usage
   # comment above for why --continue alone isn't enough).
-  SESSION_ID_FILE="$REPO_ROOT/.agents/.claude-session-id.$SESSION"
+  SESSION_ID_FILE="$REPO_ROOT/.pipeline/.claude-session-id.$SESSION"
   [ "$FRESH" -eq 1 ] && rm -f "$SESSION_ID_FILE"
 
   if [ -f "$SESSION_ID_FILE" ]; then
@@ -168,13 +168,9 @@ if [ "$LEAD" = "claude" ]; then
     LEAD_CMD="claude --session-id $CLAUDE_UUID"
   fi
 else
-  # Codex has no create-with-id equivalent. Its --last lookup is scoped to
-  # the current project, so resume that unless --fresh requested a new chat.
-  if [ "$FRESH" -eq 1 ]; then
-    LEAD_CMD="codex"
-  else
-    LEAD_CMD="codex resume --last || codex"
-  fi
+  [[ "$SESSION" =~ ^[a-zA-Z0-9_-]+$ ]] || { echo "team.sh: invalid Codex team name" >&2; exit 1; }
+  LEAD_CMD="bash scripts/codex-lead.sh $SESSION"
+  [ "$FRESH" -eq 0 ] || LEAD_CMD="$LEAD_CMD --fresh"
 fi
 
 tmux new-session -d -s "$SESSION" -c "$REPO_ROOT" -n team
@@ -185,10 +181,10 @@ tmux send-keys -t "$SESSION:team.1" \
 
 tmux split-window -v -t "$SESSION:team.1" -c "$REPO_ROOT"
 tmux send-keys -t "$SESSION:team.2" \
-  "echo '--- .agents/ activity ---'; ls -t .agents/ 2>/dev/null; \
+  "echo '--- .pipeline/ activity ---'; ls -t .pipeline/ 2>/dev/null; \
    command -v fswatch >/dev/null 2>&1 \
-     && fswatch -o .agents | while read -r _; do date '+%H:%M:%S'; ls -t .agents/ | head -5; done \
-     || while true; do sleep 5; ls -t .agents/ 2>/dev/null | head -5; done" C-m
+     && fswatch -o .pipeline | while read -r _; do date '+%H:%M:%S'; ls -t .pipeline/ | head -5; done \
+     || while true; do sleep 5; ls -t .pipeline/ 2>/dev/null | head -5; done" C-m
 
 tmux split-window -v -t "$SESSION:team.2" -c "$REPO_ROOT"
 

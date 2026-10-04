@@ -568,3 +568,35 @@ path before its project integration exists.
 - Test the exact bootstrap state by removing the newly introduced files from a
   stamped scaffold and confirming a flag-free run restores only those files,
   preserves the stamp, and does not retrigger first-run behavior.
+
+## 29. Keep writable handoff records outside protected instruction directories
+
+A writable workspace can still contain recursively protected instruction,
+configuration, or version-control directories. A syntactically valid worker
+sandbox setting does not prove it can write the handoff there. Keep task
+records, logs, and runtime markers separate from skill/config discovery, and
+probe the real OS sandbox before relying on a path. Move every role and checker
+together at a task boundary; retain a read-only legacy baseline and refuse
+bootstrap that would silently create two runtimes.
+
+## 30. Resume exact identities, and fail when identity cannot be recovered
+
+The latest conversation in a repository is not the conversation associated
+with a particular team. Capture the runtime's authoritative session identity,
+pin it per team, and resume that exact identity. Capture through a reviewed
+lifecycle event rather than guessing from timestamps or arbitrary transcript
+files. A failed resume or a skipped/untrusted capture must stop for recovery;
+starting fresh silently loses decisions. Keep a process lock to prevent two
+leads using one pin. Worker corrections reuse the task's recorded worker thread;
+record a replacement when that thread is no longer recoverable.
+
+## 31. Workflow consent and runtime permission approval are separate controls
+
+Approval of a spec or merge is a decision about the work. It does not remove
+filesystem, network, execution-rule, or hook-trust boundaries. Check actual
+state writes and authenticated worker-runtime access before dispatching. When
+blocked, report the precise operation and request the narrow runtime approval
+it needs, rather than disabling protection. Classify permission-sensitive
+updates by behavior across every tool's schema, including hooks and TOML, not
+only by the first tool's YAML field names. Configuration/skill presence is not
+proof of discovery; fake-CLI tests are not live model workflow evidence.

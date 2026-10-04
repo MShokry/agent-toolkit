@@ -1,0 +1,49 @@
+"""Capture only the team launcher's main Codex session, from hook JSON."""
+import json
+import os
+from pathlib import Path
+import re
+import sys
+
+
+def main():
+    team = os.environ.get("TEAM_CODEX_SESSION", "")
+    if not team:
+        return  # Ordinary Codex conversations have no toolkit-owned pin.
+    if not re.fullmatch(r"[a-zA-Z0-9_-]+", team):
+        raise ValueError("invalid team name")
+    event = json.load(sys.stdin)
+    if not isinstance(event, dict):
+        raise ValueError("hook input must be an object")
+    if event.get("hook_event_name") not in ("SessionStart", "UserPromptSubmit"):
+        return
+    root = Path(__file__).resolve().parent.parent
+    cwd = Path(event["cwd"]).resolve()
+    if cwd != root and root not in cwd.parents:
+        raise ValueError("hook cwd is outside this repository")
+    session = event["session_id"]
+    if not isinstance(session, str) or not re.fullmatch(r"[a-zA-Z0-9_-]+", session):
+        raise ValueError("invalid Codex session id")
+    directory = root / ".pipeline"
+    if directory.is_symlink():
+        raise ValueError("runtime directory must stay inside the repository")
+    directory.mkdir(exist_ok=True)
+    pin = directory / f".codex-session-id.{team}"
+    if pin.is_symlink():
+        raise ValueError("session pin must not be a symlink")
+    # Exclusive creation avoids concurrent hooks replacing another thread's id.
+    try:
+        with pin.open("x") as output:
+            output.write(session + "\n")
+    except FileExistsError:
+        if pin.read_text().strip() != session:
+            raise ValueError("session differs from the pinned lead; use a different team name")
+    print("Team lead session captured. Use $feature for feature work; runtime records live in .pipeline/.")
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except (KeyError, TypeError, ValueError, OSError) as error:
+        print(f"codex-session: {error}", file=sys.stderr)
+        sys.exit(2)

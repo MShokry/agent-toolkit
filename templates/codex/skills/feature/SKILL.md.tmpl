@@ -13,18 +13,47 @@ Claude frontmatter and `$ARGUMENTS` placeholder are syntax, not extra rules.
 Apply these Codex adaptations:
 
 - The feature request is the user's request that invoked this skill.
+- Run `scripts/codex-preflight.sh` from your current sandbox before canonical
+  Preflight. Verify that Codex discovers the project `planner` agent and all
+  three supporting skills; a file-presence check cannot establish discovery.
+  On failure, report the exact blocked operation. Request narrowly scoped
+  runtime approval when needed; never switch to full access or disable approvals.
+  Its authenticated API check replaces canonical Preflight's step 3 server
+  probe, so `OC_SERVER` overrides and password-gated servers are handled once.
 - When the canonical flow says to dispatch `planner`, spawn the project-scoped
   Codex `planner` subagent. Wait for it and use its short reply as a receipt;
-  its full output belongs in `.agents/T-<id>.md`.
+  its full output belongs in `.pipeline/T-<id>.md`.
+- Record **Codex planner thread id** in the task file after the first dispatch.
+  Same task -> same planner thread: send corrections, verify-spec failures, and
+  the one permitted spec bounce to that thread. Wait for completion before any
+  follow-up; after interruption inspect its status and the state file first.
+  Never start a second writer while the previous planner is active. If the
+  thread is gone, record that fact and start a replacement using the task file
+  and written decisions. New task -> new thread; release the thread when the
+  task ends, keeping the recorded id for audit. Respect the model/reasoning
+  settings in the planner file; otherwise inherit the lead's settings.
 - Use OpenCode `builder` as the implementer. The Claude `senior-dev` option is
   unavailable in a Codex-led fallback run. All review-independence rules still
   apply.
-- Codex can invoke repository skills directly. Load `delegate`,
-  `karpathy-guidelines`, and `status-board` when they are available and the
-  canonical flow calls for them.
+- Load the installed `delegate`, `karpathy-guidelines`, and `status-board`
+  repository skills when the canonical flow calls for them.
 - Do not replace the state-file handoff with Codex subagent chat context. Read
   `Latest handoff` between steps and use the structural scripts at the exact
   gates named by the canonical flow.
+- OpenCode auto mode applies only to OpenCode dispatch. It never authorizes
+  a Codex permission change. Spec approval and merge consent are workflow
+  gates; runtime approval for sandbox/network/Git access is a separate control.
+  At the approved merge step, request runtime approval for the precise Git
+  command if needed. Configuration updates under `.codex/` or `.agents/skills/`
+  may also need runtime approval; never move those files to evade protection.
+- At a restart or compaction, recover the active task from `.pipeline/`, read
+  its status, counters, approvals in the Decisions log, and Latest handoff,
+  and verify existing worker activity before dispatching. Do not repeat an
+  approval already recorded, and do not infer approval from silence.
+- On a quota failure, preserve the task and thread ids and report the failing
+  step. Retry through an available scheduled wakeup only; if this runtime
+  cannot schedule one, state that limitation and leave a resumable handoff.
+  Never claim a retry has been scheduled when no mechanism exists.
 
 If the Codex planner cannot be spawned, stop and tell the user; do not silently
 plan and implement in the lead thread.

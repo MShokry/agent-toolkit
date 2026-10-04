@@ -16,6 +16,9 @@ Ask these up front rather than guessing — they shape every generated file:
 
 1. **Project name** — used in a few descriptions and the tmux session name.
 2. **Claude model** for planner/senior-dev (default `sonnet`).
+   If using Codex, offer lead/planner model and reasoning settings separately;
+   `--codex-model`, `--codex-reasoning`, `--codex-planner-model`, and
+   `--codex-planner-reasoning` default to `inherit`, preserving local settings.
 3. **Cross-vendor provider and models.** Run `opencode models` in the
    target project and show the user the list rather than assuming what's
    configured. You need three: builder, reviewer, and a reviewer-fallback
@@ -47,14 +50,14 @@ Ask these up front rather than guessing — they shape every generated file:
 It writes `.claude/agents/`, `.opencode/agent/`, `.claude/commands/{feature.md,
 toolkit-update.md}`, Codex project instructions/skills/planner under `AGENTS.md`,
 `.agents/skills/`, and `.codex/agents/`,
-`.agents/{TEMPLATE.md,.toolkit-version}`, and
+`.pipeline/{TEMPLATE.md,.toolkit-version}`, and
 `scripts/{oc.sh,team.sh,verify-state.sh,verify-spec.sh,promote-findings.sh}`
 into the target. It does **not** overwrite a file that already exists — it
 prints what it skipped so you can diff and merge by hand.
 
 When the toolkit itself has moved on since this project was scaffolded,
 run the same command with `--update` instead (flags default from
-`.agents/.toolkit-version`, so `--update --target .` is usually enough).
+`.pipeline/.toolkit-version`, so `--update --target .` is usually enough).
 It writes nothing — it prints a drift summary and exits 1 when files
 differ; add `--diff`/`--only <path>` for hunks. Triage against the
 toolkit's impact-tagged `CHANGELOG.md`, merge deliberately, then refresh
@@ -87,7 +90,7 @@ a different tool:
    research-then-build step live for this project regardless of whether
    that offer is taken.
 
-Codex is already supported as a fallback lead. For a different AI to be the
+Codex is already supported as a lead. For a different AI to be the
 lead itself — not a worker role dispatched by an existing lead — point the
 user at `SYSTEM.md` at the toolkit root.
 
@@ -105,6 +108,9 @@ user at `SYSTEM.md` at the toolkit root.
    `$feature`. `scripts/team.sh` chooses that fallback automatically. Tell the
    user to load the `delegate` skill at the start of the lead's own session —
    it's the context-discipline half of this, not the workflow half.
+   With Codex, review/trust the generated lifecycle hooks with `/hooks`, merge
+   them if hooks already existed, and run `scripts/codex-preflight.sh` from the
+   lead sandbox. Missing pins and failed resumes require explicit recovery.
 4. The generated `.claude/commands/feature.md` and agent files reference
    "this project's own guidance file" for constraints — make sure the
    project actually has a `CLAUDE.md`/`AGENTS.md` before relying on that,

@@ -21,13 +21,13 @@
 
 set -eu
 
-# Anchor to the repo root like oc.sh/team.sh do, so `.agents/` resolves the
+# Anchor to the repo root like oc.sh/team.sh do, so `.pipeline/` resolves the
 # same way no matter where the lead runs this from.
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_ROOT"
 
 ID="${1:?usage: verify-state.sh <task-id, e.g. T-01>}"
-FILE=".agents/${ID}.md"
+FILE=".pipeline/${ID}.md"
 
 [ -f "$FILE" ] || { echo "verify-state.sh: no such file: $FILE" >&2; exit 1; }
 

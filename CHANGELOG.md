@@ -10,6 +10,33 @@ update workflow. Version bumps mean: **MAJOR** = state-file contract /
 role authority / script interface changed; **MINOR** = new template,
 script, flag, or role rule; **PATCH** = prose and docs.
 
+## Unreleased
+
+- `[contract]` Writable task records, outputs, server credentials, session pins,
+  and logs move from `.agents/` to `.pipeline/` for both leads. Codex protects
+  `.agents/` under its default workspace policy; skills remain at
+  `.agents/skills/`. Migration: `migrations/02-pipeline-directory.md`.
+  Read-only update triage accepts legacy provenance stamps; a plain bootstrap
+  refuses an unmigrated runtime rather than silently creating another one.
+- `[process]` Codex leads capture exact session IDs through reviewed lifecycle
+  hooks, pin them per team name, and resume through `codex-lead.sh`. Failed
+  resumes, missing capture, and concurrent launches stop explicitly. The task
+  template gains an optional Codex planner thread ID for corrections/recovery.
+- `[process]` Added Codex lead/planner model and reasoning flags, defaulting to
+  inheritance and preserved through the provenance stamp. Supporting delegate,
+  status-board, and karpathy-guidelines skills are now installed deterministically.
+- `[safety]` Codex preflight probes writable state and authenticated OpenCode
+  access from the active sandbox. The adapter distinguishes workflow consent
+  from runtime permission approval and preserves task/thread state on failure.
+  Update consent explicitly covers Codex permissions, execution rules, and hooks.
+- `[process]` Added no-model behavioral tests for launcher/hook/preflight and
+  migration failures, plus an opt-in real Codex sandbox test. CI runs the
+  behavioral suite. Live model workflow verification remains a documented
+  manual check; these tests do not claim to establish model-level parity.
+- `[docs]` Added `docs/CODEX.md`, migration/recovery guidance, and generalized
+  lessons about protected instruction directories, exact-session identity,
+  lifecycle trust, and separate workflow/runtime approvals.
+
 ## v0.9.0 — 2026-09-27
 
 - `[safety]` Synced this toolkit's own opencode v2 migration into the

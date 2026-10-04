@@ -13,10 +13,12 @@ jobs:
         run: bash test/smoke.sh
       - name: Cross-file invariants
         run: bash test/invariants.sh
+      - name: Codex adapter behavior (no model calls)
+        run: bash test/codex.sh
       - name: ShellCheck
         run: |
           shellcheck --version >/dev/null 2>&1 || { echo "shellcheck not installed; skipping"; exit 0; }
-          shellcheck bin/init.sh bin/release.sh test/smoke.sh test/invariants.sh
+          shellcheck bin/init.sh bin/release.sh test/smoke.sh test/invariants.sh test/codex.sh test/codex-sandbox.sh
           for f in templates/scripts/*.tmpl; do
             shellcheck --shell=bash "$f"
           done

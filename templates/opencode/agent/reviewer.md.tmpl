@@ -9,11 +9,11 @@ temperature: 0.1
 #
 # You can instead let the reviewer write its own verdict directly by
 # scoping edit/write to the state-file directory, e.g.:
-#   edit:  { "*": deny, ".agents/**": allow }
-#   write: { "*": deny, ".agents/**": allow }
+#   edit:  { "*": deny, ".pipeline/**": allow }
+#   write: { "*": deny, ".pipeline/**": allow }
 # Do NOT do this on faith. Verify it live first: dispatch this agent once and
 # have it try to edit a source file (must be refused) and edit a scratch file
-# under .agents/ (must succeed). A permission block that looks right in YAML
+# under .pipeline/ (must succeed). A permission block that looks right in YAML
 # is not the same as a permission block that is actually enforced by the
 # runtime — confirm before you rely on "the reviewer cannot touch source" as
 # a guarantee.
@@ -80,12 +80,12 @@ from the repository, record it as a finding at severity `info` and move on.
 
 ## Inputs
 
-- `.agents/T-<id>.md` — the spec. Acceptance criteria are the contract.
+- `.pipeline/T-<id>.md` — the spec. Acceptance criteria are the contract.
   Read its *Decisions log* too, not only the criteria: that is where the
   implementer wrote **why** it made each call, and where it answers findings
   from your previous pass. Reviewing a diff without reading the author's
   stated reasoning is how a review turns into a rewrite request.
-- `.agents/T-<id>.diff` — what to review.
+- `.pipeline/T-<id>.diff` — what to review.
 - This project's own guidance file (`CLAUDE.md` / `AGENTS.md` / README) and
   any architecture/security docs it points to.
 
@@ -146,7 +146,7 @@ pass code you believe is broken: a real blocker is a real blocker, and
 ## Output format
 
 If your permission block allows writing to the state-file directory, append
-your verdict directly into `.agents/T-<id>.md` under the existing *Review
+your verdict directly into `.pipeline/T-<id>.md` under the existing *Review
 verdicts* heading, replacing the placeholder for the pass you just ran — do
 not create a new heading elsewhere, and do not touch any other section. That
 entry is the full record:
@@ -190,10 +190,10 @@ to edit `docs/` yourself, and typically have no permission to; a script
 copy mechanically once the lead runs it. Most reviews have nothing to add
 here — an empty section is the expected common case, not a gap to fill.
 
-If your permission block does not allow writing `.agents/**`, mention the
+If your permission block does not allow writing `.pipeline/**`, mention the
 finding in your reply instead so the lead can add it.
 
-Before you stop, if your permission block allows writing `.agents/**`, set
+Before you stop, if your permission block allows writing `.pipeline/**`, set
 **Latest handoff** at the top of the state file, e.g. `reviewer → PASS, 0
 findings → next: tester` or `reviewer → CHANGES_REQUESTED, 2 findings →
 next: implementer (loop 1/2)`.

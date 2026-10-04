@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# Start/resume one Codex lead per team name. SessionStart/UserPromptSubmit
+# hooks capture its actual id; never infer it from the latest conversation.
+set -eu
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$REPO_ROOT"
+SESSION="${1:?usage: codex-lead.sh <team-name> [--fresh]}"
+FRESH="${2:-}"
+die() { printf 'codex-lead.sh: %s\n' "$*" >&2; exit 1; }
+[[ "$SESSION" =~ ^[a-zA-Z0-9_-]+$ ]] || die "invalid team name"
+[ -z "$FRESH" ] || [ "$FRESH" = --fresh ] || die "expected --fresh"
+[ "$#" -le 2 ] || die "too many arguments"
+command -v codex >/dev/null 2>&1 || die "codex not installed"
+command -v python3 >/dev/null 2>&1 || die "python3 is required for session hooks"
+[ ! -L .pipeline ] || die "runtime directory must stay inside the repository"
+mkdir -p .pipeline
+PIN=".pipeline/.codex-session-id.$SESSION"
+STARTED=".pipeline/.codex-started.$SESSION"
+LOCK=".pipeline/.codex-lead-lock.$SESSION"
+mkdir "$LOCK" 2>/dev/null || die "lead already running (or stale lock: $LOCK); check the process before removing the lock"
+trap 'rmdir "$LOCK"' EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+if [ "$FRESH" = --fresh ]; then
+  rm -f "$PIN" "$STARTED"
+fi
+ARGS=(--no-daemon)
+MODEL="__CODEX_MODEL__"
+REASONING="__CODEX_REASONING__"
+[ "$MODEL" = inherit ] || ARGS+=(--model "$MODEL")
+[ "$REASONING" = inherit ] || ARGS+=(-c "model_reasoning_effort=\"$REASONING\"")
+export TEAM_CODEX_SESSION="$SESSION"
+export TEAM_CODEX_ROOT="$REPO_ROOT"
+[ ! -L "$PIN" ] || die "session pin must not be a symlink"
+if [ -f "$PIN" ]; then
+  ID="$(cat "$PIN")"
+  [[ "$ID" =~ ^[a-zA-Z0-9_-]+$ ]] || die "invalid stored session id: $PIN"
+  # A failed resume leaves the pin intact. Explicit --fresh is the only reset.
+  codex resume "${ARGS[@]}" "$ID"
+else
+  [ ! -f "$STARTED" ] || die "previous launch has no captured id; recover it from /status and write $PIN, or explicitly use --fresh"
+  touch "$STARTED"
+  printf 'codex-lead.sh: review/trust the session hooks with /hooks; capture must succeed before relying on resume.\n' >&2
+  codex "${ARGS[@]}"
+  [ -f "$PIN" ] || die "session id not captured; trust the hooks and submit a prompt, or recover the id from /status before restarting"
+fi

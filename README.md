@@ -3,7 +3,7 @@
 A reusable version of the planner → implement → review → test multi-agent
 pipeline: Claude or Codex as the lead, Claude/Codex planning, OpenCode (any
 vendor) for cross-vendor implement/review/test, a state file
-(`.agents/T-<id>.md`) as the single handoff surface between roles, and a
+(`.pipeline/T-<id>.md`) as the single handoff surface between roles, and a
 `delegate` skill so the lead's own context stays small across a long run. 
 
 It was distilled from real multi-agent pipeline runs and hardened there
@@ -11,10 +11,16 @@ over time, so the same setup — permissions, session-reuse policy,
 cross-vendor independence rules, the state-file contract — doesn't get
 re-invented and re-debugged from scratch in every new repo.
 
-Codex is a supported fallback lead: the scaffold includes project instructions,
+Codex is a supported lead: the scaffold includes project instructions,
 a `feature` skill, a `toolkit-update` skill, and a Codex planner. For any other
 lead tool, read [`SYSTEM.md`](SYSTEM.md) — one tool-agnostic page meant to be
 handed to an AI ("recreate this system, with yourself as the lead").
+
+Both leads store writable task records and runtime files in `.pipeline/`;
+Codex skills remain in `.agents/skills/`. Existing projects must apply
+[the directory migration](migrations/02-pipeline-directory.md) at a task boundary.
+See [Codex lead operation](docs/CODEX.md) for session pins, hook trust,
+permissions, recovery, and live verification.
 
 ## How it flows
 
@@ -40,7 +46,7 @@ flowchart TD
 
 
 Every arrow into or out of a role is really a write to, or a read from,
-`.agents/T-<id>.md` — see below.
+`.pipeline/T-<id>.md` — see below.
 
 ### Context stays small, by construction
 
@@ -48,7 +54,7 @@ Every arrow into or out of a role is really a write to, or a read from,
 sequenceDiagram
     participant Lead
     participant Role as Role (any)
-    participant File as .agents/T-id.md
+    participant File as .pipeline/T-id.md
 
     Lead->>Role: dispatch (task id, short prompt)
     Role->>File: full detail - diff, Decisions log,<br/>verdict, test results
@@ -71,20 +77,20 @@ and test log it dispatched.
 | Role                                   | Reads                  | Writes                                      | Notes                                                   |
 | -------------------------------------- | ---------------------- | ------------------------------------------- | ------------------------------------------------------- |
 | Lead                                   | state file             | the acceptance-criteria ledger, Status      | the only role that records whether a criterion was met  |
-| Planner                                | whole repo             | `.agents/T-<id>.md` only                    | never touches source; owns criteria *text*, not outcome |
-| Implementer (`senior-dev` / `builder`) | whole repo             | source + `.agents/T-<id>.diff` + state file | the only roles that edit source                         |
+| Planner                                | whole repo             | `.pipeline/T-<id>.md` only                    | never touches source; owns criteria *text*, not outcome |
+| Implementer (`senior-dev` / `builder`) | whole repo             | source + `.pipeline/T-<id>.diff` + state file | the only roles that edit source                         |
 | Reviewer                               | whole repo (read-only) | state file only, or nothing — see below     | blanket `edit`/`write: deny` by default in this toolkit |
 | Tester                                 | whole repo (read-only) | `<test-dir>/**` + state file only           | never fixes, only reports                               |
 
 
 The reviewer template ships **safer than it has to be** — blanket deny, not
-scoped-allow on `.agents/**` — because a permission block that reads
+scoped-allow on `.pipeline/**` — because a permission block that reads
 correctly in YAML isn't proof it's enforced by the runtime. Loosen it only
 after verifying that live against your own OpenCode server (see "Design
 decisions" below).
 
 Codex's planner uses a `workspace-write` sandbox because it must create the
-state file. Codex cannot scope that sandbox to `.agents/**` alone, so its
+state file. That sandbox does not scope writes to `.pipeline/**` alone, so its
 source-read-only boundary is explicit role instruction rather than filesystem
 enforcement. This limitation is stated in the generated planner file rather
 than hidden.
@@ -109,11 +115,12 @@ templates/             every generated file, with __PLACEHOLDER__ tokens
   claude/agents/        planner.md.tmpl, senior-dev.md.tmpl
   claude/commands/      feature.md.tmpl — the /feature pipeline command;
                           toolkit-update.md.tmpl — the /toolkit-update merge command
-  codex/                AGENTS.md.tmpl, a project-scoped planner agent, and
-                          feature/toolkit-update skills for a Codex lead
+  codex/                AGENTS.md.tmpl, a project-scoped planner agent, reviewed
+                          lifecycle hooks, and feature/toolkit-update skills
   opencode/agent/        builder.md.tmpl, reviewer.md.tmpl, tester.md.tmpl
   agents-state/          TEMPLATE.md.tmpl — the T-<id> state file shape
-  scripts/                oc.sh.tmpl (OpenCode CLI wrapper), team.sh.tmpl (tmux
+  scripts/                oc.sh.tmpl (OpenCode CLI wrapper), Codex launcher/preflight,
+                          team.sh.tmpl (tmux
                           layout — resumes the lead by default, --port for
                           running a second project at once, see docs/TEAM.md),
                           team-completion.bash.tmpl (optional shell completion
@@ -213,16 +220,21 @@ templates into a temp file and compares each one against what's already in
 `--target`, printing a drift **summary** first (`exit 0` = clean, `exit 1`
 = something to merge; full hunks behind `--diff`, one file via
 `--only <path>`). On any scaffold after v0.3.0, flags default from
-`.agents/.toolkit-version` — the provenance stamp written at init — so
+`.pipeline/.toolkit-version` — the provenance stamp written at init — so
 usually just `--update --target .` is needed. Merge deliberately (or run
 the generated `/toolkit-update` command and let your lead reconcile,
 triaging against the impact-tagged `CHANGELOG.md`), then refresh the
 baseline: `bin/init.sh --refresh-stamp --target .`. Full workflow:
 [`docs/UPGRADING.md`](docs/UPGRADING.md).
 
+For existing scaffolds whose runtime is still under `.agents/`, triage reads
+the legacy stamp there. Apply [migration 02](migrations/02-pipeline-directory.md)
+before the plain missing-file bootstrap; it otherwise refuses to split the
+runtime between two directories.
+
 ### Updating a project scaffolded before v0.3.0
 
-Older scaffolds have no `.agents/.toolkit-version` stamp. One-time
+These scaffolds have no provenance stamp at either location. One-time
 migration — in the *target* project:
 
 `/toolkit-update` doesn't exist in the target yet at this point (step 3
@@ -241,8 +253,10 @@ against the *toolkit checkout*, not the target's own commands:
    selection past the standard single-model-plus-fallback shape will need
    `--reviewer-fallback-model` by hand). This prints the drift summary and
    **doesn't write anything yet**. Before merging, check
-   `.agents/T-*.md` for any `Status:` that isn't `done` — merge at a task
+   `.pipeline/T-*.md` and legacy `.agents/T-*.md` for any `Status:` that isn't `done` — merge at a task
    boundary, not mid-flight.
+   Apply migration 02 before the next step if runtime files still live under
+   `.agents/`; keep the recovered flags for the first bootstrap.
 3. Run the **same command again with the same flags, minus `--update`**
    (i.e. plain `bin/init.sh --target <path> --project-name ... [...]`) —
    skip-if-exists makes this safe. This is what actually adds the files
@@ -251,8 +265,8 @@ against the *toolkit checkout*, not the target's own commands:
    against an already-current project is — you still need the values from
    step 2, because this run doesn't attempt recovery itself.
 4. Merge in `CHANGELOG.md` impact order. Coming from ≤ v0.2.x also apply
-   `migrations/01-delivery-contract.md` to `.agents/TEMPLATE.md` and any
-   in-flight `.agents/T-*.md` (bare `blocked` still validates; nothing
+   `migrations/01-delivery-contract.md` to `.pipeline/TEMPLATE.md` and any
+   in-flight `.pipeline/T-*.md` (bare `blocked` still validates; nothing
    breaks if you skip it — you just don't get the new guarantees).
 5. Create the baseline: `bin/init.sh --refresh-stamp --target <path>`
    (same flags again).
@@ -270,13 +284,16 @@ existing files.
 A Codex-only user on an older scaffold does not have `$toolkit-update` yet, so
 that skill cannot bootstrap itself. After pulling the toolkit checkout, run:
 
+Apply migration 02 between the two commands when `.agents/` contains the old
+runtime. Existing hooks and project instructions require a deliberate merge.
+
 ```bash
 <toolkit-checkout>/bin/init.sh --update --target <project>  # preview only
 <toolkit-checkout>/bin/init.sh --target <project>           # add missing files only
 ```
 
 For a stamped project the second command loads all original values from
-`.agents/.toolkit-version`. It installs the Codex skill and planner without
+`.pipeline/.toolkit-version`. It installs the Codex skill and planner without
 touching customized files; then open Codex and run `$toolkit-update` to
 reconcile any reported changes to files that already existed. For a pre-v0.3.0
 project with no stamp, follow the flag-recovery procedure above and pass those
@@ -294,7 +311,8 @@ open Claude Code in the target repo and run:
 That runs the generated `.claude/commands/feature.md` — the lead reads it,
 dispatches `planner` first, and walks the flow in "How it flows" above.
 
-If Claude Code is not installed, open Codex in the target repo and invoke:
+To use Codex, start `scripts/team.sh --lead codex` (or open Codex directly),
+review/trust the session capture hooks with `/hooks`, then invoke:
 
 ```
 $feature <describe the feature or bug you want fixed>
@@ -306,6 +324,9 @@ Codex discovers the generated root `AGENTS.md`, the repository-scoped skill at
 but uses the Codex planner and OpenCode builder instead of Claude roles.
 `scripts/team.sh` makes this choice automatically: Claude when installed,
 otherwise Codex. Override it with `--lead claude` or `--lead codex`.
+The supporting skills are installed under `.agents/skills/`. The generated
+Codex preflight checks writes and authenticated API access from the active
+sandbox; see [the Codex guide](docs/CODEX.md) for required capability checks.
 Two things need to be true first:
 
 - `opencode serve` must be reachable — `scripts/team.sh` starts it in a
@@ -330,7 +351,7 @@ not just correct-looking YAML.
 The first `/feature` run on a freshly-scaffolded project also asks, once,
 whether to fill the generated role files' generic "what this codebase will
 punish you for" sections with real specifics from your actual codebase —
-gated by a `.agents/.needs-customization` marker that `init.sh` drops only
+gated by a `.pipeline/.needs-customization` marker that `init.sh` drops only
 on a genuinely fresh scaffold, deleted the moment it's asked either way.
 See `feature.md.tmpl`'s Preflight step 1; the Codex feature skill executes the
 same check.
@@ -453,8 +474,8 @@ mechanism. Full behavior and guardrails: `skills/self-improvement/ SKILL.md`.
 1. Copy the file in:
   `cp /path/to/agent-toolkit/skills/self-improvement/SKILL.md .claude/skills/self-improvement/SKILL.md`
    (or wherever your tool discovers skills from — same as `delegate` and
-   `karpathy-guidelines`, this toolkit's skills aren't rendered by
-   `init.sh`, they're copied in on request).
+   `karpathy-guidelines`). The three supporting skills are scaffolded under
+   `.agents/skills/`; `self-improvement` remains opt-in and is not installed.
 2. Add one line to that project's own `.claude/commands/feature.md`, next
   to the existing `delegate`/`karpathy-guidelines` line: `If the  "self-improvement" skill is available, load it now.`
 3. Read the guardrails in the skill file once before relying on it — it's
@@ -492,6 +513,9 @@ project on its own.
 
 ## Known gaps
 
+- Codex launcher/hooks/preflight have no-model behavioral coverage, and an
+  opt-in real sandbox check. Custom planner discovery and the full model-driven
+  workflow remain manual checks in [docs/CODEX.md](docs/CODEX.md).
 - `test/smoke.sh` covers the scaffolder's core guarantees (placeholder
   substitution, never-clobber on re-run, `--update` diffing, the
   findings-path traversal guard, the loop-cap and budget checks, the
@@ -504,7 +528,7 @@ project on its own.
   enforcement in particular still needs the manual verification described
   under "Design decisions", and remains the single biggest unverified
   assumption in this toolkit.**
-- The checks are structural by design. They can tell you a spec is
+- The spec/state checks are structural by design. They can tell you a spec is
   unfinished, a budget is blown, or a criterion was closed without
   evidence; they cannot tell you the spec is *wrong* or the evidence is
   *good*. That judgement is still the reviewer's, the tester's, and yours

@@ -52,7 +52,7 @@ ok "no unsubstituted __PLACEHOLDER__ tokens"
 wrote="$(grep -c '^init.sh: wrote ' "$TMP/run1.log" || true)"
 # Exclude this log and the customization marker; the provenance stamp is
 # counted separately since it is written once, not rendered per-template.
-stamp_written=0; [ -f "$TMP/.agents/.toolkit-version" ] && stamp_written=1
+stamp_written=0; [ -f "$TMP/.pipeline/.toolkit-version" ] && stamp_written=1
 files="$(find "$TMP" -type f -not -name run1.log \
   -not -name .needs-customization -not -name .toolkit-version | wc -l | tr -d ' ')"
 [ "$wrote" = "$((files + stamp_written))" ] || fail "claimed $wrote writes but $((files + stamp_written)) files exist"
@@ -77,10 +77,10 @@ grep -q 'never modify source' "$TMP/.codex/agents/planner.toml" \
   || fail "Codex planner does not state its source-write boundary"
 ok "Codex lead instructions, skills, and planner were scaffolded"
 
-[ -f "$TMP/.agents/.needs-customization" ] || fail ".needs-customization marker missing on fresh scaffold"
+[ -f "$TMP/.pipeline/.needs-customization" ] || fail ".needs-customization marker missing on fresh scaffold"
 ok "first-run customization marker dropped"
 
-STAMP="$TMP/.agents/.toolkit-version"
+STAMP="$TMP/.pipeline/.toolkit-version"
 [ -f "$STAMP" ] || fail "provenance stamp missing on fresh scaffold"
 grep -q '^toolkit_sha:' "$STAMP" || fail "stamp lacks toolkit_sha"
 grep -q '^builder_model: a/b' "$STAMP" || fail "stamp does not record the init flags"
@@ -90,7 +90,7 @@ ok "fresh scaffold wrote the provenance stamp with flags + toolkit SHA"
 # --- 2. second run skips, never clobbers ------------------------------------
 cp "$TMP/.claude/commands/feature.md" "$TMP/feature.sentinel"
 printf 'LOCAL CUSTOMIZATION\n' >> "$TMP/.claude/commands/feature.md"
-rm -f "$TMP/.agents/.needs-customization"
+rm -f "$TMP/.pipeline/.needs-customization"
 bash "$ROOT/bin/init.sh" --target "$TMP" > "$TMP/run2.log" 2>&1 \
   || fail "second init.sh run failed"
 skips="$(grep -c '^init.sh: skip (exists)' "$TMP/run2.log" || true)"
@@ -98,8 +98,8 @@ skips="$(grep -c '^init.sh: skip (exists)' "$TMP/run2.log" || true)"
 ! grep -q '^init.sh: wrote ' "$TMP/run2.log" || fail "second run wrote something"
 grep -q 'LOCAL CUSTOMIZATION' "$TMP/.claude/commands/feature.md" \
   || fail "second run clobbered a customized file"
-[ ! -f "$TMP/.agents/.needs-customization" ] || fail "marker recreated on non-fresh run"
-cmp -s "$TMP/stamp.bak" "$TMP/.agents/.toolkit-version" 2>/dev/null \
+[ ! -f "$TMP/.pipeline/.needs-customization" ] || fail "marker recreated on non-fresh run"
+cmp -s "$TMP/stamp.bak" "$TMP/.pipeline/.toolkit-version" 2>/dev/null \
   || fail "second run touched the provenance stamp"
 ok "re-run skipped all $files files, preserved local edits, marker + stamp untouched"
 # restore the pristine render so the --update checks below start clean
@@ -116,9 +116,9 @@ bash "$ROOT/bin/init.sh" --target "$TMP" > "$TMP/bootstrap.log" 2>&1 \
 bootstrap_writes="$(grep -c '^init.sh: wrote ' "$TMP/bootstrap.log" || true)"
 [ "$bootstrap_writes" = "4" ] \
   || fail "missing-file bootstrap wrote $bootstrap_writes files, expected 4"
-grep -q '^builder_model: a/b' "$TMP/.agents/.toolkit-version" \
+grep -q '^builder_model: a/b' "$TMP/.pipeline/.toolkit-version" \
   || fail "missing-file bootstrap changed the provenance values"
-[ ! -f "$TMP/.agents/.needs-customization" ] \
+[ ! -f "$TMP/.pipeline/.needs-customization" ] \
   || fail "missing-file bootstrap recreated the first-run marker"
 ok "flag-free plain run installs newly added files from stamped values only"
 
@@ -142,7 +142,7 @@ chmod +x "$FAKEBIN/codex" "$FAKEBIN/tmux"
 TEAM_LOG="$TMP/team.log" PATH="$FAKEBIN:/usr/bin:/bin" \
   "$TMP/scripts/team.sh" --fresh codex-smoke >/dev/null 2>&1 \
   || fail "team.sh failed its Codex fallback launch"
-grep -q 'send-keys .* codex C-m' "$TMP/team.log" \
+grep -q 'send-keys .* scripts/codex-lead.sh codex-smoke --fresh C-m' "$TMP/team.log" \
   || fail "team.sh did not put Codex in the lead pane when Claude was unavailable"
 ok "team.sh falls back to Codex when Claude is unavailable"
 
@@ -163,7 +163,7 @@ grep -q "all $files checked files match" "$TMP/upd1.log" || fail "--update summa
 ok "--update: flag-free run defaults from the stamp; clean target exits 0"
 
 # --- 5. --update: drift is summarized, exit 1, hunks only behind --diff -------
-printf '\n' >> "$TMP/.agents/TEMPLATE.md"
+printf '\n' >> "$TMP/.pipeline/TEMPLATE.md"
 rc=0
 bash "$ROOT/bin/init.sh" --update --target "$TMP" > "$TMP/upd2.log" 2>&1 || rc=$?
 [ "$rc" = "1" ] || fail "--update exited $rc on a drifted target, expected 1"
@@ -211,7 +211,7 @@ ok "init.sh refuses --target pointing at the toolkit itself"
 
 # --- 6. verify-state.sh ------------------------------------------------------
 VS="$TMP/scripts/verify-state.sh"
-cat > "$TMP/.agents/T-01.md" <<'EOF'
+cat > "$TMP/.pipeline/T-01.md" <<'EOF'
 **Status:** blocked
 
 ## Review verdicts
@@ -224,17 +224,17 @@ EOF
 ok "verify-state accepts valid state file incl. blocked Status"
 
 # 6a. Task class + decision source: absent = fine, junk = fails
-cat > "$TMP/.agents/T-01.md" <<'EOF'
+cat > "$TMP/.pipeline/T-01.md" <<'EOF'
 **Status:** blocked
 **Task class:** TBD
 **Class decided by:** maybe
 EOF
 "$VS" T-01 > /dev/null 2>&1 && fail "verify-state accepted bogus Task class / decision source"
-printf '**Status:** blocked\n**Task class:** sensitive\n**Class decided by:** human\n' > "$TMP/.agents/T-01.md"
+printf '**Status:** blocked\n**Task class:** sensitive\n**Class decided by:** human\n' > "$TMP/.pipeline/T-01.md"
 "$VS" T-01 > /dev/null 2>&1 || fail "verify-state rejected a valid class + decision source"
 ok "verify-state validates Task class + Class decided by (absent ok, junk fails)"
 
-printf '\n### Pass 3 — 2026-08-26 — verdict: PASS\n\nnone\n' >> "$TMP/.agents/T-01.md"
+printf '\n### Pass 3 — 2026-08-26 — verdict: PASS\n\nnone\n' >> "$TMP/.pipeline/T-01.md"
 if "$VS" T-01 > /dev/null 2>&1; then
   fail "verify-state accepted a Pass 3 (two-loop cap breached)"
 fi
@@ -245,7 +245,7 @@ ok "verify-state fails loudly on a third review pass"
 # anti-thrash and delivery-contract rules; if they are advisory only, they
 # are not rules. Each is checked on a file that is otherwise valid, so a
 # failure here names exactly one cause.
-cat > "$TMP/.agents/T-03.md" <<'EOF'
+cat > "$TMP/.pipeline/T-03.md" <<'EOF'
 **Status:** in-review
 **Review loop count:** 1 / 2
 **Test-fix loops:** 5 / 2
@@ -258,11 +258,11 @@ cat > "$TMP/.agents/T-03.md" <<'EOF'
 1. [high] a.js:1 — finding
 EOF
 "$VS" T-03 2>&1 | grep -q 'test-fix loop budget exceeded'   || fail "verify-state did not catch a blown test-fix budget"
-sed -i.bak 's|^\*\*Test-fix loops:\*\* 5 / 2|**Test-fix loops:** 1 / 2|' "$TMP/.agents/T-03.md"
+sed -i.bak 's|^\*\*Test-fix loops:\*\* 5 / 2|**Test-fix loops:** 1 / 2|' "$TMP/.pipeline/T-03.md"
 "$VS" T-03 > /dev/null 2>&1 || fail "verify-state rejected a file with in-budget counters"
 ok "verify-state enforces the loop budgets and passes when they are in range"
 
-cat > "$TMP/.agents/T-04.md" <<'EOF'
+cat > "$TMP/.pipeline/T-04.md" <<'EOF'
 **Status:** done
 **Review loop count:** 1 / 2
 **Test-fix loops:** 0 / 2
@@ -290,7 +290,7 @@ if "$VS" T-04 > /dev/null 2>&1; then
   fail "verify-state accepted 'done' with an unticked, unwaived criterion"
 fi
 "$VS" T-04 2>&1 | grep -q "acceptance criteria are unticked"   || fail "verify-state's done-gate failed for the wrong reason"
-python3 - "$TMP/.agents/T-04.md" <<'PY'
+python3 - "$TMP/.pipeline/T-04.md" <<'PY'
 import sys
 p=sys.argv[1]; s=open(p).read()
 s=s.replace('| AC2 | [ ] | Pass 1 — unverifiable from diff | no covering test |',
@@ -302,7 +302,7 @@ ok "verify-state refuses 'done' on an open criterion, accepts an explicit waiver
 
 # 6c. done-gate also rejects a ticked ledger row with an empty evidence cell —
 # a tick TEMPLATE.md already forbids, now enforced instead of self-policed.
-cat > "$TMP/.agents/T-06.md" <<'EOF'
+cat > "$TMP/.pipeline/T-06.md" <<'EOF'
 **Status:** done
 **Review loop count:** 1 / 2
 **Test-fix loops:** 0 / 2
@@ -326,7 +326,7 @@ none
 EOF
 "$VS" T-06 > /dev/null 2>&1 && fail "verify-state accepted 'done' with a ticked ledger row citing no test evidence"
 "$VS" T-06 2>&1 | grep -q 'cite no evidence' || fail "done-gate ledger-evidence check failed for the wrong reason"
-python3 - "$TMP/.agents/T-06.md" <<'PY'
+python3 - "$TMP/.pipeline/T-06.md" <<'PY'
 import sys
 p = sys.argv[1]; s = open(p).read()
 s = s.replace('| AC1 | [x] | Pass 1 — a.js:42 | |',
@@ -338,7 +338,7 @@ ok "verify-state's done-gate rejects a ticked ledger row with a blank evidence c
 
 # 6d. once review has run, a missing/placeholder verdict fails from the file
 # side too — the mirror of the unfilled-placeholder check.
-cat > "$TMP/.agents/T-07.md" <<'EOF'
+cat > "$TMP/.pipeline/T-07.md" <<'EOF'
 **Status:** testing
 **Review loop count:** 1 / 2
 **Test-fix loops:** 0 / 2
@@ -350,21 +350,21 @@ cat > "$TMP/.agents/T-07.md" <<'EOF'
 EOF
 "$VS" T-07 > /dev/null 2>&1 && fail "verify-state accepted Status 'testing' with no filled review verdict"
 "$VS" T-07 2>&1 | grep -q 'no Review verdicts pass records a filled' || fail "missing-verdict check failed for the wrong reason"
-sed -i.bak 's/verdict: TBD/verdict: PASS/' "$TMP/.agents/T-07.md"
+sed -i.bak 's/verdict: TBD/verdict: PASS/' "$TMP/.pipeline/T-07.md"
 "$VS" T-07 > /dev/null 2>&1 || fail "verify-state rejected 'testing' once a filled PASS verdict was present"
 ok "verify-state requires a filled review verdict once a task has reached review"
 
 # --- 7. verify-spec.sh -------------------------------------------------------
 # The spec-side equivalent: structure only, run before the human sees a spec.
 VSPEC="$TMP/scripts/verify-spec.sh"
-cp "$TMP/.agents/TEMPLATE.md" "$TMP/.agents/T-05.md"
+cp "$TMP/.pipeline/TEMPLATE.md" "$TMP/.pipeline/T-05.md"
 if "$VSPEC" T-05 > /dev/null 2>&1; then
   fail "verify-spec passed the raw template, which is entirely boilerplate"
 fi
 "$VSPEC" T-05 2>&1 | grep -q 'still the template placeholder'   || fail "verify-spec did not identify template boilerplate"
 ok "verify-spec rejects an unfilled spec"
 
-python3 - "$TMP/.agents/T-05.md" <<'PY'
+python3 - "$TMP/.pipeline/T-05.md" <<'PY'
 import sys
 NL = chr(10)
 p = sys.argv[1]
@@ -400,7 +400,7 @@ PY
 "$VSPEC" T-05 > /dev/null 2>&1 || { "$VSPEC" T-05; fail "verify-spec rejected a properly filled spec"; }
 ok "verify-spec accepts a filled spec"
 
-python3 - "$TMP/.agents/T-05.md" <<'PY'
+python3 - "$TMP/.pipeline/T-05.md" <<'PY'
 import sys
 p=sys.argv[1]; s=open(p).read()
 s=s.replace('resolves identically to "https://x.test/a"','works well')
@@ -414,7 +414,7 @@ ok "verify-spec catches an unmeasurable acceptance criterion"
 # --- 8. promote-findings.sh --------------------------------------------------
 PF="$TMP/scripts/promote-findings.sh"
 mkdir -p "$TMP/docs"
-cat > "$TMP/.agents/T-02.md" <<'EOF'
+cat > "$TMP/.pipeline/T-02.md" <<'EOF'
 ## Findings for docs
 
 - [docs/GOTCHAS.md] real finding worth keeping

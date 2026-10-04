@@ -15,3 +15,8 @@ toolkit's plain, flag-free `bin/init.sh --target .` bootstrap has added it.
 
 Never update during an in-flight task, never auto-apply permission changes,
 and never overwrite a local customization without the user's explicit choice.
+
+Apply the canonical flow's Codex permission-change gate to TOML, execution
+rules, and lifecycle hooks too. Protected config/skill writes may require
+runtime approval. Preserve existing hooks and hand-merge the two session
+capture handlers; review/trust changed handlers with `/hooks` afterward.

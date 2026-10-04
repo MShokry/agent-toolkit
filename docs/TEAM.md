@@ -3,7 +3,7 @@
 A tmux layout for running the pipeline: pane 0 is the lead (`claude` when
 installed, otherwise `codex`), pane
 1 is `opencode serve` (what `scripts/oc.sh` attaches to), pane 2 tails
-`.agents/` for activity, pane 3 is free.
+`.pipeline/` for activity, pane 3 is free.
 
 ## Usage
 
@@ -33,7 +33,7 @@ drives the same pipeline as Claude's `/feature` command.
 ## Resuming is the default
 
 Pane 0 resumes the lead's own conversation — not a fresh one — but it does
-so by pinning to a stored UUID (`.agents/.claude-session-id.<session-name>`,
+so by pinning to a stored UUID (`.pipeline/.claude-session-id.<session-name>`,
 written the first time that session name runs) rather than
 `claude --continue`. `--continue` only means "the most recent conversation
 in this directory," with no notion of *which* tmux session started it, so
@@ -53,10 +53,13 @@ Pass `--fresh` on the rare run where you actually want a clean slate
 instead — this mints a new pinned id, so later resumes follow the new
 conversation, not the old one.
 
-Codex has no create-with-session-id equivalent. Without `--fresh`, the launcher
-uses `codex resume --last`, whose lookup is scoped to the current repository;
-if no saved session exists it starts `codex`. With `--fresh`, it starts a new
-Codex conversation directly.
+Codex captures its actual session ID using reviewed SessionStart and
+UserPromptSubmit hooks. `scripts/codex-lead.sh` stores it per team name under
+`.pipeline/.codex-session-id.<session-name>` and resumes that exact conversation.
+It never uses `--last` or starts a fresh conversation after a failed resume.
+Review/trust the generated hooks with `/hooks`; existing hooks need a hand-merge.
+Use `--fresh` to deliberately reset a conversation. Missing capture or a stale
+process lock requires explicit recovery; see [Codex lead operation](CODEX.md).
 
 ## Running two projects at once
 
@@ -69,12 +72,12 @@ the second project its own port:
 scripts/team.sh --port 4097
 ```
 
-That port gets written to `.agents/.oc-port` in this repo. `scripts/oc.sh`
+That port gets written to `.pipeline/.oc-port` in this repo. `scripts/oc.sh`
 reads it automatically (when `OC_SERVER` isn't already set), so every
 `oc.sh` call in this project just uses the right port — you don't export
 `OC_SERVER` by hand for every call.
 
-**`.agents/.oc-port` is gitignored automatically by `bin/init.sh`** when
+**`.pipeline/.oc-port` is gitignored automatically by `bin/init.sh`** when
 the target is a git repo — it's local machine state (which port happened
 to be free on your laptop today), not something to commit. If your project
 predates that, or ignores it differently, add it by hand.

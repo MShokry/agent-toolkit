@@ -10,8 +10,13 @@ an agent-toolkit scaffold update, invoke the `toolkit-update` skill. Do not run
 either workflow from memory: load the skill and follow its referenced canonical
 flow.
 
-The task state file under `.agents/` is the only handoff surface between roles.
-Keep role replies short and leave full details in that file.
+The task state file under `.pipeline/` is the only handoff surface between roles.
+Keep role replies short and leave full details in that file. Run
+`scripts/codex-preflight.sh` from your sandbox before feature work.
+`.agents/skills/` and `.codex/` contain protected instructions/configuration;
+`.pipeline/` contains writable runtime records. Never store runtime output in
+the protected instruction directories. Spec/merge consent does not replace
+runtime permission approval for network, Git, or protected-config writes.
 
 ## Project-specific guidance
 

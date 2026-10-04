@@ -5,7 +5,7 @@ description: Keep a project's top-level status board in sync with per-task state
 
 # Status board
 
-A per-task state file (`.agents/T-<id>.md`, or whatever a project calls it)
+A per-task state file (`.pipeline/T-<id>.md`, or whatever a project calls it)
 is easy to keep current — each role updates its own file as it works. The
 project-wide status board (a top-level `README.md`, `STATUS.md`, or
 `TASKS.md` checklist) is not: nothing forces anyone to open every task file

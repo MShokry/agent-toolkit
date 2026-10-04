@@ -24,7 +24,7 @@ file — it's the one line each role updates when it finishes, naming what
 happened and who's next. Open the full file only when that line, a
 verification-script failure, or a real decision point tells you to.
 
-Everything passes through the state file (`.agents/T-<id>.md` or
+Everything passes through the state file (`.pipeline/T-<id>.md` or
 equivalent). Context is never carried between roles by memory alone — if
 it isn't written there, the next role doesn't know it.
 
@@ -303,3 +303,7 @@ granting anything standing edit rights over its own instructions.
 - A third review loop, a third test-fix loop, or a second spec bounce.
 - Any budget the structural check reports as exceeded.
 - Before any merge.
+
+Record approvals in the Decisions log. On restart or compaction, recover
+status, counters, approvals, and worker activity from the task record before
+dispatching. Do not repeat recorded approvals or start a competing writer.

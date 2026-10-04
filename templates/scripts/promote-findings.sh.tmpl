@@ -13,7 +13,7 @@
 #
 # Findings are written as:
 #   - [docs/SOME-DOC.md] one-line finding text
-# under a "## Findings for docs" heading in the task's .agents/T-<id>.md.
+# under a "## Findings for docs" heading in the task's .pipeline/T-<id>.md.
 #
 # Usage: scripts/promote-findings.sh T-03
 
@@ -26,7 +26,7 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_ROOT"
 
 ID="${1:?usage: promote-findings.sh <task-id, e.g. T-03>}"
-FILE=".agents/${ID}.md"
+FILE=".pipeline/${ID}.md"
 [ -f "$FILE" ] || { echo "promote-findings.sh: no such file: $FILE" >&2; exit 1; }
 
 LINES="$(awk '/^## Findings for docs/{f=1;next} /^## /{f=0} f && /^- \[/' "$FILE")"

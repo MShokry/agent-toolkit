@@ -12,14 +12,22 @@ project's own copies.
 
 ## Hard gates
 
-- **Task boundary only.** If any `.agents/T-*.md` is in flight (Status not
-  `done`), stop and tell the user to finish or park it first — changing
+- **Task boundary only.** If any `.pipeline/T-*.md` (or legacy `.agents/T-*.md`)
+  is in flight (Status not `done`), stop and tell the user to finish or park it
+  first — changing
   the state-file contract under a running task is how an in-flight task
   ends up half on each contract.
 - **Permission blocks are never auto-applied.** Any hunk touching a
   `permission:` or `tools:` block is shown to the user and applied only on
   their explicit yes — and carries the standing rule: verify it live
   against the real OpenCode server before trusting it.
+- **Codex permission changes follow the same gate.** Treat `sandbox_mode`,
+  `sandbox_workspace_write`, approval policy/reviewer, writable roots, network
+  policy, `.rules` files, hook commands, and agent tool/MCP/skill configuration
+  as permission-sensitive. Review and get explicit consent before applying;
+  re-verify in the real Codex runtime. Hook edits require renewed `/hooks`
+  trust. Runtime approval to write protected configuration is separate from
+  the user's choice to accept an upstream change; never bypass protection.
 - **Never overwrite a local customization silently.** Where upstream and
   local both changed, present three options: take upstream, keep local, or
   hand-merge. The user picks.
@@ -44,7 +52,7 @@ project's own copies.
    `git -C <toolkit-path> pull` — or clone it first if it isn't on disk:
    `git clone https://github.com/MShokry/agent-toolkit`. Report the
    SHA/branch you landed on.
-2. Read `.agents/.toolkit-version` — note `toolkit_sha`/`toolkit_tag` and
+2. Read `.pipeline/.toolkit-version` — note `toolkit_sha`/`toolkit_tag` and
    `scaffolded`. This is your baseline — the diff is always *current
    toolkit templates vs your live files*, and the changelog entries that
    matter are those added after this baseline. If it doesn't exist, this
@@ -52,6 +60,10 @@ project's own copies.
    `--update` infers them from the target's files and prints them; verify
    they look right before merging, and expect to create the stamp at
    step 7.
+   If the stamp/runtime is still under `.agents/`, read the legacy stamp there
+   and complete `migrations/02-pipeline-directory.md` before adding missing
+   files. Check legacy task files for in-flight work too. Never create a second
+   runtime alongside an unmigrated first one.
 3. Run `bin/init.sh --update --target .` (from the toolkit checkout path).
    Exit 0 means nothing to do — report that and stop. Exit 1 lists the
    differing/new files.
@@ -77,7 +89,8 @@ project's own copies.
    `bin/init.sh --refresh-stamp --target .` (on a pre-v0.3.0 project this
    writes the stamp for the first time — future updates then need no
    flags).
-8. Re-run `bin/init.sh --update --target .` — it must now exit 0. Then run
+8. Re-run `bin/init.sh --update --target .`. Resolve unexpected drift; record
+   deliberately kept local customizations rather than forcing equality. Then run
    `scripts/verify-state.sh` on the most recent task's state file as a
    smoke check that the contract still parses.
 9. Report: merged / kept-local / deferred (with reasons), and record one

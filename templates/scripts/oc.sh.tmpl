@@ -24,7 +24,7 @@
 #
 # Usage:
 #   scripts/oc.sh --agent reviewer --model hcnsec/DeepSeek-V4-Pro \
-#                 --prompt-file .agents/T-001.review-request.md
+#                 --prompt-file .pipeline/T-001.review-request.md
 #   scripts/oc.sh --agent tester --model hcnsec/auto --prompt "run the suite"
 #   echo "..." | scripts/oc.sh --agent reviewer --model hcnsec/glm-5.3
 #
@@ -153,9 +153,9 @@
 #
 # --- Pipeline telemetry -----------------------------------------------------
 #
-# Every call appends one JSON line to .agents/logs/pipeline.jsonl (the dir is
+# Every call appends one JSON line to .pipeline/logs/pipeline.jsonl (the dir is
 # created on first use, and init.sh adds it to a target repo's .gitignore —
-# it is machine state, like .agents/.oc-port). Fields: ts, agent, model,
+# it is machine state, like .pipeline/.oc-port). Fields: ts, agent, model,
 # session, wall_s, status, kill_reason, and — best-effort from
 # GET /session/<id> — token counts and cost. This is what makes the
 # pipeline's *own* $/min per role answerable after the fact, instead of only
@@ -166,10 +166,10 @@
 # Env:
 #   OC_SERVER        default http://localhost:4096, or the port
 #                    scripts/team.sh last started (read from
-#                    .agents/.oc-port) if that file exists and OC_SERVER
+#                    .pipeline/.oc-port) if that file exists and OC_SERVER
 #                    isn't set — see scripts/team.sh's own header for why.
 #   OC_PASSWORD      the OPENCODE_PASSWORD to authenticate with, or read from
-#                    .agents/.oc-password (written by scripts/team.sh) if
+#                    .pipeline/.oc-password (written by scripts/team.sh) if
 #                    that file exists and OC_PASSWORD isn't set. Required —
 #                    opencode v2 always auth-gates the API (v1 had none).
 #   OC_TIMEOUT       absolute ceiling, seconds. Default 2400. A run still
@@ -198,16 +198,16 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 if [ -n "${OC_SERVER:-}" ]; then
   SERVER="$OC_SERVER"
-elif [ -f "$REPO_ROOT/.agents/.oc-port" ]; then
-  SERVER="http://localhost:$(cat "$REPO_ROOT/.agents/.oc-port")"
+elif [ -f "$REPO_ROOT/.pipeline/.oc-port" ]; then
+  SERVER="http://localhost:$(cat "$REPO_ROOT/.pipeline/.oc-port")"
 else
   SERVER="http://localhost:4096"
 fi
 
 if [ -n "${OC_PASSWORD:-}" ]; then
   OPENCODE_PASSWORD="$OC_PASSWORD"
-elif [ -f "$REPO_ROOT/.agents/.oc-password" ]; then
-  OPENCODE_PASSWORD="$(cat "$REPO_ROOT/.agents/.oc-password")"
+elif [ -f "$REPO_ROOT/.pipeline/.oc-password" ]; then
+  OPENCODE_PASSWORD="$(cat "$REPO_ROOT/.pipeline/.oc-password")"
 else
   # Preserve a password the caller already exported (e.g. hand-launched
   # `opencode serve` with a chosen OPENCODE_PASSWORD) instead of clobbering
@@ -288,7 +288,7 @@ fi
 # reachability probe alone would not have caught a missing/wrong password.
 if ! "$TIMEOUT_BIN" 10 opencode api GET /api/session --server "$SERVER" --param limit=1 >/dev/null 2>&1; then
   die "no opencode server (or bad OPENCODE_PASSWORD) at $SERVER — start one with:
-     OPENCODE_PASSWORD=\"\$(cat .agents/.oc-password)\" opencode serve --port 4096
+     OPENCODE_PASSWORD=\"\$(cat .pipeline/.oc-password)\" opencode serve --port 4096
      (or run scripts/team.sh, which starts it in pane 1 with the password wired up)"
 fi
 
@@ -462,7 +462,7 @@ USED_SESSION="$WATCH_SID"
 
 # --- pipeline telemetry (best-effort; never fails the run) ----------------
 {
-  TELEMETRY_DIR="$REPO_ROOT/.agents/logs"
+  TELEMETRY_DIR="$REPO_ROOT/.pipeline/logs"
   if mkdir -p "$TELEMETRY_DIR" 2>/dev/null; then
     "$TIMEOUT_BIN" 10 opencode api GET "/api/session/${USED_SESSION:-none}" --server "$SERVER" 2>/dev/null | python3 -c '
 import json, sys, datetime

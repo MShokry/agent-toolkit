@@ -2,7 +2,7 @@
 
 The single handoff surface. Every role reads this file and appends to it —
 nothing is passed between roles by prose alone. Copy this shape to
-`.agents/T-<id>.md` (or wherever this project keeps per-task state) and
+`.pipeline/T-<id>.md` (or wherever this project keeps per-task state) and
 fill it in per task.
 
 ```markdown
@@ -13,6 +13,7 @@ fill it in per task.
 **Implementer for this task:** <role/tool/model — e.g. "senior-dev (claude/sonnet)" or "builder (opencode/kimi-k2.7-code)">
 **Reviewer for this task:** none yet — set by the lead before dispatching review; a model/vendor independent from the implementer
 **Tester for this task:** none yet — set by the lead before dispatching test
+**Planner thread id:** none yet — when the planner has a separate thread, record/reuse it for corrections on this task
 **Dispatch session id:** none yet — set after the first dispatch call, reused for every later call on this task
 **Wide-auto-approve mode:** off — only meaningful if the implementer's tool has one (see lessons-learned.md entry 1). On means it's used for this task's implement call, per the user's answer at spec approval. Off is the default; never turn this on without asking.
 **Review loop count:** 0 / 2

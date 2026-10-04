@@ -1,0 +1,7 @@
+{
+  "description": "Capture the exact Codex lead id for scripts/team.sh. Review and trust with /hooks.",
+  "hooks": {
+    "SessionStart": [{"hooks": [{"type": "command", "command": "if [ -n \"${TEAM_CODEX_SESSION:-}\" ]; then python3 \"$TEAM_CODEX_ROOT/scripts/codex-session.py\"; fi", "timeout": 5}]}],
+    "UserPromptSubmit": [{"hooks": [{"type": "command", "command": "if [ -n \"${TEAM_CODEX_SESSION:-}\" ]; then python3 \"$TEAM_CODEX_ROOT/scripts/codex-session.py\"; fi", "timeout": 5}]}]
+  }
+}
