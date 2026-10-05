@@ -600,3 +600,18 @@ it needs, rather than disabling protection. Classify permission-sensitive
 updates by behavior across every tool's schema, including hooks and TOML, not
 only by the first tool's YAML field names. Configuration/skill presence is not
 proof of discovery; fake-CLI tests are not live model workflow evidence.
+
+## 32. A compatible legacy config path is not a reliable discovery contract
+
+A runtime may document backward-compatible discovery of an old role directory
+while its live agent endpoint loads only built-ins from that project. Treat the
+current canonical project path as the contract for generated scaffolds, and
+migrate old paths explicitly at a task boundary instead of depending on a
+compatibility promise. Refuse a plain bootstrap that would create a second role
+tree beside an unmigrated first one.
+
+Likewise, configuration agreement is not runtime readiness. Before dispatch,
+resolve every configured model id against the live provider and inspect the
+live role list after a restart, upgrade, path migration, or permission change.
+A model name written consistently in three files can still be unavailable, and
+a permission file that exists on disk can still correspond to no loaded role.

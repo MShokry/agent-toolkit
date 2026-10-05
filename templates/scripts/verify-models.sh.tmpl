@@ -1,0 +1,117 @@
+#!/usr/bin/env bash
+#
+# Deterministic check that every model this pipeline dispatches actually
+# exists on the OpenCode server — before a task is planned, not after a
+# dispatch dies on it.
+#
+# This exists because of T-005: `builder_model` was set to `openai/sol`,
+# which is a model *family* name, not an id. The manifest and feature.md
+# agreed with each other perfectly, so nothing looked wrong — but the
+# server offers `gpt-5.6-sol`, and the builder dispatch failed instantly
+# with an opaque `UnknownError: Unexpected server error`. Agreement between
+# config files is not the same fact as the values resolving, and only one
+# of those two was ever being checked.
+#
+# Reads the ids from `.pipeline/.toolkit-version` rather than taking them as
+# arguments, so the thing being validated is the thing the pipeline will
+# actually use. `claude/*` entries are skipped: Claude roles dispatch as
+# subagents, never through oc.sh, so the OpenCode server has no opinion
+# about them.
+#
+# Usage: scripts/verify-models.sh
+# Exit 0 = every oc.sh-dispatched id resolves, prints one OK line.
+# Exit 1 = the invalid ids and what the provider actually offers.
+
+set -eu
+
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$REPO_ROOT"
+
+MANIFEST=".pipeline/.toolkit-version"
+[ -f "$MANIFEST" ] || { echo "verify-models.sh: no $MANIFEST" >&2; exit 1; }
+
+PORT="$(cat .pipeline/.oc-port 2>/dev/null || echo 4096)"
+SERVER="${OC_SERVER:-http://localhost:$PORT}"
+
+# opencode v2 auth-gates the whole API and moved it under /api/*. Plain curl
+# gets 401 here, so go through `opencode api` with the password scripts/team.sh
+# wrote (same approach as scripts/oc.sh).
+if [ -n "${OC_PASSWORD:-}" ]; then
+  OPENCODE_PASSWORD="$OC_PASSWORD"
+elif [ -f .pipeline/.oc-password ]; then
+  OPENCODE_PASSWORD="$(cat .pipeline/.oc-password)"
+fi
+export OPENCODE_PASSWORD="${OPENCODE_PASSWORD:-}"
+
+# Right after an `opencode serve` (re)start the provider list loads lazily, so
+# the first call can say a provider "is not on this server" when it simply has
+# not loaded yet (seen on T-028). Retry that one case, up to 3 attempts 5s
+# apart; a wrong model id (provider present, model absent) still fails at once.
+attempt=1
+while :; do
+# Write to a file, not a pipe: the model list is ~430 entries (>256 KB) and
+# `opencode api` truncates its output mid-JSON when stdout is a pipe.
+MODELS_JSON="$(mktemp)"
+trap 'rm -f "$MODELS_JSON"' EXIT
+opencode api GET /api/model --server "$SERVER" --param directory="$REPO_ROOT" >"$MODELS_JSON" 2>/dev/null || {
+  echo "verify-models.sh: cannot reach OpenCode server at $SERVER (or it rejected the password in .pipeline/.oc-password) — run scripts/team.sh first" >&2
+  exit 1
+}
+
+set +e
+MANIFEST="$MANIFEST" MODELS_JSON="$MODELS_JSON" python3 -c '
+import json, os, sys, re
+
+try:
+    doc = json.load(open(os.environ["MODELS_JSON"], encoding="utf-8"))
+except Exception as e:
+    print(f"verify-models.sh: server returned unparseable JSON: {e}", file=sys.stderr)
+    sys.exit(1)
+
+# v2: GET /api/model returns {"data": [{"providerID", "modelID", ...}, ...]}.
+have = {}
+for m in doc.get("data", []):
+    have.setdefault(m.get("providerID"), set()).add(m.get("modelID"))
+
+wanted = []
+for line in open(os.environ["MANIFEST"], encoding="utf-8"):
+    m = re.match(r"^(\w*model\w*):\s*(\S+)", line.strip())
+    if m:
+        wanted.append((m.group(1), m.group(2)))
+
+bad = []
+checked = 0
+for key, val in wanted:
+    if "/" not in val:
+        continue          # bare name, e.g. claude_model: sonnet — not an oc.sh id
+    prov, model = val.split("/", 1)
+    if prov == "claude":
+        continue          # Claude roles run as subagents, never through oc.sh
+    checked += 1
+    if model not in have.get(prov, set()):
+        bad.append((key, val, prov))
+
+if bad:
+    cold = any(not have.get(prov) for _, _, prov in bad)
+    for key, val, prov in bad:
+        offers = sorted(have.get(prov, set()))
+        model = val.split("/", 1)[1]
+        if not offers:
+            print(f"verify-models.sh: {key} = {val} — provider {prov!r} is not on this server", file=sys.stderr)
+        else:
+            offered = ", ".join(offers)
+            print(f"verify-models.sh: {key} = {val} — {prov} does not offer {model!r}; it offers: {offered}", file=sys.stderr)
+    sys.exit(3 if cold else 1)
+
+print(f"verify-models.sh: OK ({checked} oc.sh model id(s) resolve on the server)")
+'
+rc=$?
+set -e
+[ "$rc" -ne 3 ] && exit "$rc"
+if [ "$attempt" -ge 3 ]; then
+  echo "verify-models.sh: a configured provider is still not on the server after $attempt attempts — if you just restarted it, check \`opencode api GET /api/provider\`; otherwise the provider is not configured" >&2
+  exit 1
+fi
+attempt=$((attempt + 1))
+sleep 5
+done

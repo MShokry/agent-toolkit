@@ -80,7 +80,7 @@ question tool if one is available) before writing anything:
      see Step 3.
    For any tool that isn't already a worked example in this folder's
    `reference/role-examples.md` **and** isn't already scaffolded in this
-   target project (check `.claude/agents/`, `.opencode/agent/`, or
+   target project (check `.claude/agents/`, `.opencode/agents/`, or
    whatever that tool's own convention is), go to **Step 2** before
    promising it works.
 4. **Cross-vendor independence for review, specifically.** The reviewer

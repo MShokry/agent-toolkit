@@ -65,6 +65,15 @@ for codex_file in \
   "$TMP/.agents/skills/toolkit-update/SKILL.md"; do
   [ -f "$codex_file" ] || fail "Codex scaffold file missing: $codex_file"
 done
+for opencode_file in \
+  "$TMP/.opencode/agents/builder.md" \
+  "$TMP/.opencode/agents/reviewer.md" \
+  "$TMP/.opencode/agents/tester.md"; do
+  [ -f "$opencode_file" ] || fail "OpenCode V2 role file missing: $opencode_file"
+done
+[ ! -d "$TMP/.opencode/agent" ] || fail "fresh scaffold wrote the legacy singular OpenCode role directory"
+[ -x "$TMP/scripts/verify-models.sh" ] || fail "verify-models.sh missing or not executable"
+ok "OpenCode V2 roles and live model verifier were scaffolded"
 grep -q '\.claude/commands/feature.md' "$TMP/.agents/skills/feature/SKILL.md" \
   || fail "Codex feature skill does not point at the canonical lead flow"
 grep -q 'Not populated by agent-toolkit' "$TMP/AGENTS.md" \

@@ -47,11 +47,11 @@ Ask these up front rather than guessing — they shape every generated file:
   --test-dir "<e2e or similar>"
 ```
 
-It writes `.claude/agents/`, `.opencode/agent/`, `.claude/commands/{feature.md,
+It writes `.claude/agents/`, `.opencode/agents/`, `.claude/commands/{feature.md,
 toolkit-update.md}`, Codex project instructions/skills/planner under `AGENTS.md`,
 `.agents/skills/`, and `.codex/agents/`,
 `.pipeline/{TEMPLATE.md,.toolkit-version}`, and
-`scripts/{oc.sh,team.sh,verify-state.sh,verify-spec.sh,promote-findings.sh}`
+`scripts/{oc.sh,team.sh,verify-state.sh,verify-spec.sh,verify-models.sh,promote-findings.sh}`
 into the target. It does **not** overwrite a file that already exists — it
 prints what it skipped so you can diff and merge by hand.
 

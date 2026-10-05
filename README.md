@@ -117,7 +117,7 @@ templates/             every generated file, with __PLACEHOLDER__ tokens
                           toolkit-update.md.tmpl — the /toolkit-update merge command
   codex/                AGENTS.md.tmpl, a project-scoped planner agent, reviewed
                           lifecycle hooks, and feature/toolkit-update skills
-  opencode/agent/        builder.md.tmpl, reviewer.md.tmpl, tester.md.tmpl
+  opencode/agents/       builder.md.tmpl, reviewer.md.tmpl, tester.md.tmpl
   agents-state/          TEMPLATE.md.tmpl — the T-<id> state file shape
   scripts/                oc.sh.tmpl (OpenCode CLI wrapper), Codex launcher/preflight,
                           team.sh.tmpl (tmux
@@ -127,6 +127,7 @@ templates/             every generated file, with __PLACEHOLDER__ tokens
                           for team.sh), verify-state.sh.tmpl (structural check on
                           a task's state file — no LLM call), verify-spec.sh.tmpl
                           (the same, on a spec, before the human approves it),
+                          verify-models.sh.tmpl (authenticated live model check),
                           promote-findings.sh.tmpl
                           (copies tagged findings into project docs — no LLM
                           call, no agent write access to docs/)

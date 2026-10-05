@@ -42,7 +42,14 @@ exceeded budget as an escalation, never one more lap.
    server/runtime is actually reachable — fail fast with a clear message
    rather than letting a dispatch silently fall back to a slow cold-start
    path or hang.
-3. Confirm the working tree is clean enough to produce a meaningful diff.
+3. Resolve every configured worker model against the live runtime before the
+   first dispatch. Configuration files agreeing with each other does not prove
+   that a provider actually offers those model ids.
+4. After a runtime restart, upgrade, role-path migration, or permission edit,
+   inspect the live role/capability ruleset. Confirm every required role is
+   loaded and that last-match-wins permission ordering preserves the intended
+   write boundary; readable configuration alone is not enforcement evidence.
+5. Confirm the working tree is clean enough to produce a meaningful diff.
 
 ## Token/context discipline
 

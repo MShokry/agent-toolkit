@@ -531,7 +531,7 @@ if [ -n "$KILL_REASON" ] || [ "$STATUS" -eq 124 ]; then
     WHY="the session's last message did not change for ${IDLE_SECS}s while a turn was still open"
     HINT="That is what a wedged run looks like — almost always a permission prompt
   with no TTY to answer it:
-    - Widen .opencode/agent/$AGENT.md's shell permissions to cover the command
+    - Widen .opencode/agents/$AGENT.md's shell permissions to cover the command
       that stopped it, and set 'question: deny'.
     - --auto is a reasonable workaround here (see this script's own --auto
       comment above): re-verified live, it correctly auto-approves only

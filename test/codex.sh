@@ -139,6 +139,21 @@ cmp -s "$TMP/legacy-stamp" "$TMP/.agents/.toolkit-version" || fail "triage chang
 [ ! -f "$TMP/.pipeline/TEMPLATE.md" ] || fail "triage wrote a second runtime"
 ok "legacy baseline is readable, triage is read-only, and unmigrated bootstrap is refused"
 
+# The OpenCode V2 role path migration must not create duplicate role trees.
+LEGACY_AGENT="$TMP/legacy-agent"
+mkdir "$LEGACY_AGENT"
+bash "$ROOT/bin/init.sh" --target "$LEGACY_AGENT" --project-name legacy-agent > "$TMP/legacy-agent.log" 2>&1
+mv "$LEGACY_AGENT/.opencode/agents" "$LEGACY_AGENT/.opencode/agent"
+if bash "$ROOT/bin/init.sh" --target "$LEGACY_AGENT" > "$TMP/legacy-agent.log" 2>&1; then fail "bootstrap accepted the legacy singular OpenCode role layout"; fi
+grep -q '03-opencode-v2-agents-directory' "$TMP/legacy-agent.log" || fail "OpenCode role-path migration not identified"
+mv "$LEGACY_AGENT/.pipeline/.toolkit-version" "$LEGACY_AGENT/stamp.hold"
+rc=0
+bash "$ROOT/bin/init.sh" --update --target "$LEGACY_AGENT" > "$TMP/legacy-agent.log" 2>&1 || rc=$?
+[ "$rc" = 1 ] || fail "legacy OpenCode role layout triage did not report drift"
+grep -q 'BUILDER_MODEL: opencode-go/glm-5.3-flash' "$TMP/legacy-agent.log" || fail "stamp-less recovery did not read the legacy OpenCode role path"
+[ ! -d "$LEGACY_AGENT/.opencode/agents" ] || fail "read-only triage created a second OpenCode role tree"
+ok "legacy OpenCode role layout is readable for triage and refused for bootstrap"
+
 # Defaults preserve local model choices; existing instructions/hooks/skills survive.
 DEFAULT="$TMP/default"
 mkdir "$DEFAULT"

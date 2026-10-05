@@ -186,9 +186,12 @@ STAMP_SOURCE="$STAMP"
 if [ "$UPDATE" -eq 0 ] && { [ -f "$TARGET/.agents/TEMPLATE.md" ] || compgen -G "$TARGET/.agents/T-*.md" >/dev/null; }; then
   die "legacy .agents runtime state: complete migrations/02-pipeline-directory.md at a task boundary before bootstrapping"
 fi
+if [ "$UPDATE" -eq 0 ] && [ -d "$TARGET/.opencode/agent" ] && [ ! -d "$TARGET/.opencode/agents" ]; then
+  die "legacy .opencode/agent role layout: complete migrations/03-opencode-v2-agents-directory.md at a task boundary before bootstrapping"
+fi
 
 # Keep in sync with the number of check_pair/render lines below.
-RENDER_TOTAL=25
+RENDER_TOTAL=26
 
 write_stamp() {
   local sha tag
@@ -274,17 +277,19 @@ load_flags_from_stamp() {
 # exactly one rendered file. Sets REPLY; empty if not found.
 recover_from_target() { # $1 = key
   REPLY=""
+  local agent_dir="$TARGET/.opencode/agents"
+  [ -d "$agent_dir" ] || agent_dir="$TARGET/.opencode/agent"
   case "$1" in
     builder_model)
-      REPLY="$(sed -n 's/^model: //p' "$TARGET/.opencode/agent/builder.md" | head -1)" ;;
+      REPLY="$(sed -n 's/^model: //p' "$agent_dir/builder.md" | head -1)" ;;
     reviewer_model)
-      REPLY="$(sed -n 's/^model: //p' "$TARGET/.opencode/agent/reviewer.md" | head -1)" ;;
+      REPLY="$(sed -n 's/^model: //p' "$agent_dir/reviewer.md" | head -1)" ;;
     reviewer_fallback_model)
       # feature.md: "switch to `__REVIEWER_FALLBACK_MODEL__`"
       REPLY="$(sed -n 's/.*switch to `\([^`]*\)`.*/\1/p' \
         "$TARGET/.claude/commands/feature.md" | head -1)" ;;
     tester_model)
-      REPLY="$(sed -n 's/^model: //p' "$TARGET/.opencode/agent/tester.md" | head -1)" ;;
+      REPLY="$(sed -n 's/^model: //p' "$agent_dir/tester.md" | head -1)" ;;
     claude_model)
       REPLY="$(sed -n 's/^model: //p' "$TARGET/.claude/agents/planner.md" 2>/dev/null | head -1)" ;;
     codex_model)
@@ -302,7 +307,7 @@ recover_from_target() { # $1 = key
     test_dir)
       # tester.md: "__TEST_DIR__/**": allow
       REPLY="$(sed -n 's/^ *"\(.*\)\/\*\*": allow.*/\1/p' \
-        "$TARGET/.opencode/agent/tester.md" | head -1)" ;;
+        "$agent_dir/tester.md" | head -1)" ;;
   esac
 }
 
@@ -446,15 +451,16 @@ if [ "$UPDATE" -eq 1 ]; then
   check_pair "$TOOLKIT_ROOT/skills/karpathy-guidelines/SKILL.md" "$TARGET/.agents/skills/karpathy-guidelines/SKILL.md"
   check_pair "$TEMPLATES/codex/skills/feature/SKILL.md.tmpl" "$TARGET/.agents/skills/feature/SKILL.md"
   check_pair "$TEMPLATES/codex/skills/toolkit-update/SKILL.md.tmpl" "$TARGET/.agents/skills/toolkit-update/SKILL.md"
-  check_pair "$TEMPLATES/opencode/agent/builder.md.tmpl"   "$TARGET/.opencode/agent/builder.md"
-  check_pair "$TEMPLATES/opencode/agent/reviewer.md.tmpl"  "$TARGET/.opencode/agent/reviewer.md"
-  check_pair "$TEMPLATES/opencode/agent/tester.md.tmpl"    "$TARGET/.opencode/agent/tester.md"
+  check_pair "$TEMPLATES/opencode/agents/builder.md.tmpl"  "$TARGET/.opencode/agents/builder.md"
+  check_pair "$TEMPLATES/opencode/agents/reviewer.md.tmpl" "$TARGET/.opencode/agents/reviewer.md"
+  check_pair "$TEMPLATES/opencode/agents/tester.md.tmpl"   "$TARGET/.opencode/agents/tester.md"
   check_pair "$TEMPLATES/agents-state/TEMPLATE.md.tmpl"    "$TARGET/.pipeline/TEMPLATE.md"
   check_pair "$TEMPLATES/scripts/oc.sh.tmpl"               "$TARGET/scripts/oc.sh"
   check_pair "$TEMPLATES/scripts/team.sh.tmpl"             "$TARGET/scripts/team.sh"
   check_pair "$TEMPLATES/scripts/team-completion.bash.tmpl" "$TARGET/scripts/team-completion.bash"
   check_pair "$TEMPLATES/scripts/verify-state.sh.tmpl"     "$TARGET/scripts/verify-state.sh"
   check_pair "$TEMPLATES/scripts/verify-spec.sh.tmpl"      "$TARGET/scripts/verify-spec.sh"
+  check_pair "$TEMPLATES/scripts/verify-models.sh.tmpl"    "$TARGET/scripts/verify-models.sh"
   check_pair "$TEMPLATES/scripts/promote-findings.sh.tmpl" "$TARGET/scripts/promote-findings.sh"
 
   CUR_SHA="$(git -C "$TOOLKIT_ROOT" rev-parse --short HEAD 2>/dev/null || echo unknown)"
@@ -514,20 +520,22 @@ render "$TOOLKIT_ROOT/skills/status-board/SKILL.md" "$TARGET/.agents/skills/stat
 render "$TOOLKIT_ROOT/skills/karpathy-guidelines/SKILL.md" "$TARGET/.agents/skills/karpathy-guidelines/SKILL.md"
 render "$TEMPLATES/codex/skills/feature/SKILL.md.tmpl" "$TARGET/.agents/skills/feature/SKILL.md"
 render "$TEMPLATES/codex/skills/toolkit-update/SKILL.md.tmpl" "$TARGET/.agents/skills/toolkit-update/SKILL.md"
-render "$TEMPLATES/opencode/agent/builder.md.tmpl"   "$TARGET/.opencode/agent/builder.md"
-render "$TEMPLATES/opencode/agent/reviewer.md.tmpl"  "$TARGET/.opencode/agent/reviewer.md"
-render "$TEMPLATES/opencode/agent/tester.md.tmpl"    "$TARGET/.opencode/agent/tester.md"
+render "$TEMPLATES/opencode/agents/builder.md.tmpl"  "$TARGET/.opencode/agents/builder.md"
+render "$TEMPLATES/opencode/agents/reviewer.md.tmpl" "$TARGET/.opencode/agents/reviewer.md"
+render "$TEMPLATES/opencode/agents/tester.md.tmpl"   "$TARGET/.opencode/agents/tester.md"
 render "$TEMPLATES/agents-state/TEMPLATE.md.tmpl"    "$TARGET/.pipeline/TEMPLATE.md"
 render "$TEMPLATES/scripts/oc.sh.tmpl"               "$TARGET/scripts/oc.sh"
 render "$TEMPLATES/scripts/team.sh.tmpl"             "$TARGET/scripts/team.sh"
 render "$TEMPLATES/scripts/team-completion.bash.tmpl" "$TARGET/scripts/team-completion.bash"
 render "$TEMPLATES/scripts/verify-state.sh.tmpl"     "$TARGET/scripts/verify-state.sh"
 render "$TEMPLATES/scripts/verify-spec.sh.tmpl"      "$TARGET/scripts/verify-spec.sh"
+render "$TEMPLATES/scripts/verify-models.sh.tmpl"    "$TARGET/scripts/verify-models.sh"
 render "$TEMPLATES/scripts/promote-findings.sh.tmpl" "$TARGET/scripts/promote-findings.sh"
 
 chmod +x "$TARGET/scripts/oc.sh" "$TARGET/scripts/team.sh" \
          "$TARGET/scripts/verify-state.sh" "$TARGET/scripts/verify-spec.sh" \
-         "$TARGET/scripts/promote-findings.sh" "$TARGET/scripts/codex-lead.sh" \
+         "$TARGET/scripts/verify-models.sh" "$TARGET/scripts/promote-findings.sh" \
+         "$TARGET/scripts/codex-lead.sh" \
          "$TARGET/scripts/codex-preflight.sh" 2>/dev/null || true
 
 mkdir -p "$TARGET/.pipeline"
@@ -597,7 +605,7 @@ init.sh: done.
 
 Next steps:
   1. Read every generated file before trusting it — especially
-     .opencode/agent/reviewer.md's permission block. A blanket "deny" has
+     .opencode/agents/reviewer.md's permission block. A blanket "deny" has
      failed to actually block a write before in at least one real project;
      verify it against your real OpenCode server rather than assuming it
      from the YAML.

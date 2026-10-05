@@ -12,7 +12,7 @@ needed, not maintaining an ever-growing library of pre-built adapters.
    Find, from the tool's own documentation or by experimenting with it
    directly:
    - Where it looks for custom agent/rule definitions — a per-repo
-     directory convention (like `.claude/agents/` or `.opencode/agent/`),
+     directory convention (like `.claude/agents/` or `.opencode/agents/`),
      a global (per-machine) config location, or no custom-agent concept
      at all.
    - What frontmatter or config keys it actually reads: model selection, a

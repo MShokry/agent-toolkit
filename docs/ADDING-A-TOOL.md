@@ -11,12 +11,12 @@ second or third tool — not before.
 ## Case 1 — a role this toolkit already has, running under a tool it
 doesn't support yet
 
-Example: `tester` exists only for OpenCode (`.opencode/agent/tester.md`);
+Example: `tester` exists only for OpenCode (`.opencode/agents/tester.md`);
 you want it to also run under some other tool.
 
 1. **Learn the new tool's own agent/rule format first** — don't guess it.
    Find: where it looks for custom agent/rule definitions (a directory
-   convention, like `.claude/agents/` or `.opencode/agent/`), what
+   convention, like `.claude/agents/` or `.opencode/agents/`), what
    frontmatter or config keys it reads (model selection, a permission or
    capability model, a system-prompt field), and how — or whether — it can
    be dispatched non-interactively from a script (OpenCode has `opencode

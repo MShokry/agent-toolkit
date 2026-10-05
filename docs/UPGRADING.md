@@ -152,7 +152,7 @@ With Stages 1–2 in place, `--update` gets three cheap upgrades:
 
   ```
   init.sh: 3 of 12 files differ from toolkit v0.3.0 (you are on v0.2.0)
-    [safety]   .opencode/agent/builder.md      — permission block
+    [safety]   .opencode/agents/builder.md      — permission block
     [contract] .pipeline/TEMPLATE.md             — 2 new fields
     [docs]     scripts/team.sh                 — comment only
   run with --diff to see hunks, or --diff <path> for one file

@@ -58,7 +58,7 @@ does not know it.
 
 1. **First run only:** if `.pipeline/.needs-customization` exists, this
    project was just scaffolded — the role files under `.claude/agents/` and
-   `.opencode/agent/` still carry generic pitfalls/hard-rules text, not this
+   `.opencode/agents/` still carry generic pitfalls/hard-rules text, not this
    codebase's actual ones. Ask the user: read the real source tree and this
    project's own CLAUDE.md/AGENTS.md, then fill those sections in with real
    specifics, now, before starting the requested feature? If yes, do that
@@ -73,7 +73,22 @@ does not know it.
    `curl -sS -m 5 "http://localhost:$(cat .pipeline/.oc-port 2>/dev/null || echo 4096)"`.
    If not up, tell the user to run `scripts/team.sh` (or `opencode serve`)
    and stop.
-4. Confirm the working tree is clean enough to produce a meaningful diff.
+4. **Confirm every OpenCode-dispatched model resolves on the live server:**
+   `scripts/verify-models.sh`. It reads model ids from
+   `.pipeline/.toolkit-version`, queries the authenticated `/api/model`
+   endpoint, and skips models that run outside OpenCode. If it fails, bring
+   the invalid id and the provider's real model list to the user and stop —
+   do not silently switch model or vendor.
+5. **After any OpenCode server restart, upgrade, role-path migration, or edit
+   to a role permission block, verify the live roles before dispatching.**
+   The Markdown is not the running ruleset:
+   `OPENCODE_PASSWORD="$(cat .pipeline/.oc-password)" opencode api GET /api/agent --server http://localhost:$(cat .pipeline/.oc-port) --param directory=$PWD`.
+   Write the response to a file rather than a pipe because large API output
+   may truncate. Confirm `builder`, `reviewer`, and `tester` are present. The
+   last matching `edit` rule for the tester must allow `.pipeline/**`, and
+   the builder must retain its intended source-write rule. Retry the endpoint
+   once after a cold start before concluding a role is missing.
+6. Confirm the working tree is clean enough to produce a meaningful diff.
 
 ## Token discipline
 
@@ -86,7 +101,7 @@ calls.
   background; no manual step is needed.
 - Implementer, reviewer, and tester write their own outputs directly into
   `.pipeline/T-<id>.md` / `.pipeline/T-<id>.diff` (see each role's write scope
-  in `.opencode/agent/*.md`). The lead's job is to **verify placement and
+  in `.opencode/agents/*.md`). The lead's job is to **verify placement and
   content**, not to retype or re-paste what a role already wrote to disk.
 - Don't read a role's raw `--raw-out .jsonl` event stream as a matter of
   course — that inlines every file the agent read and is the single

@@ -70,9 +70,9 @@ files are skipped, not clobbered (`render()`'s core guarantee).
 | `templates/claude/agents/` | `planner.md.tmpl`, `senior-dev.md.tmpl` — Claude subagent role definitions |
 | `templates/claude/commands/` | `feature.md.tmpl` — the `/feature` pipeline command (the lead's own instructions); `toolkit-update.md.tmpl` — the `/toolkit-update` merge command for already-scaffolded projects |
 | `templates/codex/` | Root `AGENTS.md`, a project-scoped planner agent, and `feature` / `toolkit-update` skills. Thin Codex lead adapter over the canonical Claude command flow |
-| `templates/opencode/agent/` | `builder.md.tmpl`, `reviewer.md.tmpl`, `tester.md.tmpl` — OpenCode role definitions |
+| `templates/opencode/agents/` | `builder.md.tmpl`, `reviewer.md.tmpl`, `tester.md.tmpl` — OpenCode role definitions |
 | `templates/agents-state/` | `TEMPLATE.md.tmpl` — the `T-<id>` state-file shape every role reads and appends to |
-| `templates/scripts/` | `oc.sh.tmpl` (OpenCode CLI wrapper), `team.sh.tmpl` (+ `team-completion.bash.tmpl`; tmux layout), `verify-state.sh.tmpl` (state file) / `verify-spec.sh.tmpl` (spec, before the approval gate) / `promote-findings.sh.tmpl` — all deterministic, no-LLM-call structural checks |
+| `templates/scripts/` | `oc.sh.tmpl` (OpenCode CLI wrapper), `team.sh.tmpl` (+ `team-completion.bash.tmpl`; tmux layout), `verify-state.sh.tmpl` (state file) / `verify-spec.sh.tmpl` (spec, before the approval gate) / `verify-models.sh.tmpl` (authenticated live model check) / `promote-findings.sh.tmpl` — all deterministic, no-LLM-call checks |
 | `skills/delegate/` | Context-discipline rules for the lead — usable independently of `init.sh` |
 | `skills/toolkit-init/` | Thin skill wrapping `bin/init.sh`, for running the scaffold conversationally |
 | `skills/dev-team-generator/` | Self-contained, interview-driven alternative to `toolkit-init`: generates the team + flow live for whatever tool(s) are actually available, instead of stamping out `templates/`. Its own `reference/lessons-learned.md` is a generalized, tool-agnostic distillation of this toolkit's hardening history — see the Conventions bullet below |
@@ -168,7 +168,7 @@ files are skipped, not clobbered (`render()`'s core guarantee).
   `--refresh-stamp` after a merge is accepted. If you add a new
   marker-gated behavior, keep that "computed once, before any write"
   ordering or a later non-fresh `init.sh` run will re-trigger it.
-- `templates/opencode/agent/reviewer.md.tmpl` defaults to blanket
+- `templates/opencode/agents/reviewer.md.tmpl` defaults to blanket
   `edit: deny` / `write: deny`, unlike a project that has since widened its
   own copy (e.g. an applied copy's reviewer allows
   `.pipeline/**`). That gap is intentional — see README's "Design decisions"

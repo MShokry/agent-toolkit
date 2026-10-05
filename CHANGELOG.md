@@ -12,6 +12,16 @@ script, flag, or role rule; **PATCH** = prose and docs.
 
 ## Unreleased
 
+- `[contract]` OpenCode role templates move from the legacy singular
+  `.opencode/agent/` directory to V2's canonical `.opencode/agents/` path.
+  Plain bootstrap refuses to create a second role tree beside an unmigrated
+  one, while stamp-less update recovery can still read either layout.
+  Migration: `migrations/03-opencode-v2-agents-directory.md`.
+- `[safety]` Fresh scaffolds now include `scripts/verify-models.sh`; feature
+  preflight resolves every OpenCode-dispatched model against the authenticated
+  live server and verifies that required roles and their ordered permission
+  rules actually loaded after restarts, upgrades, migrations, or permission
+  edits. Disk configuration alone is no longer treated as readiness evidence.
 - `[contract]` Writable task records, outputs, server credentials, session pins,
   and logs move from `.agents/` to `.pipeline/` for both leads. Codex protects
   `.agents/` under its default workspace policy; skills remain at

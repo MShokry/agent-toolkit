@@ -35,9 +35,9 @@ STATE="templates/agents-state/TEMPLATE.md.tmpl"
 STATE_EX="skills/dev-team-generator/reference/state-file-example.md"
 PLANNER="templates/claude/agents/planner.md.tmpl"
 SENIOR="templates/claude/agents/senior-dev.md.tmpl"
-BUILDER="templates/opencode/agent/builder.md.tmpl"
-REVIEWER="templates/opencode/agent/reviewer.md.tmpl"
-TESTER="templates/opencode/agent/tester.md.tmpl"
+BUILDER="templates/opencode/agents/builder.md.tmpl"
+REVIEWER="templates/opencode/agents/reviewer.md.tmpl"
+TESTER="templates/opencode/agents/tester.md.tmpl"
 LESSONS="skills/dev-team-generator/reference/lessons-learned.md"
 CODEX_AGENTS="templates/codex/AGENTS.md.tmpl"
 CODEX_FEATURE="templates/codex/skills/feature/SKILL.md.tmpl"
@@ -106,6 +106,14 @@ rule "only the lead commits, tagged with the task id" \
 rule "check the spec with a script before approval" \
   'verify-spec|check the spec with a script|spec.{0,40}structural check' \
   "$FEATURE" "$SYSTEM" "$FLOW" "$PLANNER"
+
+rule "preflight resolves configured models against the live runtime" \
+  'model.{0,100}live (server|runtime)|model id against the actual provider' \
+  "$FEATURE" "$SYSTEM" "$FLOW"
+
+rule "preflight verifies the live role permission ruleset" \
+  'live role|live.*capability ruleset' \
+  "$FEATURE" "$SYSTEM" "$FLOW"
 
 # --- Codex lead adapter -----------------------------------------------------
 rule "Codex feature skill delegates to the canonical lead flow" \

@@ -221,7 +221,7 @@ takes them as required arguments rather than assuming:
 2. **Cross-vendor independence for review, specifically.** The reviewer
    must not share a vendor/model family with whoever implemented — ask for
    a reviewer model and a *fallback* reviewer model in a different family,
-   the same way `templates/opencode/agent/reviewer.md.tmpl`'s consumer
+   the same way `templates/opencode/agents/reviewer.md.tmpl`'s consumer
    does, for whenever the two would otherwise collide.
 3. **Source directories you're allowed to touch as implementer**, and
    anything explicitly off-limits without an Open Question first.
@@ -254,7 +254,14 @@ mechanism. You need three things:
    thin CLI wrapper that passes a role's instructions and a model choice to
    another agent process and gets its final text back, nothing more exotic
    than that.
-3. **The discipline rules above**, actually followed — the short-reply
+3. **A live preflight for the worker runtime** — resolve every configured
+   model id against the actual provider before dispatch. After a runtime
+   restart, upgrade, role-path migration, or permission edit, inspect the
+   live role/capability ruleset too: confirm every required role loaded and
+   that last-match-wins permission ordering preserves the intended write
+   boundary. Configuration that merely looks correct is not enforcement
+   evidence.
+4. **The discipline rules above**, actually followed — the short-reply
    convention, the loop cap, the stop-and-ask list.
 
 For the exact orchestration *sequence* (preflight checks → dispatch planner
@@ -271,9 +278,9 @@ reference**, not a copy target:
 
 - `templates/claude/agents/planner.md.tmpl` — planner
 - `templates/claude/agents/senior-dev.md.tmpl` or
-  `templates/opencode/agent/builder.md.tmpl` — implementer
-- `templates/opencode/agent/reviewer.md.tmpl` — reviewer
-- `templates/opencode/agent/tester.md.tmpl` — tester
+  `templates/opencode/agents/builder.md.tmpl` — implementer
+- `templates/opencode/agents/reviewer.md.tmpl` — reviewer
+- `templates/opencode/agents/tester.md.tmpl` — tester
 
 Adapt each to what your own tool can actually enforce or actually do —
 research your tool's real config and capability surface first (don't
