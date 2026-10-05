@@ -74,6 +74,34 @@ done
 [ ! -d "$TMP/.opencode/agent" ] || fail "fresh scaffold wrote the legacy singular OpenCode role directory"
 [ -x "$TMP/scripts/verify-models.sh" ] || fail "verify-models.sh missing or not executable"
 ok "OpenCode V2 roles and live model verifier were scaffolded"
+
+MODEL_BIN="$TMP/modelbin"
+mkdir "$MODEL_BIN"
+cat > "$MODEL_BIN/opencode" <<'EOF'
+#!/bin/sh
+count=0
+[ ! -f "$MODEL_COUNT_FILE" ] || count="$(cat "$MODEL_COUNT_FILE")"
+count=$((count + 1))
+printf '%s\n' "$count" > "$MODEL_COUNT_FILE"
+if [ "$count" = 1 ]; then
+  printf '%s\n' '{"data":[]}'
+else
+  printf '%s\n' '{"data":[{"providerID":"a","modelID":"b"},{"providerID":"a","modelID":"c"},{"providerID":"d","modelID":"e"}]}'
+fi
+EOF
+chmod +x "$MODEL_BIN/opencode"
+(
+  cd "$TMP"
+  MODEL_COUNT_FILE="$TMP/model-count" OC_MODEL_RETRY_DELAY=0 \
+    PATH="$MODEL_BIN:/usr/bin:/bin" scripts/verify-models.sh > "$TMP/model-check.log" 2>&1
+) || fail "verify-models.sh did not recover from a cold provider list"
+grep -q 'OK (4 oc.sh model id(s) resolve' "$TMP/model-check.log" \
+  || fail "verify-models.sh did not report the resolved configured models"
+! grep -q 'not on this server' "$TMP/model-check.log" \
+  || fail "verify-models.sh leaked a transient cold-start error before succeeding"
+[ "$(cat "$TMP/model-count")" = 2 ] || fail "verify-models.sh did not retry the cold provider list exactly once"
+ok "verify-models retries cold providers without printing false failure diagnostics"
+
 grep -q '\.claude/commands/feature.md' "$TMP/.agents/skills/feature/SKILL.md" \
   || fail "Codex feature skill does not point at the canonical lead flow"
 grep -q 'Not populated by agent-toolkit' "$TMP/AGENTS.md" \

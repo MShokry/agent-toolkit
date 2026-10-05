@@ -32,6 +32,7 @@ MANIFEST=".pipeline/.toolkit-version"
 
 PORT="$(cat .pipeline/.oc-port 2>/dev/null || echo 4096)"
 SERVER="${OC_SERVER:-http://localhost:$PORT}"
+RETRY_DELAY="${OC_MODEL_RETRY_DELAY:-5}"
 
 # opencode v2 auth-gates the whole API and moved it under /api/*. Plain curl
 # gets 401 here, so go through `opencode api` with the password scripts/team.sh
@@ -59,7 +60,9 @@ opencode api GET /api/model --server "$SERVER" --param directory="$REPO_ROOT" >"
 }
 
 set +e
-MANIFEST="$MANIFEST" MODELS_JSON="$MODELS_JSON" python3 -c '
+final_attempt=0
+[ "$attempt" -ge 3 ] && final_attempt=1
+MANIFEST="$MANIFEST" MODELS_JSON="$MODELS_JSON" FINAL_ATTEMPT="$final_attempt" python3 -c '
 import json, os, sys, re
 
 try:
@@ -93,6 +96,8 @@ for key, val in wanted:
 
 if bad:
     cold = any(not have.get(prov) for _, _, prov in bad)
+    if cold and os.environ.get("FINAL_ATTEMPT") != "1":
+        sys.exit(3)
     for key, val, prov in bad:
         offers = sorted(have.get(prov, set()))
         model = val.split("/", 1)[1]
@@ -113,5 +118,5 @@ if [ "$attempt" -ge 3 ]; then
   exit 1
 fi
 attempt=$((attempt + 1))
-sleep 5
+sleep "$RETRY_DELAY"
 done
