@@ -15,7 +15,7 @@ _team_sh_complete() {
       return 0
       ;;
     --lead)
-      COMPREPLY=($(compgen -W "auto claude codex" -- "$cur"))
+      COMPREPLY=($(compgen -W "auto claude codex opencode" -- "$cur"))
       return 0
       ;;
     --kill)

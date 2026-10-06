@@ -2,7 +2,7 @@
 
 A reusable, project-agnostic version of the planner → implement → review →
 test multi-agent pipeline. `bin/init.sh` scaffolds it into any target repo:
-Claude or Codex as lead, Claude/Codex planning, OpenCode (any vendor) for
+Claude, Codex, or OpenCode as lead, matching-tool planning, OpenCode (any vendor) for
 cross-vendor implement/review/test, a state file (`.pipeline/T-<id>.md`) as the
 one handoff surface between roles, and a `delegate` skill that keeps the
 orchestrating lead's own context small across a long run.
@@ -26,6 +26,7 @@ change with the automated smoke run:
 bash test/smoke.sh        # scaffolder guarantees + the two structural scripts
 bash test/invariants.sh   # every load-bearing rule present in every copy
 bash test/codex.sh        # generated launcher/hooks/preflight, no model calls
+python3 test/herdr.py     # optional host adapter; fake Herdr, no agents or LLM calls
 ```
 
 `smoke.sh` scaffolds into a throwaway directory and asserts the core
@@ -66,11 +67,15 @@ files are skipped, not clobbered (`render()`'s core guarantee).
 | `test/smoke.sh` | The automated smoke run (see Commands). CI runs it plus shellcheck on every push |
 | `test/invariants.sh` | Cross-file rule presence check: one grep per (rule, file) pair over the hand-synced copies. Add a rule = one line in its table |
 | `test/codex.sh` | Behavioral checks for the generated launcher, lifecycle hooks, preflight, inheritance, and migration failures, using CLI doubles and no model calls |
+| `integrations/herdr/` | Optional Herdr plugin for adopting an existing lead and showing task records/support panes; Python standard library, independent of the bash scaffolder |
+| `bin/dashboard` | Standalone read-only visual task viewer for any terminal; reuses the renderer without calling Herdr |
+| `integrations/herdr/dashboard.py` | Canonical host-independent viewer; copied directly by init to `scripts/dashboard`, also imported by the Herdr adapter. Reads `.pipeline/` (falls back to a not-yet-migrated `.agents/` runtime). Python is required only to run this optional UI, not to scaffold |
 | `.github/workflows/ci.yml` | Runs `test/smoke.sh` + shellcheck (`bin/init.sh`, the test, and every `templates/scripts/*.tmpl`) |
 | `templates/claude/agents/` | `planner.md.tmpl`, `senior-dev.md.tmpl` — Claude subagent role definitions |
 | `templates/claude/commands/` | `feature.md.tmpl` — the `/feature` pipeline command (the lead's own instructions); `toolkit-update.md.tmpl` — the `/toolkit-update` merge command for already-scaffolded projects |
 | `templates/codex/` | Root `AGENTS.md`, a project-scoped planner agent, and `feature` / `toolkit-update` skills. Thin Codex lead adapter over the canonical Claude command flow |
-| `templates/opencode/agents/` | `builder.md.tmpl`, `reviewer.md.tmpl`, `tester.md.tmpl` — OpenCode role definitions |
+| `templates/opencode/agents/` | `builder.md.tmpl`, `reviewer.md.tmpl`, `tester.md.tmpl` — OpenCode worker role definitions; `leader.md.tmpl`, `planner.md.tmpl` — native V2 adapters for an OpenCode lead |
+| `templates/opencode/commands/` | `feature.md.tmpl`, `toolkit-update.md.tmpl` — direct OpenCode lead commands that point at the canonical Claude flow files |
 | `templates/agents-state/` | `TEMPLATE.md.tmpl` — the `T-<id>` state-file shape every role reads and appends to |
 | `templates/scripts/` | `oc.sh.tmpl` (OpenCode CLI wrapper), `team.sh.tmpl` (+ `team-completion.bash.tmpl`; tmux layout), `verify-state.sh.tmpl` (state file) / `verify-spec.sh.tmpl` (spec, before the approval gate) / `verify-models.sh.tmpl` (authenticated live model check) / `promote-findings.sh.tmpl` — all deterministic, no-LLM-call checks |
 | `skills/delegate/` | Context-discipline rules for the lead — usable independently of `init.sh` |
@@ -185,7 +190,7 @@ files are skipped, not clobbered (`render()`'s core guarantee).
 
 Actively developed; history in git. The scaffolder's core guarantees are
 covered by `test/smoke.sh`, and cross-copy rule presence by
-`test/invariants.sh` (CI: smoke + invariants + Codex behavior + shellcheck). What's *not*
+`test/invariants.sh` (CI: smoke + invariants + Codex behavior + Herdr adapter + shellcheck). What's *not*
 automated: a live end-to-end pipeline run against a real OpenCode server,
 and live permission-enforcement verification — those stay manual per
 README's "Design decisions". Treat README.md's "Known gaps" and

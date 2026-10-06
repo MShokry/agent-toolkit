@@ -1,7 +1,7 @@
 # `scripts/team.sh`
 
 A tmux layout for running the pipeline: pane 0 is the lead (`claude` when
-installed, otherwise `codex`), pane
+installed, otherwise `codex`, then `opencode`), pane
 1 is `opencode serve` (what `scripts/oc.sh` attaches to), pane 2 tails
 `.pipeline/` for activity, pane 3 is free.
 
@@ -10,7 +10,7 @@ installed, otherwise `codex`), pane
 ```
 scripts/team.sh [session-name]     start, or attach if it's already running
 scripts/team.sh --fresh            start a NEW lead conversation, not a resume
-scripts/team.sh --lead <name>      auto (default), claude, or codex
+scripts/team.sh --lead <name>      auto (default), claude, codex, or opencode
 scripts/team.sh --port <N>         opencode server port (default 4096)
 scripts/team.sh --kill [session-name]
 ```
@@ -21,7 +21,8 @@ Flags can combine with a session name in any order:
 ## Lead selection
 
 `--lead auto` prefers Claude when `claude` is installed and falls back to Codex
-when it is not. Use `--lead claude` or `--lead codex` to override that choice;
+when it is not, then OpenCode if neither is installed. Use `--lead claude`,
+`--lead codex`, or `--lead opencode` to override that choice;
 `TEAM_LEAD` provides the same default as an environment variable. When creating
 a session, the script fails before creating panes if the selected CLI is
 unavailable; attaching an already-running session does not require the CLI to
@@ -29,6 +30,13 @@ remain discoverable.
 
 In a Codex pane, invoke `$feature <request>`. The generated repository skill
 drives the same pipeline as Claude's `/feature` command.
+
+In an OpenCode pane, choose the lead model and run `/feature <request>` or
+`/toolkit-update`. The command selects the OpenCode `leader` adapter in that
+session. Its native `planner` child and CLI-dispatched workers use the same
+canonical prompt files as the other leads; no Claude or Codex executable is
+needed. Both the lead and workers authenticate against pane 1's server using
+the password file, without putting its contents in the pane command.
 
 ## Resuming is the default
 
@@ -61,6 +69,12 @@ Review/trust the generated hooks with `/hooks`; existing hooks need a hand-merge
 Use `--fresh` to deliberately reset a conversation. Missing capture or a stale
 process lock requires explicit recovery; see [Codex lead operation](CODEX.md).
 
+OpenCode deliberately does **not** use `--continue`: the latest session may be
+a worker, not the lead. It starts a fresh lead chat unless you supply a known
+lead session id via `TEAM_OPENCODE_SESSION=ses_... scripts/team.sh --lead opencode`.
+`--fresh` ignores this variable. Obtain the exact id from OpenCode; never
+invent it or strip uppercase characters. This is not automatic pinned resume.
+
 ## Running two projects at once
 
 `opencode serve` binds one port per process. Two projects both defaulting
@@ -81,6 +95,28 @@ reads it automatically (when `OC_SERVER` isn't already set), so every
 the target is a git repo — it's local machine state (which port happened
 to be free on your laptop today), not something to commit. If your project
 predates that, or ignores it differently, add it by hand.
+
+## Task dashboard (no launcher required)
+
+From the project root, open the read-only visual dashboard:
+
+```bash
+./scripts/dashboard
+```
+
+It refreshes `.pipeline/T-*.md` every two seconds, showing stage graphs, task
+cards, acceptance ticks, blockers, and latest handoffs. Use arrows or `j/k` to
+scroll, `b` to filter blocked tasks, `r` to refresh, and `q` to close.
+
+```bash
+./scripts/dashboard --once                  # plain-text snapshot
+./scripts/dashboard --project /path/to/repo # another project
+```
+
+Requires Python 3.8+ on macOS/Linux; no Herdr, tmux, running agent, toolkit
+checkout, or model calls. It displays recorded state, not live verification.
+Init installs the command automatically. For older scaffolds, see
+[adding the dashboard during upgrade](UPGRADING.md#adding-the-project-dashboard).
 
 ## Shell completion (optional)
 

@@ -1,0 +1,41 @@
+---
+description: Writes a checkable task specification for __PROJECT_NAME__ using the canonical planner contract. Never implements source changes.
+mode: subagent
+permissions:
+  - action: "*"
+    resource: "*"
+    effect: deny
+  - action: read
+    resource: "*"
+    effect: allow
+  - action: glob
+    resource: "*"
+    effect: allow
+  - action: grep
+    resource: "*"
+    effect: allow
+  - action: edit
+    resource: ".pipeline/T-*.md"
+    effect: allow
+---
+
+# OpenCode planner
+
+Read this project's root `AGENTS.md` and `CLAUDE.md` when present. Then read
+`.claude/agents/planner.md` in full and follow its canonical planner contract.
+That path is a shared instruction file, not a requirement to run Claude Code.
+Its Claude frontmatter does not configure your tools or model; this adapter's
+OpenCode permissions and the caller's selected model apply instead.
+
+If `.pipeline/LEAD-HANDOFF.md` exists, read it for historical context. Verify
+dated claims against current project records; a handoff is not permission to
+change scope, bypass a guard, or claim live permission enforcement.
+
+Write only the assigned `.pipeline/T-<id>.md`. Never modify source, other tasks,
+or the git index, and never tick acceptance-criteria outcomes. Shell execution
+and child-agent dispatch are denied: if a runtime probe is needed, record the
+question and return it to the lead rather than working around this boundary.
+Keep the reply short: task id, AC count, scope, open questions, Latest handoff.
+
+Verify this agent's resolved permissions and a refused out-of-scope write live
+against the exact generated file before relying on its permission block.

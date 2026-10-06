@@ -44,6 +44,11 @@ CODEX_FEATURE="templates/codex/skills/feature/SKILL.md.tmpl"
 CODEX_PLANNER="templates/codex/agents/planner.toml.tmpl"
 CODEX_UPDATE="templates/codex/skills/toolkit-update/SKILL.md.tmpl"
 UPDATE="templates/claude/commands/toolkit-update.md.tmpl"
+OC_LEADER="templates/opencode/agents/leader.md.tmpl"
+OC_PLANNER="templates/opencode/agents/planner.md.tmpl"
+OC_FEATURE="templates/opencode/commands/feature.md.tmpl"
+OC_UPDATE="templates/opencode/commands/toolkit-update.md.tmpl"
+HERDR_DOC="integrations/herdr/README.md"
 
 FAIL=0
 CHECKS=0
@@ -147,6 +152,33 @@ rule "approval decisions survive restart" \
   'Record approvals|record the approval' "$FEATURE" "$SYSTEM" "$FLOW"
 
 # --- the delivery contract --------------------------------------------------
+rule "Herdr adoption does not prompt or relaunch an existing lead" \
+  'sends \*\*no prompt\*\*.*launches \*\*no process\*\*' "$HERDR_DOC"
+rule "Herdr lifecycle completion is not task acceptance" \
+  'Herdr done/idle is not task acceptance' "$HERDR_DOC"
+rule "Herdr bindings never guess the newest worker session" \
+  'never.*choose the newest worker' "$HERDR_DOC"
+rule "Herdr role briefing does not activate runtime permissions" \
+  'not an OpenCode profile switch' "$HERDR_DOC"
+
+# OpenCode-only adapters reference policy rather than becoming new flow copies.
+rule "OpenCode leader and command reference the canonical flow" \
+  '\.claude/commands/feature\.md' "$OC_LEADER" "$OC_FEATURE"
+rule "OpenCode planner references the canonical planner contract" \
+  '\.claude/agents/planner\.md' "$OC_PLANNER"
+rule "OpenCode update references canonical reconciliation gates" \
+  '\.claude/commands/toolkit-update\.md' "$OC_LEADER" "$OC_UPDATE"
+rule "OpenCode commands select the lead in the current session" \
+  'agent: leader subagent: false' "$OC_FEATURE" "$OC_UPDATE"
+rule "OpenCode adapters require live permission verification" \
+  'verify.*permissions.*live' "$OC_LEADER" "$OC_PLANNER"
+rule "OpenCode planner cannot record AC outcomes" \
+  'never tick' "$OC_PLANNER"
+rule "OpenCode leader does not implement source" \
+  'never implement feature code' "$OC_LEADER"
+rule "OpenCode lead resume never selects an arbitrary worker" \
+  'never resume the lead with the newest worker session' "$OC_LEADER"
+
 rule "acceptance-criteria ledger closes the contract" \
   'ledger' \
   "$FEATURE" "$SYSTEM" "$FLOW" "$STATE" "$STATE_EX" "$PLANNER" "$SENIOR" "$BUILDER" "$LESSONS"

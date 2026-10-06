@@ -330,7 +330,7 @@ a turn hanging open. Retrying the same session immediately is safe; you do
 not need to check whether the prior call is still active first. (This only
 holds when `oc.sh` itself did the killing. If a session was killed some
 other way — you interrupted it by hand, the machine slept — abort it
-yourself before reusing it: `curl -X POST $OC_SERVER/session/<id>/abort`.)
+yourself before reusing it: `OPENCODE_PASSWORD="$(cat .pipeline/.oc-password)" opencode api POST /api/session/<id>/interrupt --server $OC_SERVER`.)
 
 ## 3 — Review
 

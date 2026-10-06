@@ -186,12 +186,14 @@ STAMP_SOURCE="$STAMP"
 if [ "$UPDATE" -eq 0 ] && { [ -f "$TARGET/.agents/TEMPLATE.md" ] || compgen -G "$TARGET/.agents/T-*.md" >/dev/null; }; then
   die "legacy .agents runtime state: complete migrations/02-pipeline-directory.md at a task boundary before bootstrapping"
 fi
-if [ "$UPDATE" -eq 0 ] && [ -d "$TARGET/.opencode/agent" ] && [ ! -d "$TARGET/.opencode/agents" ]; then
+# Worker files, not the directory: an upstream scaffold already has .opencode/agents/
+# (leader/planner) beside the legacy .opencode/agent/ workers.
+if [ "$UPDATE" -eq 0 ] && [ -f "$TARGET/.opencode/agent/builder.md" ] && [ ! -f "$TARGET/.opencode/agents/builder.md" ]; then
   die "legacy .opencode/agent role layout: complete migrations/03-opencode-v2-agents-directory.md at a task boundary before bootstrapping"
 fi
 
 # Keep in sync with the number of check_pair/render lines below.
-RENDER_TOTAL=26
+RENDER_TOTAL=31
 
 write_stamp() {
   local sha tag
@@ -278,7 +280,7 @@ load_flags_from_stamp() {
 recover_from_target() { # $1 = key
   REPLY=""
   local agent_dir="$TARGET/.opencode/agents"
-  [ -d "$agent_dir" ] || agent_dir="$TARGET/.opencode/agent"
+  [ -f "$agent_dir/builder.md" ] || agent_dir="$TARGET/.opencode/agent"
   case "$1" in
     builder_model)
       REPLY="$(sed -n 's/^model: //p' "$agent_dir/builder.md" | head -1)" ;;
@@ -451,11 +453,16 @@ if [ "$UPDATE" -eq 1 ]; then
   check_pair "$TOOLKIT_ROOT/skills/karpathy-guidelines/SKILL.md" "$TARGET/.agents/skills/karpathy-guidelines/SKILL.md"
   check_pair "$TEMPLATES/codex/skills/feature/SKILL.md.tmpl" "$TARGET/.agents/skills/feature/SKILL.md"
   check_pair "$TEMPLATES/codex/skills/toolkit-update/SKILL.md.tmpl" "$TARGET/.agents/skills/toolkit-update/SKILL.md"
-  check_pair "$TEMPLATES/opencode/agents/builder.md.tmpl"  "$TARGET/.opencode/agents/builder.md"
+  check_pair "$TEMPLATES/opencode/agents/builder.md.tmpl" "$TARGET/.opencode/agents/builder.md"
   check_pair "$TEMPLATES/opencode/agents/reviewer.md.tmpl" "$TARGET/.opencode/agents/reviewer.md"
-  check_pair "$TEMPLATES/opencode/agents/tester.md.tmpl"   "$TARGET/.opencode/agents/tester.md"
-  check_pair "$TEMPLATES/agents-state/TEMPLATE.md.tmpl"    "$TARGET/.pipeline/TEMPLATE.md"
+  check_pair "$TEMPLATES/opencode/agents/tester.md.tmpl" "$TARGET/.opencode/agents/tester.md"
+  check_pair "$TEMPLATES/opencode/agents/planner.md.tmpl" "$TARGET/.opencode/agents/planner.md"
+  check_pair "$TEMPLATES/opencode/agents/leader.md.tmpl" "$TARGET/.opencode/agents/leader.md"
+  check_pair "$TEMPLATES/opencode/commands/feature.md.tmpl" "$TARGET/.opencode/commands/feature.md"
+  check_pair "$TEMPLATES/opencode/commands/toolkit-update.md.tmpl" "$TARGET/.opencode/commands/toolkit-update.md"
+  check_pair "$TEMPLATES/agents-state/TEMPLATE.md.tmpl" "$TARGET/.pipeline/TEMPLATE.md"
   check_pair "$TEMPLATES/scripts/oc.sh.tmpl"               "$TARGET/scripts/oc.sh"
+  check_pair "$TOOLKIT_ROOT/integrations/herdr/dashboard.py" "$TARGET/scripts/dashboard"
   check_pair "$TEMPLATES/scripts/team.sh.tmpl"             "$TARGET/scripts/team.sh"
   check_pair "$TEMPLATES/scripts/team-completion.bash.tmpl" "$TARGET/scripts/team-completion.bash"
   check_pair "$TEMPLATES/scripts/verify-state.sh.tmpl"     "$TARGET/scripts/verify-state.sh"
@@ -520,11 +527,16 @@ render "$TOOLKIT_ROOT/skills/status-board/SKILL.md" "$TARGET/.agents/skills/stat
 render "$TOOLKIT_ROOT/skills/karpathy-guidelines/SKILL.md" "$TARGET/.agents/skills/karpathy-guidelines/SKILL.md"
 render "$TEMPLATES/codex/skills/feature/SKILL.md.tmpl" "$TARGET/.agents/skills/feature/SKILL.md"
 render "$TEMPLATES/codex/skills/toolkit-update/SKILL.md.tmpl" "$TARGET/.agents/skills/toolkit-update/SKILL.md"
-render "$TEMPLATES/opencode/agents/builder.md.tmpl"  "$TARGET/.opencode/agents/builder.md"
+render "$TEMPLATES/opencode/agents/builder.md.tmpl" "$TARGET/.opencode/agents/builder.md"
 render "$TEMPLATES/opencode/agents/reviewer.md.tmpl" "$TARGET/.opencode/agents/reviewer.md"
-render "$TEMPLATES/opencode/agents/tester.md.tmpl"   "$TARGET/.opencode/agents/tester.md"
-render "$TEMPLATES/agents-state/TEMPLATE.md.tmpl"    "$TARGET/.pipeline/TEMPLATE.md"
+render "$TEMPLATES/opencode/agents/tester.md.tmpl" "$TARGET/.opencode/agents/tester.md"
+render "$TEMPLATES/opencode/agents/planner.md.tmpl" "$TARGET/.opencode/agents/planner.md"
+render "$TEMPLATES/opencode/agents/leader.md.tmpl" "$TARGET/.opencode/agents/leader.md"
+render "$TEMPLATES/opencode/commands/feature.md.tmpl" "$TARGET/.opencode/commands/feature.md"
+render "$TEMPLATES/opencode/commands/toolkit-update.md.tmpl" "$TARGET/.opencode/commands/toolkit-update.md"
+render "$TEMPLATES/agents-state/TEMPLATE.md.tmpl" "$TARGET/.pipeline/TEMPLATE.md"
 render "$TEMPLATES/scripts/oc.sh.tmpl"               "$TARGET/scripts/oc.sh"
+render "$TOOLKIT_ROOT/integrations/herdr/dashboard.py" "$TARGET/scripts/dashboard"
 render "$TEMPLATES/scripts/team.sh.tmpl"             "$TARGET/scripts/team.sh"
 render "$TEMPLATES/scripts/team-completion.bash.tmpl" "$TARGET/scripts/team-completion.bash"
 render "$TEMPLATES/scripts/verify-state.sh.tmpl"     "$TARGET/scripts/verify-state.sh"
@@ -532,7 +544,7 @@ render "$TEMPLATES/scripts/verify-spec.sh.tmpl"      "$TARGET/scripts/verify-spe
 render "$TEMPLATES/scripts/verify-models.sh.tmpl"    "$TARGET/scripts/verify-models.sh"
 render "$TEMPLATES/scripts/promote-findings.sh.tmpl" "$TARGET/scripts/promote-findings.sh"
 
-chmod +x "$TARGET/scripts/oc.sh" "$TARGET/scripts/team.sh" \
+chmod +x "$TARGET/scripts/oc.sh" "$TARGET/scripts/team.sh" "$TARGET/scripts/dashboard" \
          "$TARGET/scripts/verify-state.sh" "$TARGET/scripts/verify-spec.sh" \
          "$TARGET/scripts/verify-models.sh" "$TARGET/scripts/promote-findings.sh" \
          "$TARGET/scripts/codex-lead.sh" \
@@ -611,23 +623,27 @@ Next steps:
      from the YAML.
   2. Start opencode serve (or run $TARGET/scripts/team.sh) so scripts/oc.sh
      has something to attach to.
-  3. Start the lead with Claude when installed, or Codex otherwise. In
+  3. Start the lead with Claude, Codex, or OpenCode. In
      Claude run /feature; in Codex invoke the feature skill (for example,
-     \$feature). scripts/team.sh makes the same Claude-first choice.
+     \$feature). In OpenCode run /feature; use scripts/team.sh --lead opencode
+     for an OpenCode-only team. Auto selection prefers Claude, then Codex,
+     then OpenCode.
      Load the "delegate" skill when available; it is the context-discipline
      half of this.
   4. In Codex, review/trust the generated hooks with /hooks (existing hooks
      are never overwritten). Run scripts/codex-preflight.sh from the lead
      sandbox. Git/config writes may need runtime approval after pipeline consent.
      Make sure $TARGET has real project-specific guidance. The generated
-     AGENTS.md is Codex integration plus an explicitly unpopulated guidance
+     AGENTS.md is lead integration plus an explicitly unpopulated guidance
      section; fill it when no project CLAUDE.md already supplies constraints.
-  5. On the first feature run, either lead will notice
+  5. On the first feature run, the selected lead will notice
      .pipeline/.needs-customization and ask whether to fill the role files'
-     generic pitfalls/hard-rules sections with this project's real ones.
+      generic pitfalls/hard-rules sections with this project's real ones.
+      View task progress anytime: $TARGET/scripts/dashboard
+      (Python 3.8+; no Herdr or model calls; --once prints a snapshot).
   6. Later, once the toolkit itself has moved on: bin/init.sh --update
      --target $TARGET shows a drift summary (exit 1 = something to merge),
-     and /toolkit-update (Claude) or \$toolkit-update (Codex) walks your
+     and /toolkit-update (Claude/OpenCode) or \$toolkit-update (Codex) walks your
      lead through the merge. Refresh the
      stamp afterwards: bin/init.sh --refresh-stamp --target $TARGET.
 

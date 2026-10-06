@@ -10,6 +10,10 @@ for dependency in codex opencode python3; do
 done
 VERSION="$(codex --version)"
 printf 'codex-preflight.sh: %s (toolkit baseline: 0.160.0)\n' "$VERSION"
+CODEX_NUMBER="$(printf '%s' "$VERSION" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
+if [ -n "$CODEX_NUMBER" ] && [ "$(printf '0.160.0\n%s\n' "$CODEX_NUMBER" | sort -V | head -1)" != "0.160.0" ]; then
+  printf 'codex-preflight.sh: warning: Codex %s is older than the tested baseline 0.160.0; hooks/--no-daemon behavior may differ\n' "$CODEX_NUMBER" >&2
+fi
 FEATURES="$(codex features list)" || die "cannot inspect Codex runtime capabilities"
 for feature in hooks multi_agent; do
   printf '%s\n' "$FEATURES" | grep -qE "^$feature[[:space:]].*[[:space:]]true$" \

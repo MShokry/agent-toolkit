@@ -3,7 +3,7 @@
 # BEGIN USAGE
 # tmux layout for the agent team.
 #
-#   pane 0 (left, big)    claude/codex    <- you talk to the lead here
+#   pane 0 (left, big)    claude/codex/opencode <- you talk to the lead here
 #   pane 1 (top right)    opencode serve  <- the server oc.sh attaches to
 #   pane 2 (mid right)    .pipeline/ activity tail
 #   pane 3 (bottom right) free pane
@@ -13,12 +13,12 @@
 #   scripts/team.sh --fresh                start a NEW lead conversation
 #                                          instead of resuming (see below)
 #   scripts/team.sh --port <N>             opencode server port (default 4096)
-#   scripts/team.sh --lead <auto|claude|codex>
+#   scripts/team.sh --lead <auto|claude|codex|opencode>
 #                                          lead selection (default auto:
-#                                          Claude first, then Codex)
+#                                          Claude, then Codex, then OpenCode)
 #   scripts/team.sh --kill [session-name]
 #
-# Resuming is the default, not an opt-in. For Claude, pane 0 resumes the
+# For Claude and Codex, resuming is the default, not an opt-in. Claude resumes the
 # lead's conversation pinned to this session name via a stored UUID (see
 # .pipeline/.claude-session-id.<session-name>) rather than `claude --continue`
 # (which just means "the most recent conversation in this directory" — with
@@ -34,6 +34,10 @@
 # slate (this also mints a new pinned id, so future resumes follow it). Codex
 # captures its actual id with reviewed lifecycle hooks and resumes that exact
 # id through codex-lead.sh. Missing/failed pins require explicit recovery.
+# OpenCode starts a new lead chat by default: --continue could select the
+# latest worker session instead. Set TEAM_OPENCODE_SESSION to a known lead
+# session id to resume it; --fresh ignores that variable. Run /feature in
+# pane 0 to select the leader agent (the TUI has no --agent flag).
 #
 # Running two projects at once: opencode's server binds one port per
 # process, so two projects both defaulting to --port 4096 collide — the
@@ -107,16 +111,30 @@ case "$LEAD" in
       LEAD="claude"
     elif command -v codex >/dev/null 2>&1; then
       LEAD="codex"
+    elif command -v opencode >/dev/null 2>&1; then
+      LEAD="opencode"
     else
-      echo "team.sh: neither claude nor codex is installed" >&2
+      echo "team.sh: no supported lead CLI (claude, codex, opencode) is installed" >&2
       exit 1
     fi ;;
-  claude|codex)
+  claude|codex|opencode)
     command -v "$LEAD" >/dev/null 2>&1 || { echo "team.sh: $LEAD is not installed" >&2; exit 1; } ;;
   *)
-    echo "team.sh: --lead must be auto, claude, or codex" >&2
+    echo "team.sh: --lead must be auto, claude, codex, or opencode" >&2
     exit 1 ;;
 esac
+
+# Validate before writes or panes: never interpolate arbitrary shell text into
+# the lead command. Session ids are obtained from OpenCode, not invented here.
+if [ "$LEAD" = "opencode" ] && [ "$FRESH" -eq 0 ] && [ -n "${TEAM_OPENCODE_SESSION:-}" ]; then
+  case "$TEAM_OPENCODE_SESSION" in
+    ses_?*)
+      case "$TEAM_OPENCODE_SESSION" in
+        *[!A-Za-z0-9_]*) echo "team.sh: invalid TEAM_OPENCODE_SESSION" >&2; exit 1 ;;
+      esac ;;
+    *) echo "team.sh: TEAM_OPENCODE_SESSION must be a real ses_ id" >&2; exit 1 ;;
+  esac
+fi
 
 gen_uuid() {
   if command -v uuidgen >/dev/null 2>&1; then
@@ -167,10 +185,16 @@ if [ "$LEAD" = "claude" ]; then
     printf '%s' "$CLAUDE_UUID" > "$SESSION_ID_FILE"
     LEAD_CMD="claude --session-id $CLAUDE_UUID"
   fi
-else
+elif [ "$LEAD" = "codex" ]; then
   [[ "$SESSION" =~ ^[a-zA-Z0-9_-]+$ ]] || { echo "team.sh: invalid Codex team name" >&2; exit 1; }
   LEAD_CMD="bash scripts/codex-lead.sh $SESSION"
   [ "$FRESH" -eq 0 ] || LEAD_CMD="$LEAD_CMD --fresh"
+else
+  LEAD_CMD="OPENCODE_PASSWORD=\"\$(cat '$PASSWORD_FILE')\" opencode --server http://localhost:$PORT"
+  if [ "$FRESH" -eq 0 ] && [ -n "${TEAM_OPENCODE_SESSION:-}" ]; then
+    LEAD_CMD="$LEAD_CMD --session $TEAM_OPENCODE_SESSION"
+  fi
+  echo "team.sh: OpenCode lead — run /feature or /toolkit-update in pane 0"
 fi
 
 tmux new-session -d -s "$SESSION" -c "$REPO_ROOT" -n team

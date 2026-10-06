@@ -15,6 +15,8 @@ jobs:
         run: bash test/invariants.sh
       - name: Codex adapter behavior (no model calls)
         run: bash test/codex.sh
+      - name: Herdr adapter contracts (no agents or LLM calls)
+        run: python3 test/herdr.py
       - name: ShellCheck
         run: |
           shellcheck --version >/dev/null 2>&1 || { echo "shellcheck not installed; skipping"; exit 0; }

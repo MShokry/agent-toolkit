@@ -43,7 +43,7 @@ aborted only when **either**:
 2. the absolute `OC_TIMEOUT` ceiling (default **2400**) is reached while
    the turn is still running.
 
-On abort it `POST $OC_SERVER/session/<id>/abort`s (verified live: 200,
+On abort it `POST`s `/api/session/<id>/interrupt` (opencode v1 called this `/session/<id>/abort`; verified live on v1: 200,
 idempotent) and exits **124**, with a stderr message that says which of the
 two fired. A run that keeps making progress is never touched, however long
 it takes.

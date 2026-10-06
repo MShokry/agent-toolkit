@@ -14,6 +14,29 @@ current templates, `diff -u` each one against the live file in the target,
 write nothing. What is missing is everything *around* it — which is why
 downstream projects drift and stay drifted.
 
+## Adding the project dashboard
+
+New scaffolds include `scripts/dashboard`. For an existing stamped project,
+run these commands from its root after updating your toolkit checkout:
+
+```bash
+bash /path/to/agent-toolkit/bin/init.sh --update --target . --only scripts/dashboard
+bash /path/to/agent-toolkit/bin/init.sh --target .
+./scripts/dashboard
+```
+
+The first command previews only the dashboard and writes nothing: exit 1
+means it is missing or differs. The second loads settings from the provenance
+stamp and installs missing files without overwriting existing customizations.
+It may add other missing upstream files too. Existing dashboard changes are
+reconciled through `/toolkit-update`, not overwritten by re-running init.
+
+The installed viewer is self-contained and requires only Python 3.8+ on
+macOS/Linux. Use `./scripts/dashboard --once` for a text snapshot or
+`--project /path/to/repo` to view another project. No Herdr or model calls are
+needed. See [the team guide](TEAM.md#task-dashboard-no-launcher-required) for
+controls and status limitations.
+
 ## Bootstrapping a newly supported lead
 
 An update command cannot bootstrap itself into a project that does not have it

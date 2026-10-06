@@ -12,6 +12,14 @@ script, flag, or role rule; **PATCH** = prose and docs.
 
 ## Unreleased
 
+- `[contract]` Merged upstream v0.10.0 (OpenCode lead, standalone dashboard,
+  Herdr plugin) onto this line without changing the Codex/`.pipeline/`
+  contract: the new OpenCode `leader`/`planner`/commands, `scripts/dashboard`,
+  and the Herdr plugin read and write `.pipeline/` (task records) while
+  skills stay in `.agents/skills/`. Upstream's `.opencode/agent/` worker
+  directory stays retired in favor of `.opencode/agents/`. See below for
+  upstream's own v0.10.0 notes, which still say `.agents/` where they
+  describe the unmodified upstream.
 - `[contract]` OpenCode role templates move from the legacy singular
   `.opencode/agent/` directory to V2's canonical `.opencode/agents/` path.
   Plain bootstrap refuses to create a second role tree beside an unmigrated
@@ -19,9 +27,11 @@ script, flag, or role rule; **PATCH** = prose and docs.
   Migration: `migrations/03-opencode-v2-agents-directory.md`.
 - `[safety]` Fresh scaffolds now include `scripts/verify-models.sh`; feature
   preflight resolves every OpenCode-dispatched model against the authenticated
-  live server and verifies that required roles and their ordered permission
-  rules actually loaded after restarts, upgrades, migrations, or permission
-  edits. Disk configuration alone is no longer treated as readiness evidence.
+  live server, and instructs the lead to verify (against `/api/agent`) that
+  required roles and their ordered permission rules loaded after restarts,
+  upgrades, migrations, or permission edits — the script checks models, the
+  role check is a lead-run step. Disk configuration alone is no longer treated
+  as readiness evidence.
 - `[contract]` Writable task records, outputs, server credentials, session pins,
   and logs move from `.agents/` to `.pipeline/` for both leads. Codex protects
   `.agents/` under its default workspace policy; skills remain at
@@ -46,6 +56,68 @@ script, flag, or role rule; **PATCH** = prose and docs.
 - `[docs]` Added `docs/CODEX.md`, migration/recovery guidance, and generalized
   lessons about protected instruction directories, exact-session identity,
   lifecycle trust, and separate workflow/runtime approvals.
+
+## v0.10.0 — 2026-10-06
+
+- `[safety]` Corrected earlier permission-verification conclusions in worker
+  templates and `oc.sh`: v2 enforcement remains unverified against the exact
+  generated artifacts. Stale server configuration and altered scratch copies
+  can mislead checks; verify resolved rules and refused actions in a fresh
+  runtime. Permission blocks remain guardrails, not filesystem isolation.
+
+- `[process]` Init now installs self-contained `scripts/dashboard` into target
+  repos, and `--update` / `/toolkit-update` include it in new-file and drift
+  triage. Existing stamped projects add it with a plain flag-free init re-run;
+  existing dashboard customizations and provenance are preserved. The shared
+  dashboard module is host-independent and needs no toolkit checkout to run.
+- `[process]` Added standalone `bin/dashboard`: opens the same visual task
+  dashboard from any macOS/Linux terminal without Herdr or model calls. Finds
+  the nearest `.agents/` directory from cwd, supports `--project` and `--once`,
+  and shares the existing renderer rather than duplicating UI logic.
+- `[process]` The in-Herdr board now uses a colored, scrollable visual terminal
+  UI with pipeline boxes, task cards, acceptance bars, and a blocked-task filter.
+  It uses standard-library curses, not an unsupported embedded webview; plain
+  text remains available for non-interactive output and `--once`.
+- `[safety]` Fixed Herdr dashboard tab creation: target-pane arguments are now
+  supplied only for splits, avoiding Herdr's `invalid_params` rejection for tabs.
+- `[process]` Herdr's task board is now a model-independent live dashboard:
+  pipeline graphs, stage/task counts, blocker and handoff summaries, and recorded
+  acceptance bars refresh from local task files without model calls. Unknown or
+  blocked stages are not guessed; narrow terminal panes wrap the display.
+- `[process]` Added an optional Herdr plugin under `integrations/herdr/` for
+  the normal "start OpenCode and ask it to lead" workflow. Adoption binds the
+  existing pane/session without prompting or relaunching it. Explicit actions
+  can brief an idle lead, show task records, focus the exact native session, or
+  add reusable empty worker/server shells and a board; `team.sh` is not required.
+- `[safety]` Herdr bindings are scoped by server/workspace/project, stored
+  outside project files, and never select the latest worker session. The plugin
+  does not change permissions, send approval keystrokes, launch workers/servers,
+  run verification scripts implicitly, or equate Herdr's done badge with task
+  acceptance. Mocked adapter tests make no LLM calls; live integrations and
+  permissions still require manual verification.
+- `[process]` OpenCode can lead the scaffolded pipeline without a Claude or
+  Codex CLI: new native V2 `leader`/`planner` adapters and `/feature` /
+  `/toolkit-update` commands reference the canonical Claude instruction files
+  instead of duplicating role policy. Existing worker files and session policy
+  remain unchanged. The optional project handoff is historical context, not an
+  implicit override of the pipeline.
+- `[process]` `team.sh --lead opencode` launches the interactive OpenCode lead
+  against the same authenticated server as its workers. Auto selection now
+  falls back to OpenCode after Claude and Codex. OpenCode starts a fresh lead
+  chat unless `TEAM_OPENCODE_SESSION` supplies an explicit lead id; `--fresh`
+  ignores that id. It never uses `--continue` to accidentally resume a worker.
+- `[safety]` The new planner denies shell/child dispatch and permits editing
+  task state files only; the leader requests approval for shell actions and
+  edits outside `.agents/**`. These are configuration defaults, not proven
+  runtime isolation: verify resolved permissions and refused actions live.
+- `[docs]` Generalized downstream handoff lessons: distinguish dated context
+  from policy, preserve dispatch evidence, verify served models, and do not
+  confuse the lead's session with worker sessions. No project-specific handoff
+  content or model overrides are imported into the toolkit.
+- `[docs]` Documented `./scripts/dashboard`, `--project`, `--once`, navigation,
+  and additive installation for existing projects in README, the team guide,
+  and the upgrade guide. No Herdr, agent runtime, or model calls are required
+  to view recorded progress.
 
 ## v0.9.0 — 2026-09-27
 
