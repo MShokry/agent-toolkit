@@ -77,6 +77,25 @@ grep -q 'never modify source' "$TMP/.codex/agents/planner.toml" \
   || fail "Codex planner does not state its source-write boundary"
 ok "Codex lead instructions, skills, and planner were scaffolded"
 
+for oc_file in agents/leader.md agents/planner.md commands/feature.md commands/toolkit-update.md; do
+  [ -f "$TMP/.opencode/$oc_file" ] || fail "OpenCode lead file missing: $oc_file"
+done
+grep -q '\.claude/agents/planner.md' "$TMP/.opencode/agents/planner.md" \
+  || fail "OpenCode planner does not reference its canonical contract"
+grep -q '\.claude/commands/feature.md' "$TMP/.opencode/agents/leader.md" \
+  || fail "OpenCode leader does not reference the canonical flow"
+grep -q '^permissions:' "$TMP/.opencode/agents/planner.md" \
+  || fail "OpenCode planner does not use native V2 permissions"
+grep -q 'resource: ".agents/T-\*.md"' "$TMP/.opencode/agents/planner.md" \
+  || fail "OpenCode planner lacks its state-file-only edit rule"
+for oc_command in feature toolkit-update; do
+  grep -q '^agent: leader$' "$TMP/.opencode/commands/$oc_command.md" \
+    || fail "OpenCode $oc_command command does not select the leader"
+  grep -q '^subagent: false$' "$TMP/.opencode/commands/$oc_command.md" \
+    || fail "OpenCode $oc_command command does not preserve the lead session"
+done
+ok "OpenCode agents and commands reference canonical prompts with native V2 metadata"
+
 [ -f "$TMP/.agents/.needs-customization" ] || fail ".needs-customization marker missing on fresh scaffold"
 ok "first-run customization marker dropped"
 
@@ -90,6 +109,8 @@ ok "fresh scaffold wrote the provenance stamp with flags + toolkit SHA"
 # --- 2. second run skips, never clobbers ------------------------------------
 cp "$TMP/.claude/commands/feature.md" "$TMP/feature.sentinel"
 printf 'LOCAL CUSTOMIZATION\n' >> "$TMP/.claude/commands/feature.md"
+cp "$TMP/.opencode/agents/leader.md" "$TMP/leader.sentinel"
+printf 'LOCAL OPENCODE CUSTOMIZATION\n' >> "$TMP/.opencode/agents/leader.md"
 rm -f "$TMP/.agents/.needs-customization"
 bash "$ROOT/bin/init.sh" --target "$TMP" > "$TMP/run2.log" 2>&1 \
   || fail "second init.sh run failed"
@@ -98,12 +119,15 @@ skips="$(grep -c '^init.sh: skip (exists)' "$TMP/run2.log" || true)"
 ! grep -q '^init.sh: wrote ' "$TMP/run2.log" || fail "second run wrote something"
 grep -q 'LOCAL CUSTOMIZATION' "$TMP/.claude/commands/feature.md" \
   || fail "second run clobbered a customized file"
+grep -q 'LOCAL OPENCODE CUSTOMIZATION' "$TMP/.opencode/agents/leader.md" \
+  || fail "second run clobbered the OpenCode leader"
 [ ! -f "$TMP/.agents/.needs-customization" ] || fail "marker recreated on non-fresh run"
 cmp -s "$TMP/stamp.bak" "$TMP/.agents/.toolkit-version" 2>/dev/null \
   || fail "second run touched the provenance stamp"
 ok "re-run skipped all $files files, preserved local edits, marker + stamp untouched"
 # restore the pristine render so the --update checks below start clean
 mv "$TMP/feature.sentinel" "$TMP/.claude/commands/feature.md"
+mv "$TMP/leader.sentinel" "$TMP/.opencode/agents/leader.md"
 
 # Simulate a stamped project that predates Codex support. A plain, flag-free
 # run must recover the render values from the stamp and add only missing files.
@@ -121,6 +145,24 @@ grep -q '^builder_model: a/b' "$TMP/.agents/.toolkit-version" \
 [ ! -f "$TMP/.agents/.needs-customization" ] \
   || fail "missing-file bootstrap recreated the first-run marker"
 ok "flag-free plain run installs newly added files from stamped values only"
+
+# Simulate a stamped scaffold without OpenCode lead support. Triage reports
+# all four files without writing them; plain bootstrap adds only those files.
+rm -f "$TMP/.opencode/agents/leader.md" "$TMP/.opencode/agents/planner.md" \
+  "$TMP/.opencode/commands/feature.md" "$TMP/.opencode/commands/toolkit-update.md"
+rc=0
+bash "$ROOT/bin/init.sh" --update --target "$TMP" > "$TMP/oc-triage.log" 2>&1 || rc=$?
+[ "$rc" = "1" ] || fail "OpenCode missing-file triage did not report drift"
+[ "$(grep -c '^  new ' "$TMP/oc-triage.log")" = "4" ] \
+  || fail "OpenCode triage did not list exactly four new files"
+[ ! -f "$TMP/.opencode/agents/leader.md" ] || fail "OpenCode triage wrote an adapter"
+bash "$ROOT/bin/init.sh" --target "$TMP" > "$TMP/oc-bootstrap.log" 2>&1 \
+  || fail "OpenCode flag-free bootstrap failed"
+[ "$(grep -c '^init.sh: wrote ' "$TMP/oc-bootstrap.log")" = "4" ] \
+  || fail "OpenCode bootstrap did not write exactly four files"
+cmp -s "$TMP/stamp.bak" "$STAMP" || fail "OpenCode bootstrap changed the stamp"
+[ ! -f "$TMP/.agents/.needs-customization" ] || fail "OpenCode bootstrap recreated the marker"
+ok "OpenCode lead bootstrap is additive; triage writes nothing and preserves provenance"
 
 # Exercise lead auto-selection without requiring tmux/Codex on the test host.
 # PATH contains a fake codex and tmux but no claude, and tmux records the pane
@@ -145,6 +187,47 @@ TEAM_LOG="$TMP/team.log" PATH="$FAKEBIN:/usr/bin:/bin" \
 grep -q 'send-keys .* codex C-m' "$TMP/team.log" \
   || fail "team.sh did not put Codex in the lead pane when Claude was unavailable"
 ok "team.sh falls back to Codex when Claude is unavailable"
+
+cat > "$FAKEBIN/opencode" <<'EOF'
+#!/bin/sh
+exit 0
+EOF
+chmod +x "$FAKEBIN/opencode"
+TEAM_LOG="$TMP/team-oc.log" PATH="$FAKEBIN:/usr/bin:/bin" \
+  "$TMP/scripts/team.sh" --lead opencode --port 4097 --fresh oc-smoke >/dev/null 2>&1 \
+  || fail "team.sh failed its explicit OpenCode launch"
+grep -q 'send-keys .*team.0 .*opencode --server http://localhost:4097 C-m' "$TMP/team-oc.log" \
+  || fail "OpenCode lead did not connect to the selected server"
+grep -q 'team.0 .*OPENCODE_PASSWORD=.*cat' "$TMP/team-oc.log" \
+  || fail "OpenCode lead did not load server authentication at runtime"
+! grep -q -- '--auto\|--continue\|--agent' "$TMP/team-oc.log" \
+  || fail "OpenCode lead launch auto-approved, resumed an arbitrary worker, or used unsupported --agent"
+ok "team.sh launches an authenticated OpenCode-only lead on the selected port"
+
+rm -f "$FAKEBIN/codex"
+TEAM_LOG="$TMP/team-oc-auto.log" PATH="$FAKEBIN:/usr/bin:/bin" \
+  "$TMP/scripts/team.sh" --fresh oc-auto >/dev/null 2>&1 \
+  || fail "team.sh failed OpenCode auto fallback"
+grep -q 'team.0 .*opencode --server' "$TMP/team-oc-auto.log" \
+  || fail "team.sh did not select OpenCode when Claude/Codex were absent"
+ok "team.sh falls back to OpenCode without Claude or Codex"
+
+TEAM_LOG="$TMP/team-oc-resume.log" TEAM_OPENCODE_SESSION=ses_AbC123 \
+  PATH="$FAKEBIN:/usr/bin:/bin" "$TMP/scripts/team.sh" --lead opencode oc-resume \
+  >/dev/null 2>&1 || fail "team.sh failed explicit OpenCode lead resume"
+grep -q -- '--session ses_AbC123 C-m' "$TMP/team-oc-resume.log" \
+  || fail "team.sh did not preserve the exact mixed-case lead session id"
+TEAM_LOG="$TMP/team-oc-fresh.log" TEAM_OPENCODE_SESSION=ses_AbC123 \
+  PATH="$FAKEBIN:/usr/bin:/bin" "$TMP/scripts/team.sh" --lead opencode --fresh oc-fresh \
+  >/dev/null 2>&1 || fail "team.sh failed fresh OpenCode lead launch"
+! grep -q -- '--session' "$TMP/team-oc-fresh.log" || fail "--fresh reused the lead session"
+if TEAM_LOG="$TMP/team-oc-invalid.log" TEAM_OPENCODE_SESSION='ses_abc;bad' \
+  PATH="$FAKEBIN:/usr/bin:/bin" "$TMP/scripts/team.sh" --lead opencode oc-invalid \
+  >/dev/null 2>&1; then
+  fail "team.sh accepted shell text in TEAM_OPENCODE_SESSION"
+fi
+! grep -q '^new-session ' "$TMP/team-oc-invalid.log" || fail "invalid session created panes"
+ok "OpenCode resume uses only an explicit lead id; --fresh and input validation are enforced"
 
 TEAM_LOG="$TMP/team-existing.log" TEAM_HAS_SESSION=1 TEAM_LEAD=invalid \
   PATH="$FAKEBIN:/usr/bin:/bin" "$TMP/scripts/team.sh" existing \

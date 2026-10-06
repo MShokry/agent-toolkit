@@ -1,8 +1,8 @@
 # agent-toolkit
 
 A reusable version of the planner → implement → review → test multi-agent
-pipeline: Claude or Codex as the lead, Claude/Codex planning, OpenCode (any
-vendor) for cross-vendor implement/review/test, a state file
+pipeline: Claude, Codex, or OpenCode as the lead, matching-tool planning,
+OpenCode (any vendor) for cross-vendor implement/review/test, a state file
 (`.agents/T-<id>.md`) as the single handoff surface between roles, and a
 `delegate` skill so the lead's own context stays small across a long run. 
 
@@ -10,6 +10,11 @@ It was distilled from real multi-agent pipeline runs and hardened there
 over time, so the same setup — permissions, session-reuse policy,
 cross-vendor independence rules, the state-file contract — doesn't get
 re-invented and re-debugged from scratch in every new repo.
+
+OpenCode is also a supported direct lead: `/feature` and `/toolkit-update`
+select a `leader` adapter, and its `planner` references the canonical role
+instructions. No Claude or Codex CLI is required; the generated `.claude/`
+files remain shared instruction sources, not executable dependencies.
 
 Codex is a supported fallback lead: the scaffold includes project instructions,
 a `feature` skill, a `toolkit-update` skill, and a Codex planner. For any other
@@ -112,6 +117,8 @@ templates/             every generated file, with __PLACEHOLDER__ tokens
   codex/                AGENTS.md.tmpl, a project-scoped planner agent, and
                           feature/toolkit-update skills for a Codex lead
   opencode/agent/        builder.md.tmpl, reviewer.md.tmpl, tester.md.tmpl
+  opencode/agents/       leader.md.tmpl, planner.md.tmpl — native V2 adapters
+  opencode/commands/     feature.md.tmpl, toolkit-update.md.tmpl — direct lead commands
   agents-state/          TEMPLATE.md.tmpl — the T-<id> state file shape
   scripts/                oc.sh.tmpl (OpenCode CLI wrapper), team.sh.tmpl (tmux
                           layout — resumes the lead by default, --port for
@@ -219,6 +226,36 @@ the generated `/toolkit-update` command and let your lead reconcile,
 triaging against the impact-tagged `CHANGELOG.md`), then refresh the
 baseline: `bin/init.sh --refresh-stamp --target .`. Full workflow:
 [`docs/UPGRADING.md`](docs/UPGRADING.md).
+
+### OpenCode-only lead
+
+After scaffolding a target project, run:
+
+```bash
+scripts/team.sh --lead opencode
+```
+
+In the lead pane, choose your model and run `/feature <request>` or
+`/toolkit-update`. These commands select `leader` in the current session; the
+planner runs as an OpenCode child agent, and builder/reviewer/tester still use
+`scripts/oc.sh`. No Claude or Codex CLI is required. The `.claude/` prompt
+files are deliberately retained as the shared source of role policy.
+
+Without tmux, start `opencode serve` with a configured password, export that
+password as `OPENCODE_PASSWORD`, and connect using `opencode --server <url>`.
+Set `OC_SERVER` to that same URL for worker calls (or use the port/password files
+written by `team.sh`). Do not start the lead with `--auto`.
+
+OpenCode starts a fresh lead chat by default; `--continue` might resume a worker
+instead. To resume a known lead explicitly, set `TEAM_OPENCODE_SESSION=ses_...`
+when launching `team.sh`. `--fresh` ignores it. This does not change the
+canonical worker-session policy or eliminate its documented shared-context
+tradeoff. Verify live agent discovery and denied actions before trusting
+permission controls; the smoke suite does not make that guarantee.
+
+For an already-stamped project, a plain `bin/init.sh --target <project>` adds
+the four missing OpenCode files without overwriting existing files. Use
+`--update` first to triage related changes to the root instructions and launcher.
 
 ### Updating a project scaffolded before v0.3.0
 

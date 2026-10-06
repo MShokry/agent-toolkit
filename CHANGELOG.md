@@ -10,6 +10,28 @@ update workflow. Version bumps mean: **MAJOR** = state-file contract /
 role authority / script interface changed; **MINOR** = new template,
 script, flag, or role rule; **PATCH** = prose and docs.
 
+## Unreleased
+
+- `[process]` OpenCode can lead the scaffolded pipeline without a Claude or
+  Codex CLI: new native V2 `leader`/`planner` adapters and `/feature` /
+  `/toolkit-update` commands reference the canonical Claude instruction files
+  instead of duplicating role policy. Existing worker files and session policy
+  remain unchanged. The optional project handoff is historical context, not an
+  implicit override of the pipeline.
+- `[process]` `team.sh --lead opencode` launches the interactive OpenCode lead
+  against the same authenticated server as its workers. Auto selection now
+  falls back to OpenCode after Claude and Codex. OpenCode starts a fresh lead
+  chat unless `TEAM_OPENCODE_SESSION` supplies an explicit lead id; `--fresh`
+  ignores that id. It never uses `--continue` to accidentally resume a worker.
+- `[safety]` The new planner denies shell/child dispatch and permits editing
+  task state files only; the leader requests approval for shell actions and
+  edits outside `.agents/**`. These are configuration defaults, not proven
+  runtime isolation: verify resolved permissions and refused actions live.
+- `[docs]` Generalized downstream handoff lessons: distinguish dated context
+  from policy, preserve dispatch evidence, verify served models, and do not
+  confuse the lead's session with worker sessions. No project-specific handoff
+  content or model overrides are imported into the toolkit.
+
 ## v0.9.0 — 2026-09-27
 
 - `[safety]` Synced this toolkit's own opencode v2 migration into the

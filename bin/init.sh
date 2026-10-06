@@ -171,7 +171,7 @@ check_opencode_version
 STAMP="$TARGET/.agents/.toolkit-version"
 
 # Keep in sync with the number of check_pair/render lines below.
-RENDER_TOTAL=18
+RENDER_TOTAL=22
 
 write_stamp() {
   local sha tag
@@ -384,6 +384,10 @@ if [ "$UPDATE" -eq 1 ]; then
   check_pair "$TEMPLATES/opencode/agent/builder.md.tmpl"   "$TARGET/.opencode/agent/builder.md"
   check_pair "$TEMPLATES/opencode/agent/reviewer.md.tmpl"  "$TARGET/.opencode/agent/reviewer.md"
   check_pair "$TEMPLATES/opencode/agent/tester.md.tmpl"    "$TARGET/.opencode/agent/tester.md"
+  check_pair "$TEMPLATES/opencode/agents/planner.md.tmpl"  "$TARGET/.opencode/agents/planner.md"
+  check_pair "$TEMPLATES/opencode/agents/leader.md.tmpl"   "$TARGET/.opencode/agents/leader.md"
+  check_pair "$TEMPLATES/opencode/commands/feature.md.tmpl" "$TARGET/.opencode/commands/feature.md"
+  check_pair "$TEMPLATES/opencode/commands/toolkit-update.md.tmpl" "$TARGET/.opencode/commands/toolkit-update.md"
   check_pair "$TEMPLATES/agents-state/TEMPLATE.md.tmpl"    "$TARGET/.agents/TEMPLATE.md"
   check_pair "$TEMPLATES/scripts/oc.sh.tmpl"               "$TARGET/scripts/oc.sh"
   check_pair "$TEMPLATES/scripts/team.sh.tmpl"             "$TARGET/scripts/team.sh"
@@ -445,6 +449,10 @@ render "$TEMPLATES/codex/skills/toolkit-update/SKILL.md.tmpl" "$TARGET/.agents/s
 render "$TEMPLATES/opencode/agent/builder.md.tmpl"   "$TARGET/.opencode/agent/builder.md"
 render "$TEMPLATES/opencode/agent/reviewer.md.tmpl"  "$TARGET/.opencode/agent/reviewer.md"
 render "$TEMPLATES/opencode/agent/tester.md.tmpl"    "$TARGET/.opencode/agent/tester.md"
+render "$TEMPLATES/opencode/agents/planner.md.tmpl"  "$TARGET/.opencode/agents/planner.md"
+render "$TEMPLATES/opencode/agents/leader.md.tmpl"   "$TARGET/.opencode/agents/leader.md"
+render "$TEMPLATES/opencode/commands/feature.md.tmpl" "$TARGET/.opencode/commands/feature.md"
+render "$TEMPLATES/opencode/commands/toolkit-update.md.tmpl" "$TARGET/.opencode/commands/toolkit-update.md"
 render "$TEMPLATES/agents-state/TEMPLATE.md.tmpl"    "$TARGET/.agents/TEMPLATE.md"
 render "$TEMPLATES/scripts/oc.sh.tmpl"               "$TARGET/scripts/oc.sh"
 render "$TEMPLATES/scripts/team.sh.tmpl"             "$TARGET/scripts/team.sh"
@@ -525,20 +533,22 @@ Next steps:
      from the YAML.
   2. Start opencode serve (or run $TARGET/scripts/team.sh) so scripts/oc.sh
      has something to attach to.
-  3. Start the lead with Claude when installed, or Codex otherwise. In
+  3. Start the lead with Claude, Codex, or OpenCode. In
      Claude run /feature; in Codex invoke the feature skill (for example,
-     \$feature). scripts/team.sh makes the same Claude-first choice.
+     \$feature). In OpenCode run /feature; use scripts/team.sh --lead opencode
+     for an OpenCode-only team. Auto selection prefers Claude, then Codex,
+     then OpenCode.
      Load the "delegate" skill when available; it is the context-discipline
      half of this.
   4. Make sure $TARGET has real project-specific guidance. The generated
-     AGENTS.md is Codex integration plus an explicitly unpopulated guidance
+     AGENTS.md is lead integration plus an explicitly unpopulated guidance
      section; fill it when no project CLAUDE.md already supplies constraints.
-  5. On the first feature run, either lead will notice
+  5. On the first feature run, the selected lead will notice
      .agents/.needs-customization and ask whether to fill the role files'
      generic pitfalls/hard-rules sections with this project's real ones.
   6. Later, once the toolkit itself has moved on: bin/init.sh --update
      --target $TARGET shows a drift summary (exit 1 = something to merge),
-     and /toolkit-update (Claude) or \$toolkit-update (Codex) walks your
+     and /toolkit-update (Claude/OpenCode) or \$toolkit-update (Codex) walks your
      lead through the merge. Refresh the
      stamp afterwards: bin/init.sh --refresh-stamp --target $TARGET.
 

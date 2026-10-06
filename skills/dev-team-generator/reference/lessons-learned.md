@@ -598,3 +598,31 @@ under test.
   in production. Treat any safety conclusion reached through either
   shortcut as unconfirmed until re-run against the real file with a
   structure-aware check.
+
+## 30. Direct lead support needs an adapter, not another copy of the pipeline
+
+- A tool being able to run workers does not make it a supported lead. Supply
+  its native entrypoints, a planner, approval routing, launcher/authentication,
+  and reconciliation command; do not stop at a prompt that says "act as lead."
+- Keep shared role policy in one canonical prompt and use thin adapters for
+  tool-specific metadata, dispatch, and permission semantics. A prompt file
+  named for one tool can be read by another without that tool's CLI installed.
+  Read the body as instructions; do not inherit incompatible frontmatter.
+- Do not resume "the latest session" when leads and workers use the same
+  runtime. It can silently select a worker. Resume only a known lead id, or
+  start fresh and disclose that automatic lead pinning is not implemented.
+- Long dispatches should leave the lead responsive: use background execution
+  and completion notifications when supported. Send literal prompts through
+  files, and preserve one transcript per role/pass instead of overwriting
+  earlier evidence. Runtime limitations must be disclosed, not invented away.
+- Verify the served model rather than the requested label before claiming
+  model-maker independence. A gateway name is not a model-maker identity, and
+  shared sessions can contaminate evidence even when model families differ.
+  Document the tradeoff; an adapter must not silently change session policy.
+- A downstream handoff is dated operational evidence, not a new universal
+  contract. Revalidate snapshots and resolve conflicts explicitly. Transfer
+  generalized lessons into the source toolkit, not project paths, rosters,
+  temporary quotas, or historical claims of permission safety.
+- A denied edit tool is not filesystem isolation if shell can write files.
+  Use least privilege, disclose the boundary, and verify resolved rules and
+  refused actions against the exact generated artifact in a fresh runtime.

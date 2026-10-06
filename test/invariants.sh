@@ -42,6 +42,10 @@ LESSONS="skills/dev-team-generator/reference/lessons-learned.md"
 CODEX_AGENTS="templates/codex/AGENTS.md.tmpl"
 CODEX_FEATURE="templates/codex/skills/feature/SKILL.md.tmpl"
 CODEX_PLANNER="templates/codex/agents/planner.toml.tmpl"
+OC_LEADER="templates/opencode/agents/leader.md.tmpl"
+OC_PLANNER="templates/opencode/agents/planner.md.tmpl"
+OC_FEATURE="templates/opencode/commands/feature.md.tmpl"
+OC_UPDATE="templates/opencode/commands/toolkit-update.md.tmpl"
 
 FAIL=0
 CHECKS=0
@@ -123,6 +127,24 @@ rule "Codex planner delegates to the canonical planner contract" \
   "$CODEX_PLANNER"
 
 # --- the delivery contract --------------------------------------------------
+# OpenCode-only adapters reference policy rather than becoming new flow copies.
+rule "OpenCode leader and command reference the canonical flow" \
+  '\.claude/commands/feature\.md' "$OC_LEADER" "$OC_FEATURE"
+rule "OpenCode planner references the canonical planner contract" \
+  '\.claude/agents/planner\.md' "$OC_PLANNER"
+rule "OpenCode update references canonical reconciliation gates" \
+  '\.claude/commands/toolkit-update\.md' "$OC_LEADER" "$OC_UPDATE"
+rule "OpenCode commands select the lead in the current session" \
+  'agent: leader subagent: false' "$OC_FEATURE" "$OC_UPDATE"
+rule "OpenCode adapters require live permission verification" \
+  'verify.*permissions.*live' "$OC_LEADER" "$OC_PLANNER"
+rule "OpenCode planner cannot record AC outcomes" \
+  'never tick' "$OC_PLANNER"
+rule "OpenCode leader does not implement source" \
+  'never implement feature code' "$OC_LEADER"
+rule "OpenCode lead resume never selects an arbitrary worker" \
+  'never resume the lead with the newest worker session' "$OC_LEADER"
+
 rule "acceptance-criteria ledger closes the contract" \
   'ledger' \
   "$FEATURE" "$SYSTEM" "$FLOW" "$STATE" "$STATE_EX" "$PLANNER" "$SENIOR" "$BUILDER" "$LESSONS"
