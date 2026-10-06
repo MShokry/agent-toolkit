@@ -1,8 +1,8 @@
 # agent-toolkit
 
 A reusable version of the planner → implement → review → test multi-agent
-pipeline: Claude or Codex as the lead, Claude/Codex planning, OpenCode (any
-vendor) for cross-vendor implement/review/test, a state file
+pipeline: Claude, Codex, or OpenCode as the lead, matching-tool planning,
+OpenCode (any vendor) for cross-vendor implement/review/test, a state file
 (`.pipeline/T-<id>.md`) as the single handoff surface between roles, and a
 `delegate` skill so the lead's own context stays small across a long run. 
 
@@ -10,6 +10,11 @@ It was distilled from real multi-agent pipeline runs and hardened there
 over time, so the same setup — permissions, session-reuse policy,
 cross-vendor independence rules, the state-file contract — doesn't get
 re-invented and re-debugged from scratch in every new repo.
+
+OpenCode is also a supported direct lead: `/feature` and `/toolkit-update`
+select a `leader` adapter, and its `planner` references the canonical role
+instructions. No Claude or Codex CLI is required; the generated `.claude/`
+files remain shared instruction sources, not executable dependencies.
 
 Codex is a supported lead: the scaffold includes project instructions,
 a `feature` skill, a `toolkit-update` skill, and a Codex planner. For any other
@@ -23,6 +28,47 @@ See [Codex lead operation](docs/CODEX.md) for session pins, hook trust,
 permissions, recovery, and live verification.
 
 ## How it flows
+
+### Standalone visual dashboard
+
+From any project with `.pipeline/` task records, run:
+
+```bash
+./scripts/dashboard
+```
+
+Init installs this self-contained command in the project. It does not need the
+toolkit checkout to remain on disk. You can still use
+`/path/to/agent-toolkit/bin/dashboard` for projects without the installed copy.
+
+It discovers the project from your current directory (including nested folders),
+shows live pipeline boxes/task cards, and refreshes every two seconds. No Herdr,
+agent CLI, server, or model calls required. Python 3.8+ on macOS/Linux is enough.
+Use arrows or `j/k` to scroll, `b` for blocked tasks, and `q` to close.
+
+For another project or a plain-text snapshot:
+
+```bash
+./scripts/dashboard --project /path/to/project
+./scripts/dashboard --once
+```
+
+Optionally add the toolkit's `bin/` directory to your shell's `PATH` to run
+`dashboard` from any project. No project files are installed or changed. The
+standalone command shares the optional Herdr adapter's renderer; it does not
+call Herdr. Displayed progress is recorded data, not independent verification.
+
+For an existing stamped scaffold, preview the addition and then install it:
+
+```bash
+bash /path/to/agent-toolkit/bin/init.sh --update --target . --only scripts/dashboard
+bash /path/to/agent-toolkit/bin/init.sh --target .
+```
+
+The preview writes nothing (exit 1 means new/differing files). The plain run
+adds missing files only, loading the original settings from the provenance
+stamp. Future dashboard changes appear in `/toolkit-update` triage like other
+generated files; local customizations are never overwritten by a re-run.
 
 ```mermaid
 flowchart TD
@@ -111,13 +157,17 @@ test/invariants.sh    asserts every load-bearing rule is present in each of the
 CHANGELOG.md          impact-tagged per-release changes ([contract] › [safety]
                       › [process] › [docs]) — read this before merging an update
 migrations/           hand-appliable notes for [contract] changes only
+integrations/herdr/   optional plugin: adopt an existing lead, show task records,
+                       and add support panes without requiring team.sh
 templates/             every generated file, with __PLACEHOLDER__ tokens
   claude/agents/        planner.md.tmpl, senior-dev.md.tmpl
   claude/commands/      feature.md.tmpl — the /feature pipeline command;
                           toolkit-update.md.tmpl — the /toolkit-update merge command
   codex/                AGENTS.md.tmpl, a project-scoped planner agent, reviewed
                           lifecycle hooks, and feature/toolkit-update skills
-  opencode/agents/       builder.md.tmpl, reviewer.md.tmpl, tester.md.tmpl
+  opencode/agents/       builder, reviewer, tester (workers); leader, planner —
+                          native V2 lead adapters
+  opencode/commands/     feature.md.tmpl, toolkit-update.md.tmpl — direct lead commands
   agents-state/          TEMPLATE.md.tmpl — the T-<id> state file shape
   scripts/                oc.sh.tmpl (OpenCode CLI wrapper), Codex launcher/preflight,
                           team.sh.tmpl (tmux
@@ -232,6 +282,45 @@ For existing scaffolds whose runtime is still under `.agents/`, triage reads
 the legacy stamp there. Apply [migration 02](migrations/02-pipeline-directory.md)
 before the plain missing-file bootstrap; it otherwise refuses to split the
 runtime between two directories.
+
+### OpenCode-only lead
+
+After scaffolding a target project, start OpenCode normally:
+
+```bash
+opencode
+# or
+scripts/team.sh --lead opencode
+```
+
+Ask it to act as the toolkit leader and read `.opencode/agents/leader.md`, or
+choose your model and run `/feature <request>` or
+`/toolkit-update`. These commands select `leader` in the current session; the
+planner runs as an OpenCode child agent, and builder/reviewer/tester still use
+`scripts/oc.sh`. No Claude or Codex CLI is required. The `.claude/` prompt
+files are deliberately retained as the shared source of role policy.
+
+`scripts/team.sh --lead opencode` is an optional tmux launcher, not a prerequisite
+for acting as leader. For Herdr, the optional
+[`integrations/herdr/`](integrations/herdr/README.md) plugin adopts your existing
+agent without relaunching it. It offers an optional briefing, task board, and
+support-pane layout; no launcher script is required.
+
+Without tmux, start `opencode serve` with a configured password, export that
+password as `OPENCODE_PASSWORD`, and connect using `opencode --server <url>`.
+Set `OC_SERVER` to that same URL for worker calls (or use the port/password files
+written by `team.sh`). Do not start the lead with `--auto`.
+
+OpenCode starts a fresh lead chat by default; `--continue` might resume a worker
+instead. To resume a known lead explicitly, set `TEAM_OPENCODE_SESSION=ses_...`
+when launching `team.sh`. `--fresh` ignores it. This does not change the
+canonical worker-session policy or eliminate its documented shared-context
+tradeoff. Verify live agent discovery and denied actions before trusting
+permission controls; the smoke suite does not make that guarantee.
+
+For an already-stamped project, a plain `bin/init.sh --target <project>` adds
+the four missing OpenCode files without overwriting existing files. Use
+`--update` first to triage related changes to the root instructions and launcher.
 
 ### Updating a project scaffolded before v0.3.0
 

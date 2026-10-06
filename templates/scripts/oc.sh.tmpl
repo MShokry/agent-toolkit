@@ -44,53 +44,70 @@
 # --auto passes OpenCode's own --auto through to `opencode run`: it is
 # documented to auto-approve any permission not explicitly `deny`d in the
 # dispatched agent's own permission block, `deny` entries (e.g. builder.md's
-# `rm -rf /*` / `sudo *` / `curl *`) staying blocked. Verified live on both
-# opencode v1 and opencode v2.0.18 — a deny-listed `curl *` was refused with
-# --auto on, in both cases.
+# `rm -rf /*` / `sudo *` / `curl *`) staying blocked. Verified live on
+# opencode v1 — a deny-listed `curl *` was refused with --auto on.
 #
-# A 2026-09-27 scratch-dir test initially seemed to show --auto executing a
-# deny-listed `curl *` anyway on v2.0.18. That could not be reproduced on a
-# same-day re-test that additionally confirmed, via `GET /api/agent/<name>`
-# on a live server, that the dispatched agent's ruleset had actually loaded
-# with the `curl *: deny` rule present — i.e. the builder/reviewer/tester
-# template shape (nested `permission:` block + `temperature:`) loads
-# correctly and --auto enforces it as documented. The original finding is
-# believed to have been a confound (most likely an earlier run whose ruleset
-# silently failed to load — see next paragraph — that just wasn't checked
-# via the API at the time) and should not be relied on; the corrected,
-# verified conclusion is that --auto has NOT been shown to bypass deny rules
-# on this opencode version.
+# ** Do not extend that v1 verification to v2 on the strength of anything
+# written below — including this comment's own history. ** A 2026-09-27
+# scratch-dir test initially seemed to show --auto executing a deny-listed
+# `curl *` anyway on v2.0.18. A same-day re-test via `GET /api/agent/<name>`
+# seemed to clear it, and a separate same-day check seemed to confirm a
+# specific cause instead: mixing `temperature:` with the newer native
+# `permissions:` array frontmatter format silently drops the whole ruleset
+# to bare `*:* allow` (these templates use the nested `permission:` form,
+# unaffected if that's real). Both of those conclusions were reached the
+# same way — comparing `GET /api/agent/<name>` responses — and a still-later
+# same-day finding, on a project actually scaffolded from these templates,
+# showed that check can be misleading in two independent ways: (1) a
+# long-lived `opencode serve` process can cache the resolved config it read
+# at startup, so a `GET` after editing the file on disk can describe a
+# version of the agent that no longer exists (restart the server, or use a
+# command that reads from disk, before trusting a check — this toolkit has
+# not itself verified whether one exists, e.g. an `opencode debug agents`
+# subcommand was reported but is unconfirmed from here); (2) a scratch-dir
+# repro built by hand-copying an agent file is not the same artifact as the
+# real one — a copy made in the course of diagnosing the issue can silently
+# differ from it (a duplicate line quietly deduplicated, whitespace
+# normalized) and pass a check the original fails. That later finding
+# pointed at a third possible cause, also unconfirmed: duplicate keys inside
+# one nested permission map (e.g. two `"git reset*":` lines under the same
+# `shell:` block) rejecting the whole mapping in opencode v2, distinct from
+# the temperature+array theory above. Checked directly against these
+# templates: none of builder/reviewer/tester.md.tmpl has a duplicate key
+# within any single permission map, and a naive check that flattens the
+# whole frontmatter body and looks for a repeated quoted string is NOT valid
+# evidence either way — it flags a false positive on this toolkit's own
+# `tester.md.tmpl` (`"*"`, two other patterns) purely because the sibling
+# `edit:` and `write:` maps happen to key the same pattern, which is normal
+# and not a duplicate. A real check has to scope by which mapping a key
+# falls under.
 #
-# ** The real, confirmed opencode v2.0.18 bug, independent of --auto: **
-# mixing `temperature:` (or other non-native keys) with the *newer* native
-# `permissions:` array frontmatter format (as opposed to these templates'
-# nested `permission:` form) silently discards the ENTIRE custom ruleset,
-# falling back to bare `*:* allow` with no error, no warning, and no log
-# line — confirmed by inspecting `GET /api/agent/<name>` before and after
-# removing `temperature:` from a test file. This means an agent's permission
-# block can go from fully enforced to completely unenforced from a single
-# unrelated-looking frontmatter edit, and nothing surfaces it. Because of
-# this, **before trusting any agent's deny rules on this opencode version —
-# with --auto or without it — verify the live ruleset**, not just the YAML:
+# Net: none of the three explanations (temperature+array mixing, duplicate
+# keys, a stale-server false-clear) is confirmed against these templates
+# specifically, and neither is the original --auto question closed. **Before
+# trusting any agent's deny rules on this opencode version — with --auto or
+# without it — verify the live, resolved ruleset yourself**, against a
+# server you just restarted (or a disk-reading command) and the exact file
+# in question, not a copy:
 #   opencode api GET /api/agent --server <url> --param directory=<repo-root> \
 #     | python3 -c 'import json,sys; d=json.load(sys.stdin); \
 #       print([a for a in d["data"] if a["id"]=="<agent-name>"])'
 # and confirm the expected deny/ask entries are actually present in the
-# returned `permissions` array. These templates use the nested format
-# (verified loading correctly as of 2026-09-27) — do not convert a project
-# generated from them to the native `permissions:` array format without
-# re-running this check afterward.
+# returned `permissions` array.
 #
-# Separately, and true regardless of --auto or format: upstream issue #42436
-# (github.com/anomalyco/opencode, open as of 2026-09-27) documents `deny`
-# rules that DID load still being evadable via CWD-relative scripts and
-# argv-code gadgets (`python3 -c`, `cargo run`, `node -e`, `env <cmd>`) that
-# aren't path-scored by the permission scanner. None of the agent templates
-# here rely on denying those specific gadgets, but treat every permission
-# block generated from these templates as a guardrail against accidents, not
-# a hard sandbox boundary against a determined or compromised agent — that
-# boundary is the environment (scratch dirs, disposable creds, no prod
-# URLs), not this permission block.
+# Separately, and true regardless of any of the above: upstream issue
+# #42436 (github.com/anomalyco/opencode, open as of 2026-09-27) documents
+# `deny` rules that DID load still being evadable via CWD-relative scripts
+# and argv-code gadgets (`python3 -c`, `cargo run`, `node -e`, `env <cmd>`)
+# that aren't path-scored by the permission scanner, and #35238 (also
+# reported open) covers the v2 subagent tool not enforcing per-target
+# subagent permissions — a `task`/`subagent` deny is not a boundary on
+# *which* subagent gets launched. None of the agent templates here rely on
+# denying those specific gadgets or subagent targets, but treat every
+# permission block generated from these templates as a guardrail against
+# accidents, not a hard sandbox boundary against a determined or
+# compromised agent — that boundary is the environment (scratch dirs,
+# disposable creds, no prod URLs), not this permission block.
 #
 # OpenCode's own --help calls --auto "dangerous"; it is off unless passed,
 # and the lead should only pass it for a task the user explicitly confirmed

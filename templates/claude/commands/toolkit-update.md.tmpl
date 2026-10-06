@@ -18,8 +18,8 @@ project's own copies.
   the state-file contract under a running task is how an in-flight task
   ends up half on each contract.
 - **Permission blocks are never auto-applied.** Any hunk touching a
-  `permission:` or `tools:` block is shown to the user and applied only on
-  their explicit yes — and carries the standing rule: verify it live
+  `permission:`, `permissions:`, or `tools:` block is shown to the user and
+  applied only on their explicit yes — and carries the standing rule: verify it live
   against the real OpenCode server before trusting it.
 - **Codex permission changes follow the same gate.** Treat `sandbox_mode`,
   `sandbox_workspace_write`, approval policy/reviewer, writable roots, network

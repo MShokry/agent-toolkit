@@ -1,14 +1,17 @@
-# Codex instructions for __PROJECT_NAME__
+# Agent pipeline instructions for __PROJECT_NAME__
 
 Read `CLAUDE.md` first when it exists. It is this project's primary guidance
-file; these instructions add Codex integration without duplicating or
+file; these instructions add lead integration without duplicating or
 overriding the project's own constraints.
 
-This repository uses a planner -> implement -> review -> test pipeline. For a
-feature or bug-fix request, invoke the `feature` skill and act as its lead. For
-an agent-toolkit scaffold update, invoke the `toolkit-update` skill. Do not run
-either workflow from memory: load the skill and follow its referenced canonical
-flow.
+This repository uses a planner -> implement -> review -> test pipeline.
+In Codex, for a feature or bug-fix request, invoke the `feature` skill and act
+as its lead. For an agent-toolkit scaffold update, invoke the `toolkit-update`
+skill. Do not run either workflow from memory: load the skill and follow its
+referenced canonical flow. In OpenCode, use `/feature` or `/toolkit-update`, which select the
+`leader` adapter under `.opencode/agents/` and reference the same canonical
+Claude instruction files. Do not use the Codex-specific planner adaptation
+in an OpenCode-led run. No Claude or Codex CLI is needed for that run.
 
 The task state file under `.pipeline/` is the only handoff surface between roles.
 Keep role replies short and leave full details in that file. Run

@@ -67,7 +67,8 @@ grep -qx 'model_reasoning_effort="high"' "$FAKE_ARGS" || fail "reasoning not pas
 grep -qx -- --no-daemon "$FAKE_ARGS" || fail "hooks could inherit a different daemon environment"
 export FAKE_SESSION_ID=unrelated-latest
 bash "$LEAD" first > "$TMP/lead.log" 2>&1 || fail "pinned resume failed"
-grep -qx resume "$FAKE_ARGS" && grep -qx thread-one "$FAKE_ARGS" || fail "did not resume the pinned thread"
+grep -qx resume "$FAKE_ARGS" || fail "did not resume the pinned thread"
+grep -qx thread-one "$FAKE_ARGS" || fail "did not resume the pinned thread"
 ! grep -qx -- --last "$FAKE_ARGS" || fail "launcher used latest-thread lookup"
 ok "resume pins the exact thread despite unrelated repository conversations"
 

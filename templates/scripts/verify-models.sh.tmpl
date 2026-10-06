@@ -4,13 +4,13 @@
 # exists on the OpenCode server — before a task is planned, not after a
 # dispatch dies on it.
 #
-# This exists because of T-005: `builder_model` was set to `openai/sol`,
-# which is a model *family* name, not an id. The manifest and feature.md
-# agreed with each other perfectly, so nothing looked wrong — but the
-# server offers `gpt-5.6-sol`, and the builder dispatch failed instantly
-# with an opaque `UnknownError: Unexpected server error`. Agreement between
-# config files is not the same fact as the values resolving, and only one
-# of those two was ever being checked.
+# This exists because a model *family* name (e.g. `openai/sol`) was once
+# configured where the server only offers full ids (e.g. `gpt-5.6-sol`). The
+# manifest and feature.md agreed with each other perfectly, so nothing looked
+# wrong — but the builder dispatch failed instantly with an opaque
+# `UnknownError: Unexpected server error`. Agreement between config files is
+# not the same fact as the values resolving, and only one of those two was
+# ever being checked.
 #
 # Reads the ids from `.pipeline/.toolkit-version` rather than taking them as
 # arguments, so the thing being validated is the thing the pipeline will
@@ -46,14 +46,15 @@ export OPENCODE_PASSWORD="${OPENCODE_PASSWORD:-}"
 
 # Right after an `opencode serve` (re)start the provider list loads lazily, so
 # the first call can say a provider "is not on this server" when it simply has
-# not loaded yet (seen on T-028). Retry that one case, up to 3 attempts 5s
+# not loaded yet (seen after a mid-run restart). Retry that one case, up to 3 attempts 5s
 # apart; a wrong model id (provider present, model absent) still fails at once.
 attempt=1
-while :; do
 # Write to a file, not a pipe: the model list is ~430 entries (>256 KB) and
-# `opencode api` truncates its output mid-JSON when stdout is a pipe.
+# `opencode api` truncates its output mid-JSON when stdout is a pipe. One temp
+# file is reused across retries so the EXIT trap always removes it.
 MODELS_JSON="$(mktemp)"
 trap 'rm -f "$MODELS_JSON"' EXIT
+while :; do
 opencode api GET /api/model --server "$SERVER" --param directory="$REPO_ROOT" >"$MODELS_JSON" 2>/dev/null || {
   echo "verify-models.sh: cannot reach OpenCode server at $SERVER (or it rejected the password in .pipeline/.oc-password) — run scripts/team.sh first" >&2
   exit 1
