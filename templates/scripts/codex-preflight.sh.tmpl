@@ -16,7 +16,7 @@ if [ -n "$CODEX_NUMBER" ] && [ "$(printf '0.160.0\n%s\n' "$CODEX_NUMBER" | sort 
 fi
 FEATURES="$(codex features list)" || die "cannot inspect Codex runtime capabilities"
 for feature in hooks multi_agent; do
-  printf '%s\n' "$FEATURES" | grep -qE "^$feature[[:space:]].*[[:space:]]true$" \
+  printf '%s\n' "$FEATURES" | grep -qE "^${feature}[[:space:]].*[[:space:]]true$" \
     || die "Codex $feature capability is unavailable or disabled; review your runtime configuration before starting"
 done
 codex resume --help | grep -q -- '--no-daemon' \

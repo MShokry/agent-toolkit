@@ -125,6 +125,7 @@ rule "Codex feature skill delegates to the canonical lead flow" \
   '\.claude/commands/feature\.md' \
   "$CODEX_FEATURE"
 
+# shellcheck disable=SC2016 # literal backticks/quotes are intentional
 rule "Codex project instructions route feature work through the skill" \
   'invoke the `feature` skill' \
   "$CODEX_AGENTS"

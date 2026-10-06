@@ -148,6 +148,7 @@ parse_opencode_major() {
 check_opencode_version() {
   if ! command -v opencode >/dev/null 2>&1; then
     printf '\ninit.sh: NOTE — opencode CLI not found on PATH.\n' >&2
+    # shellcheck disable=SC2016 # literal backticks/quotes are intentional
     printf 'init.sh: scripts/oc.sh and scripts/team.sh need opencode v2 installed to run the pipeline (not to scaffold it). Install it before your first /feature or $feature run.\n\n' >&2
     return 0
   fi
@@ -162,7 +163,9 @@ check_opencode_version() {
   case "$major" in
     1)
       printf '\ninit.sh: WARNING — installed opencode is v1 (%s); these templates assume opencode v2.\n' "$ver_str" >&2
+      # shellcheck disable=SC2016 # literal backticks/quotes are intentional
       printf 'init.sh: v1 lacks v2'"'"'s password-gated `serve` (auth will just fail), the `shell` permission action name (v1 used `bash`, so deny/ask rules silently will not match), the `opencode api` CLI subcommand scripts/oc.sh polls with, and the `--server` flag scripts/oc.sh passes to `opencode run` (v1 used `--attach`/`--dir`, both removed in v2). Running this toolkit'"'"'s generated scripts against opencode v1 as-is will fail or silently under-enforce permissions.\n' >&2
+      # shellcheck disable=SC2016 # literal backticks/quotes are intentional
       printf 'init.sh: upgrade opencode first — `opencode upgrade` (or however you installed it) — then re-run.\n\n' >&2
       ;;
     2)
@@ -288,6 +291,7 @@ recover_from_target() { # $1 = key
       REPLY="$(sed -n 's/^model: //p' "$agent_dir/reviewer.md" | head -1)" ;;
     reviewer_fallback_model)
       # feature.md: "switch to `__REVIEWER_FALLBACK_MODEL__`"
+      # shellcheck disable=SC2016 # literal backticks/quotes are intentional
       REPLY="$(sed -n 's/.*switch to `\([^`]*\)`.*/\1/p' \
         "$TARGET/.claude/commands/feature.md" | head -1)" ;;
     tester_model)
@@ -471,6 +475,7 @@ if [ "$UPDATE" -eq 1 ]; then
   check_pair "$TEMPLATES/scripts/promote-findings.sh.tmpl" "$TARGET/scripts/promote-findings.sh"
 
   CUR_SHA="$(git -C "$TOOLKIT_ROOT" rev-parse --short HEAD 2>/dev/null || echo unknown)"
+  # shellcheck disable=SC2016 # literal backticks/quotes are intentional
   printf 'init.sh: toolkit is at %s; checking %s rendered file(s)%s\n' \
     "$CUR_SHA" "$TOTAL" "${ONLY:+ (filtered by --only '$ONLY'; full set is $RENDER_TOTAL)}"
   if [ -f "$STAMP_SOURCE" ]; then

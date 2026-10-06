@@ -111,6 +111,7 @@ grep -q '\.claude/commands/feature.md' "$TMP/.agents/skills/feature/SKILL.md" \
   || fail "Codex feature skill does not point at the canonical lead flow"
 grep -q 'Not populated by agent-toolkit' "$TMP/AGENTS.md" \
   || fail "generated AGENTS.md masks its missing project-specific guidance"
+# shellcheck disable=SC2016 # literal backticks/quotes are intentional
 grep -q 'Codex `planner` subagent' "$TMP/.agents/skills/feature/SKILL.md" \
   || fail "Codex feature skill does not select the Codex planner"
 grep -q 'sandbox_mode = "workspace-write"' "$TMP/.codex/agents/planner.toml" \
@@ -551,7 +552,8 @@ grep -q 'appended to docs/GOTCHAS.md' <<< "$out" || fail "legit finding not prom
 grep -q 'escaping the repo root' <<< "$out" || fail "../.. path was not refused"
 grep -q 'unsafe/invalid doc path' <<< "$out" || fail "absolute path was not refused"
 [ -f "$TMP/docs/GOTCHAS.md" ] || fail "docs/GOTCHAS.md not created"
-[ ! -e "$TMP/../escaped.md" ] && [ ! -f "/tmp/escaped.md" ] || fail "a traversal write landed somewhere"
+[ ! -e "$TMP/../escaped.md" ] || fail "a traversal write landed somewhere"
+[ ! -f "/tmp/escaped.md" ] || fail "a traversal write landed somewhere"
 [ ! -f "$(cd "$TMP/.." && pwd)/escaped.md" ] || fail "traversal escaped above target"
 out="$("$PF" T-02 2>&1)"
 grep -q 'already present, skipped' <<< "$out" || fail "promotion not idempotent"

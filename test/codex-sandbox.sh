@@ -5,6 +5,7 @@ set -eu
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/toolkit-sandbox.XXXXXX")"
 trap 'rm -rf "$TMP"' EXIT
 mkdir -p "$TMP/.pipeline" "$TMP/.agents/skills" "$TMP/.codex" "$TMP/.git"
+# shellcheck disable=SC2016 # literal backticks/quotes are intentional
 codex sandbox --permission-profile :workspace -C "$TMP" -- /bin/bash -c '
   set -eu
   printf probe > .pipeline/probe

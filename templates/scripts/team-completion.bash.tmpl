@@ -4,6 +4,9 @@
 # zsh users: `autoload -U +X bashcompinit && bashcompinit` before sourcing
 # this, zsh's own completion system doesn't load bash completions directly.
 
+# Word-splitting the compgen output into COMPREPLY is the intended behavior, and
+# mapfile is unavailable in the bash 3.2 that macOS ships.
+# shellcheck disable=SC2207
 _team_sh_complete() {
   local cur prev
   cur="${COMP_WORDS[COMP_CWORD]}"
