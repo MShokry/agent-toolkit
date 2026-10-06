@@ -24,26 +24,32 @@ permission:
   doom_loop: deny
   webfetch: allow
   websearch: deny
-  # RESOLVED (2026-09-27, opencode v2.0.18): a warning here previously
-  # claimed --auto let a deny-listed shell call run anyway (builder's, which
-  # does deny curl — this template's own denies are `sudo *` / `rm -rf /*`
-  # below). Re-verified live via `GET /api/agent/<name>` with this file's
-  # actual shape (nested `permission:` + `temperature:`): the ruleset loads
-  # correctly and --auto correctly enforces its denies, matching opencode's
-  # documented contract. The original finding could not be reproduced and is
-  # believed to have been a confound.
+  # UNVERIFIED, do not upgrade this to "resolved" without re-checking
+  # (2026-09-27, opencode v2.0.18): a warning here previously claimed --auto
+  # let a deny-listed shell call run anyway (builder's, which denies curl —
+  # this template's own denies are `sudo *` / `rm -rf /*` below); a
+  # same-day re-check via `GET /api/agent/<name>` seemed to clear it, and a
+  # separate same-day check seemed to confirm a specific cause instead
+  # (mixing `temperature:` with the newer native `permissions:` array
+  # format — this file uses the nested `permission:` form, unaffected if
+  # that's real). A still-later same-day finding showed that same
+  # `GET`-based check can be misled by a stale, long-running `opencode
+  # serve` process or by testing a hand-copied scratch file instead of the
+  # real one, and raised a THIRD, also-unconfirmed cause: duplicate keys
+  # inside one permission map. This file has no duplicate keys within any
+  # single map — checked directly (a naive flattened check over the whole
+  # frontmatter body falsely flags `"*"` and two other patterns here purely
+  # because the sibling `edit:` and `write:` maps below both key them,
+  # which is normal and not a duplicate) — but that does not settle whether
+  # --auto enforces this file's denies. See scripts/oc.sh's --auto comment
+  # for the full writeup.
   #
-  # What IS a confirmed opencode v2 bug: mixing `temperature:` with the newer
-  # native `permissions:` (array) frontmatter key — instead of this nested
-  # `permission:` form — silently drops the whole custom ruleset to bare
-  # allow-all, no warning. Don't convert this file's format without
-  # re-checking `GET /api/agent/<name>` afterward. See scripts/oc.sh's --auto
-  # comment for the full writeup.
-  #
-  # Separately: upstream issue #42436 (open) documents loaded `deny` rules
-  # still being evadable via CWD-relative scripts and argv-code gadgets
-  # (`python3 -c`, `cargo run`, `node -e`, `env <cmd>`), independent of
-  # --auto — this block is a guardrail, not a hard sandbox boundary.
+  # Separately, and true regardless of any of the above: upstream issues
+  # #42436 (deny rules evadable via CWD-relative scripts / argv-code
+  # gadgets — `python3 -c`, `cargo run`, `node -e`, `env <cmd>`) and #35238
+  # (subagent tool doesn't enforce per-target subagent permissions) are
+  # open, independent of --auto — this block is a guardrail, not a hard
+  # sandbox boundary.
   shell:
     # "npm install *" is allowed on purpose: a missing dev dependency is an
     # environmental failure the tester must be able to resolve to run the

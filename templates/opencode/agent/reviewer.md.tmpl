@@ -18,26 +18,29 @@ temperature: 0.1
 # runtime — confirm before you rely on "the reviewer cannot touch source" as
 # a guarantee.
 #
-# A finding recorded here on 2026-09-27 claimed --auto let a deny-listed
-# `curl *` run anyway for the builder template's shell block. That was
-# re-verified live the same day via `GET /api/agent/<name>` and could not be
-# reproduced with the builder template's actual permission shape (nested
-# `permission:` + `temperature`) — the ruleset loaded correctly and --auto
-# correctly denied it, matching opencode's documented contract. The original
-# finding is believed to have been a confound; the claim above it (that
-# YAML-looking-right isn't the same as runtime-enforced) still stands as
-# general practice, but don't assume --auto itself is broken.
+# UNVERIFIED, do not upgrade this to "resolved" without re-checking
+# (2026-09-27, opencode v2.0.18): a finding recorded here claimed --auto let
+# a deny-listed `curl *` run anyway for the builder template's shell block; a
+# same-day re-check via `GET /api/agent/<name>` seemed to clear it, and a
+# separate same-day check seemed to confirm a specific cause instead (mixing
+# `temperature:` with the newer native `permissions:` array format — this
+# file uses the nested `permission:` form, unaffected if that's real). A
+# still-later same-day finding showed that same `GET`-based check can be
+# misled by a stale, long-running `opencode serve` process or by testing a
+# hand-copied scratch file instead of the real one, and raised a THIRD,
+# also-unconfirmed cause: duplicate keys inside one permission map. This
+# file has no duplicate keys within any single map — checked directly — but
+# that does not settle whether --auto enforces `curl *: deny` on the builder
+# template, or anything about this file specifically. See scripts/oc.sh's
+# --auto comment for the full writeup, including why a naive flattened
+# duplicate-key grep is not valid evidence either way. The claim two
+# paragraphs up (that YAML-looking-right isn't the same as runtime-enforced)
+# still stands as general practice — if anything, more so now.
 #
-# What IS a confirmed opencode v2 bug: mixing `temperature:` with the newer
-# native `permissions:` (array) frontmatter key — instead of this file's
-# nested `permission:` form — silently drops the entire custom ruleset to
-# bare allow-all, no warning. Don't convert this file's format without
-# re-checking `GET /api/agent/<name>` afterward. See scripts/oc.sh's --auto
-# comment for the full writeup and how to check any agent's live ruleset.
-#
-# Separately: upstream issue #42436 (open) documents loaded `deny` rules
-# still being evadable via CWD-relative scripts and argv-code gadgets
-# (`python3 -c`, `cargo run`, `node -e`, `env <cmd>`) — a real, ongoing gap
+# Separately, and true regardless of any of the above: upstream issues
+# #42436 (deny rules evadable via CWD-relative scripts / argv-code gadgets —
+# `python3 -c`, `cargo run`, `node -e`, `env <cmd>`) and #35238 (subagent
+# tool doesn't enforce per-target subagent permissions) are open,
 # independent of --auto. Treat this permission block as a guardrail, not a
 # hard sandboxing boundary.
 permission:

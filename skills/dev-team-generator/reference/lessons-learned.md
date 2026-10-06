@@ -568,3 +568,33 @@ path before its project integration exists.
 - Test the exact bootstrap state by removing the newly introduced files from a
   stamped scaffold and confirming a flag-free run restores only those files,
   preserves the stamp, and does not retrigger first-run behavior.
+
+## 29. A structural checker that flattens nested config lies, and a scratch copy is not the artifact
+
+Two related traps surfaced while chasing a suspected permission-enforcement
+bug: a "does this key repeat?" script written against nested config
+(permission maps, frontmatter) that flattens the whole document before
+comparing keys, and a scratch-dir repro built by hand-copying the real file
+under test.
+
+- **Scope every duplicate/structural check to the mapping a key actually
+  lives in, never the whole document.** A key legitimately repeats across
+  independent sibling sections (an `edit:` permission map and a `write:`
+  map both keying `"*"`) and that is not a defect. Verified directly
+  against this toolkit's own `tester.md.tmpl`: a flattened duplicate-key
+  grep reported three "duplicates" that were each a pattern reused across
+  two unrelated sibling maps — a false positive that would send someone
+  chasing a bug that was never there.
+- **A repro must be the byte-identical real artifact, not a copy made while
+  diagnosing the issue.** Hand-copying or cleaning up a file in the course
+  of investigating it is easy to silently "fix" in the act of copying
+  (a duplicate line deduplicated, whitespace normalized) — the copy then
+  passes a check the original fails, and the result is read as "verified
+  safe" when nothing about the original was actually re-tested.
+- Combined, these two traps can produce a fully self-consistent but wrong
+  investigation: the flattening checker under-reports real defects on some
+  files and over-reports on others, while a from-scratch repro built to
+  confirm or deny a hypothesis quietly tests a different file than the one
+  in production. Treat any safety conclusion reached through either
+  shortcut as unconfirmed until re-run against the real file with a
+  structure-aware check.

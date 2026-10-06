@@ -18,34 +18,33 @@ permission:
   todowrite: allow
   task: deny
   doom_loop: deny
-  # RESOLVED (2026-09-27, opencode v2.0.18): an earlier note here claimed
-  # --auto let a deny-listed `curl *` run anyway. Re-verified live with this
-  # exact permission block (nested `permission:` + `temperature:`, same as
-  # below) via `GET /api/agent/<name>` on a real server: the ruleset loads
-  # with `curl *: deny` present, and --auto correctly refused it
-  # ("Permission denied: shell"), matching the documented contract
-  # (opencode.ai/docs/permissions — "deny rules are still enforced" under
-  # --auto). The original finding could not be reproduced and is believed to
-  # have been a confound, not a real --auto bug; the old warning text is
-  # wrong and has been removed.
+  # UNVERIFIED, do not upgrade this to "resolved" without re-checking
+  # (2026-09-27, opencode v2.0.18): an earlier note here claimed --auto let
+  # a deny-listed `curl *` run anyway; a same-day re-check via `GET
+  # /api/agent/<name>` seemed to clear it, and a separate same-day check
+  # seemed to confirm a specific cause instead (mixing `temperature:` with
+  # the newer native `permissions:` array format — this file uses the
+  # nested `permission:` form, unaffected if that's real). A still-later
+  # same-day finding showed that same `GET`-based check can be misled by a
+  # stale, long-running `opencode serve` process or by testing a
+  # hand-copied scratch file instead of the real one, and raised a THIRD,
+  # also-unconfirmed cause: duplicate keys inside one permission map. This
+  # file has no duplicate keys within any single map — checked directly —
+  # but that does not settle whether --auto enforces `curl *: deny` here.
+  # See scripts/oc.sh's --auto comment for the full writeup, including why
+  # a naive flattened duplicate-key grep is not valid evidence either way.
+  # Verify the live ruleset yourself, on a freshly restarted server,
+  # against this exact file, before relying on it.
   #
-  # The bug that IS real and confirmed: opencode v2 can silently DISCARD an
-  # agent's entire custom ruleset (falling back to bare `*:* allow`, no
-  # warning) if the file mixes `temperature:` with the newer native
-  # `permissions:` (array) frontmatter key instead of this nested
-  # `permission:` form. This file uses the nested form, which is unaffected.
-  # Do NOT convert this file to the `permissions: [...]` array format without
-  # re-checking `GET /api/agent/<name>` afterward for exactly this failure
-  # mode. See scripts/oc.sh's --auto comment for the full writeup and how to
-  # check any agent's live ruleset before trusting it.
-  #
-  # Separately, and regardless of --auto or format: upstream issue #42436
-  # (open) documents `deny` rules on loaded rulesets being evadable via
-  # CWD-relative scripts and argv-code gadgets (`python3 -c`, `cargo run`,
-  # `node -e`, `env <cmd>`). None of those are allowed above, but none of the
-  # denies below are a hard sandboxing boundary against a determined or
-  # compromised agent — real isolation is the environment (scratch dirs,
-  # disposable creds, no prod URLs), not this permission block.
+  # Separately, and true regardless of any of the above: upstream issues
+  # #42436 (deny rules evadable via CWD-relative scripts / argv-code
+  # gadgets — `python3 -c`, `cargo run`, `node -e`, `env <cmd>`) and #35238
+  # (subagent tool doesn't enforce per-target subagent permissions) are
+  # open. None of the denies below rely on either gap being closed, but
+  # treat this block as a guardrail against accidents, not a hard sandbox
+  # boundary against a determined or compromised agent — real isolation is
+  # the environment (scratch dirs, disposable creds, no prod URLs), not
+  # this permission block.
   shell:
     "*": ask
     "node *": allow
