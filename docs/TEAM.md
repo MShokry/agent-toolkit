@@ -93,6 +93,28 @@ the target is a git repo — it's local machine state (which port happened
 to be free on your laptop today), not something to commit. If your project
 predates that, or ignores it differently, add it by hand.
 
+## Task dashboard (no launcher required)
+
+From the project root, open the read-only visual dashboard:
+
+```bash
+./scripts/dashboard
+```
+
+It refreshes `.agents/T-*.md` every two seconds, showing stage graphs, task
+cards, acceptance ticks, blockers, and latest handoffs. Use arrows or `j/k` to
+scroll, `b` to filter blocked tasks, `r` to refresh, and `q` to close.
+
+```bash
+./scripts/dashboard --once                  # plain-text snapshot
+./scripts/dashboard --project /path/to/repo # another project
+```
+
+Requires Python 3.8+ on macOS/Linux; no Herdr, tmux, running agent, toolkit
+checkout, or model calls. It displays recorded state, not live verification.
+Init installs the command automatically. For older scaffolds, see
+[adding the dashboard during upgrade](UPGRADING.md#adding-the-project-dashboard).
+
 ## Shell completion (optional)
 
 `scripts/team-completion.bash` completes `--fresh`, `--lead`, `--port`, `--kill`,

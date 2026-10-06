@@ -58,6 +58,11 @@ files="$(find "$TMP" -type f -not -name run1.log \
 [ "$wrote" = "$((files + stamp_written))" ] || fail "claimed $wrote writes but $((files + stamp_written)) files exist"
 ok "every reported write produced exactly one file ($files rendered + stamp)"
 
+[ -x "$TMP/scripts/dashboard" ] || fail "project dashboard missing or not executable"
+cmp -s "$ROOT/integrations/herdr/dashboard.py" "$TMP/scripts/dashboard" \
+  || fail "project dashboard differs from the shared standalone source"
+ok "self-contained executable dashboard was scaffolded"
+
 for codex_file in \
   "$TMP/AGENTS.md" \
   "$TMP/.codex/agents/planner.toml" \

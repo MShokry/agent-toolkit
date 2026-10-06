@@ -1,0 +1,45 @@
+id = "agent-toolkit"
+name = "Agent Toolkit"
+version = "0.1.0"
+min_herdr_version = "0.9.1"
+description = "Adopt an existing pipeline lead, show task records, and optionally add support panes."
+platforms = ["linux", "macos"]
+
+[[actions]]
+id = "adopt"
+title = "Toolkit: adopt current agent as lead (no prompt)"
+contexts = ["pane"]
+command = ["python3", "plugin.py", "adopt"]
+
+[[actions]]
+id = "brief-leader"
+title = "Toolkit: ask the adopted agent to act as leader"
+description = "Sends one instruction prompt to an idle adopted lead. Does not approve a task."
+contexts = ["workspace", "pane"]
+command = ["python3", "plugin.py", "brief-leader"]
+
+[[actions]]
+id = "layout"
+title = "Toolkit: add board and empty support shells"
+contexts = ["workspace", "pane"]
+command = ["python3", "plugin.py", "layout"]
+
+[[actions]]
+id = "status"
+title = "Toolkit: show task board"
+contexts = ["workspace", "pane"]
+command = ["python3", "plugin.py", "status"]
+
+[[actions]]
+id = "focus-leader"
+title = "Toolkit: return to the adopted lead session"
+contexts = ["workspace", "pane"]
+command = ["python3", "plugin.py", "focus-leader"]
+
+[[panes]]
+id = "board"
+title = "Agent Toolkit task records"
+placement = "split"
+# Panes may run in --cwd, unlike actions. Resolve the script from Herdr's
+# protected plugin-root environment; argv commands do not expand $variables.
+command = ["python3", "-c", "import os, runpy; runpy.run_path(os.path.join(os.environ['HERDR_PLUGIN_ROOT'], 'plugin.py'), run_name='__main__')", "board"]

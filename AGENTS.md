@@ -24,6 +24,7 @@ change with the automated smoke run:
 ```bash
 bash test/smoke.sh        # scaffolder guarantees + the two structural scripts
 bash test/invariants.sh   # every load-bearing rule present in every copy
+python3 test/herdr.py     # optional host adapter; fake Herdr, no agents or LLM calls
 ```
 
 `smoke.sh` scaffolds into a throwaway directory and asserts the core
@@ -63,6 +64,9 @@ files are skipped, not clobbered (`render()`'s core guarantee).
 | `skills/toolkit-release/` | Conversational release flow: classify commits since the last tag into `[contract]›[safety]›[process]›[docs]`, propose a semver-ish version, get user approval, write the CHANGELOG section, run `bin/release.sh` |
 | `test/smoke.sh` | The automated smoke run (see Commands). CI runs it plus shellcheck on every push |
 | `test/invariants.sh` | Cross-file rule presence check: one grep per (rule, file) pair over the hand-synced copies. Add a rule = one line in its table |
+| `integrations/herdr/` | Optional Herdr plugin for adopting an existing lead and showing task records/support panes; Python standard library, independent of the bash scaffolder |
+| `bin/dashboard` | Standalone read-only visual task viewer for any terminal; reuses the renderer without calling Herdr |
+| `integrations/herdr/dashboard.py` | Canonical host-independent viewer; copied directly by init to `scripts/dashboard`, also imported by the Herdr adapter. Python is required only to run this optional UI, not to scaffold |
 | `.github/workflows/ci.yml` | Runs `test/smoke.sh` + shellcheck (`bin/init.sh`, the test, and every `templates/scripts/*.tmpl`) |
 | `templates/Codex/agents/` | `planner.md.tmpl`, `senior-dev.md.tmpl` — Codex subagent role definitions |
 | `templates/Codex/commands/` | `feature.md.tmpl` — the `/feature` pipeline command (the lead's own instructions); `toolkit-update.md.tmpl` — the `/toolkit-update` merge command for already-scaffolded projects |

@@ -626,3 +626,51 @@ under test.
 - A denied edit tool is not filesystem isolation if shell can write files.
   Use least privilege, disclose the boundary, and verify resolved rules and
   refused actions against the exact generated artifact in a fresh runtime.
+
+## 31. Hosting an existing lead is not launching or approving a pipeline
+
+- A terminal/workspace integration must adopt a user-started lead, not require
+  its own launcher or silently create a replacement conversation. Make layout,
+  prompting, and process launch distinct actions; adoption can be metadata-only.
+- A globally installed plugin needs runtime bindings scoped by server,
+  workspace, and project. Pane ids alone are not unique across servers. Persist
+  outside managed source checkouts and projects, and verify native session
+  identity before focusing or prompting; do not select the latest worker.
+- A host's idle/done state describes a terminal turn, not acceptance criteria.
+  Display the actual task record and keep deterministic verification and
+  evidence gates authoritative. Do not take lifecycle authority away from the
+  host's official integration merely to relabel a pane as lead.
+- Native interactive lifecycle reporting may not cover headless workers.
+  Preserve dispatch receipts and state files rather than claiming the host's
+  badges monitor processes it cannot identify. Empty support terminals must
+  not be advertised as automatic worker routing.
+- Role text is not a runtime profile or permission switch. A briefing can tell
+  an existing agent how to behave; only the runtime's real profile selection
+  can apply its configured permission block. Disclose that distinction.
+- Treat task text as untrusted terminal output: strip control characters and
+  avoid exposing external file links. Keep one-shot prompt submissions bounded
+  and never retry blindly after a timeout, since input may already have arrived.
+- Host action commands and terminal entrypoints may use different working
+  directories. Resolve entrypoint code from the host's protected package-root
+  context and pass the target project separately; test the actual manifest
+  command from a target project, not only from the plugin checkout.
+- A useful host dashboard should derive stage graphs, counts, and blocker
+  summaries deterministically from task records, independently of the current
+  model. Separate visualization from inference: unknown/blocked stages remain
+  explicit, acceptance bars are recorded data rather than verification, and a
+  responsive display cannot make stale source records fresh.
+- Placement modes may accept different API parameters: a split needs a target
+  pane while a new tab may reject it. Test placement-specific argument contracts,
+  not just successful responses from a permissive fake host.
+- Check the host's actual UI extension boundary before promising an embedded
+  graphical panel. A terminal-only plugin host can offer colored, scrollable
+  cards and graphs, but not a native webview. Preserve a plain-text fallback
+  and keep navigation read-only instead of coupling display to agent actions.
+- Keep record visualization callable without the workspace host. A standalone
+  viewer should discover the task directory from cwd, require no host session
+  context or full scaffold for reading records, and reuse the same renderer so
+  the hosted and independent views cannot drift.
+- Install the viewer as a self-contained project command and track it in the
+  same non-destructive update triage as other generated artifacts. A generated
+  launcher must not depend on the original toolkit checkout still existing;
+  additive installation must preserve customization and provenance.

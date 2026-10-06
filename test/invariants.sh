@@ -46,6 +46,7 @@ OC_LEADER="templates/opencode/agents/leader.md.tmpl"
 OC_PLANNER="templates/opencode/agents/planner.md.tmpl"
 OC_FEATURE="templates/opencode/commands/feature.md.tmpl"
 OC_UPDATE="templates/opencode/commands/toolkit-update.md.tmpl"
+HERDR_DOC="integrations/herdr/README.md"
 
 FAIL=0
 CHECKS=0
@@ -127,6 +128,15 @@ rule "Codex planner delegates to the canonical planner contract" \
   "$CODEX_PLANNER"
 
 # --- the delivery contract --------------------------------------------------
+rule "Herdr adoption does not prompt or relaunch an existing lead" \
+  'sends \*\*no prompt\*\*.*launches \*\*no process\*\*' "$HERDR_DOC"
+rule "Herdr lifecycle completion is not task acceptance" \
+  'Herdr done/idle is not task acceptance' "$HERDR_DOC"
+rule "Herdr bindings never guess the newest worker session" \
+  'never.*choose the newest worker' "$HERDR_DOC"
+rule "Herdr role briefing does not activate runtime permissions" \
+  'not an OpenCode profile switch' "$HERDR_DOC"
+
 # OpenCode-only adapters reference policy rather than becoming new flow copies.
 rule "OpenCode leader and command reference the canonical flow" \
   '\.claude/commands/feature\.md' "$OC_LEADER" "$OC_FEATURE"

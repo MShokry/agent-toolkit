@@ -171,7 +171,7 @@ check_opencode_version
 STAMP="$TARGET/.agents/.toolkit-version"
 
 # Keep in sync with the number of check_pair/render lines below.
-RENDER_TOTAL=22
+RENDER_TOTAL=23
 
 write_stamp() {
   local sha tag
@@ -390,6 +390,7 @@ if [ "$UPDATE" -eq 1 ]; then
   check_pair "$TEMPLATES/opencode/commands/toolkit-update.md.tmpl" "$TARGET/.opencode/commands/toolkit-update.md"
   check_pair "$TEMPLATES/agents-state/TEMPLATE.md.tmpl"    "$TARGET/.agents/TEMPLATE.md"
   check_pair "$TEMPLATES/scripts/oc.sh.tmpl"               "$TARGET/scripts/oc.sh"
+  check_pair "$TOOLKIT_ROOT/integrations/herdr/dashboard.py" "$TARGET/scripts/dashboard"
   check_pair "$TEMPLATES/scripts/team.sh.tmpl"             "$TARGET/scripts/team.sh"
   check_pair "$TEMPLATES/scripts/team-completion.bash.tmpl" "$TARGET/scripts/team-completion.bash"
   check_pair "$TEMPLATES/scripts/verify-state.sh.tmpl"     "$TARGET/scripts/verify-state.sh"
@@ -455,13 +456,14 @@ render "$TEMPLATES/opencode/commands/feature.md.tmpl" "$TARGET/.opencode/command
 render "$TEMPLATES/opencode/commands/toolkit-update.md.tmpl" "$TARGET/.opencode/commands/toolkit-update.md"
 render "$TEMPLATES/agents-state/TEMPLATE.md.tmpl"    "$TARGET/.agents/TEMPLATE.md"
 render "$TEMPLATES/scripts/oc.sh.tmpl"               "$TARGET/scripts/oc.sh"
+render "$TOOLKIT_ROOT/integrations/herdr/dashboard.py" "$TARGET/scripts/dashboard"
 render "$TEMPLATES/scripts/team.sh.tmpl"             "$TARGET/scripts/team.sh"
 render "$TEMPLATES/scripts/team-completion.bash.tmpl" "$TARGET/scripts/team-completion.bash"
 render "$TEMPLATES/scripts/verify-state.sh.tmpl"     "$TARGET/scripts/verify-state.sh"
 render "$TEMPLATES/scripts/verify-spec.sh.tmpl"      "$TARGET/scripts/verify-spec.sh"
 render "$TEMPLATES/scripts/promote-findings.sh.tmpl" "$TARGET/scripts/promote-findings.sh"
 
-chmod +x "$TARGET/scripts/oc.sh" "$TARGET/scripts/team.sh" \
+chmod +x "$TARGET/scripts/oc.sh" "$TARGET/scripts/team.sh" "$TARGET/scripts/dashboard" \
          "$TARGET/scripts/verify-state.sh" "$TARGET/scripts/verify-spec.sh" \
          "$TARGET/scripts/promote-findings.sh" 2>/dev/null || true
 
@@ -545,7 +547,9 @@ Next steps:
      section; fill it when no project CLAUDE.md already supplies constraints.
   5. On the first feature run, the selected lead will notice
      .agents/.needs-customization and ask whether to fill the role files'
-     generic pitfalls/hard-rules sections with this project's real ones.
+      generic pitfalls/hard-rules sections with this project's real ones.
+      View task progress anytime: $TARGET/scripts/dashboard
+      (Python 3.8+; no Herdr or model calls; --once prints a snapshot).
   6. Later, once the toolkit itself has moved on: bin/init.sh --update
      --target $TARGET shows a drift summary (exit 1 = something to merge),
      and /toolkit-update (Claude/OpenCode) or \$toolkit-update (Codex) walks your
