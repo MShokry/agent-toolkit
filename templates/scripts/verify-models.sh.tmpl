@@ -14,9 +14,9 @@
 #
 # Reads the ids from `.pipeline/.toolkit-version` rather than taking them as
 # arguments, so the thing being validated is the thing the pipeline will
-# actually use. `claude/*` entries are skipped: Claude roles dispatch as
-# subagents, never through oc.sh, so the OpenCode server has no opinion
-# about them.
+# actually use. `claude/*` and `codex/*` entries are skipped: those roles
+# dispatch as native subagents, never through oc.sh, so the OpenCode server
+# has no opinion about them.
 #
 # Usage: scripts/verify-models.sh
 # Exit 0 = every oc.sh-dispatched id resolves, prints one OK line.
@@ -89,8 +89,8 @@ for key, val in wanted:
     if "/" not in val:
         continue          # bare name, e.g. claude_model: sonnet — not an oc.sh id
     prov, model = val.split("/", 1)
-    if prov == "claude":
-        continue          # Claude roles run as subagents, never through oc.sh
+    if prov in {"claude", "codex"}:
+        continue          # Native-subagent roles never dispatch through oc.sh
     checked += 1
     if model not in have.get(prov, set()):
         bad.append((key, val, prov))

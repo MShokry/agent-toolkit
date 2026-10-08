@@ -48,11 +48,19 @@ Apply these OpenCode adaptations:
   for implementation; Claude's `senior-dev` is unavailable unless a real
   Claude Code dispatch mechanism is explicitly supplied. Never substitute a
   model or relax review independence merely because OpenCode leads the run.
-- Run long worker shell calls in the background when the host supports it.
-  Write prompts to files and pass `--prompt-file`; capture output and use a
-  different `--raw-out` path for each role/pass. Do not poll background tool
-  calls when the host supplies completion notifications. If the host cannot
-  background a dispatch, disclose that limitation before a long run.
+- A `claude/*` reviewer in `.pipeline/.toolkit-version` is not an OpenCode
+  role: run it with `scripts/claude-review.sh T-<id> <pass> <brief-file>`,
+  which runs the project's `.claude/agents/reviewer.md` headlessly with
+  read-only tools and writes `.pipeline/T-<id>.review-<N>.out`. A `codex/*`
+  tester cannot be spawned from OpenCode either: follow the canonical flow and
+  ask the user rather than substituting another tester.
+- Launch every worker dispatch with `scripts/bg-dispatch.sh start T-<id>
+  <label> -- <scripts/oc.sh … | scripts/claude-review.sh …>` and wait with
+  `scripts/bg-dispatch.sh wait T-<id> <label> <seconds>`, repeating until it
+  reports `finished:` or `wrapper-exited:`. Write prompts to files and pass
+  `--prompt-file`; use a different `--raw-out` path and label for each
+  role/pass. Stop a dispatch on purpose with `scripts/oc.sh --interrupt <id>`,
+  never a raw API call.
 - Resolve server/password using `scripts/oc.sh`'s conventions. For the API
   preflight use authenticated `opencode api GET /api/info --server <url>`,
   with `OPENCODE_PASSWORD` loaded from the configured environment or local

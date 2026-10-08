@@ -20,6 +20,11 @@ Keep role replies short and leave full details in that file. Run
 `.pipeline/` contains writable runtime records. Never store runtime output in
 the protected instruction directories. Spec/merge consent does not replace
 runtime permission approval for network, Git, or protected-config writes.
+If the reviewer is a Claude model (`reviewer_model: claude/…` in
+`.pipeline/.toolkit-version`), a non-Claude lead runs it through
+`scripts/claude-review.sh`, which sends the task's state file and diff to
+Anthropic: state in the project-specific section below whether that is
+authorized, and never send credentials or `.env` files.
 
 ## Project-specific guidance
 

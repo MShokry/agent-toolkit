@@ -37,6 +37,15 @@ script, flag, or role rule; **PATCH** = prose and docs.
   finding.
 - `[process]` `init.sh` ignores `.pipeline/T-*.{out,err,pid,brief}` dispatch
   traces in a git target.
+- `[process]` A `codex/<model>` tester is now a supported role:
+  `--tester-model codex/<model>` scaffolds `.codex/agents/tester.toml`
+  (report-only tester, model id without the vendor prefix);
+  `verify-models.sh` skips `codex/*` like `claude/*`; `codex-preflight.sh`
+  requires the tester agent when the manifest names one.
+- `[process]` The OpenCode lead dispatches a `claude/*` reviewer through
+  `scripts/claude-review.sh`, waits through `bg-dispatch.sh`, and stops roles
+  with `oc.sh --interrupt`. Generated `AGENTS.md` asks the project to record
+  whether sending review material to Anthropic is authorized.
 
 - `[contract]` Merged upstream v0.10.0 (OpenCode lead, standalone dashboard,
   Herdr plugin) onto this line without changing the Codex/`.pipeline/`

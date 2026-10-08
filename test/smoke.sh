@@ -120,6 +120,18 @@ grep -q 'never modify source' "$TMP/.codex/agents/planner.toml" \
   || fail "Codex planner does not state its source-write boundary"
 ok "Codex lead instructions, skills, and planner were scaffolded"
 
+[ ! -e "$TMP/.codex/agents/tester.toml" ] || fail "an OpenCode tester_model still scaffolded a Codex tester agent"
+CT="$(mktemp -d "${TMPDIR:-/tmp}/toolkit-codex-tester.XXXXXX")"
+bash "$ROOT/bin/init.sh" --target "$CT" --project-name smoke \
+  --builder-model a/b --reviewer-model a/c --reviewer-fallback-model d/e \
+  --tester-model codex/some-model > "$CT/run.log" 2>&1 || fail "init.sh with a codex/* tester failed"
+grep -q '^model = "some-model"$' "$CT/.codex/agents/tester.toml" \
+  || fail "codex/* tester_model did not render .codex/agents/tester.toml with its model id"
+grep -q '^name = "tester"$' "$CT/.codex/agents/tester.toml" || fail "Codex tester agent has no tester name"
+grep -q 'never fix anything' "$CT/.codex/agents/tester.toml" || fail "Codex tester does not state its report-only boundary"
+grep -q '"codex"' "$CT/scripts/verify-models.sh" || fail "verify-models.sh does not skip codex/* roles"
+ok "a codex/* tester_model scaffolds a Codex tester agent and is skipped by verify-models"
+
 for oc_file in agents/leader.md agents/planner.md commands/feature.md commands/toolkit-update.md; do
   [ -f "$TMP/.opencode/$oc_file" ] || fail "OpenCode lead file missing: $oc_file"
 done

@@ -27,6 +27,11 @@ for path in .codex/agents/planner.toml .codex/hooks.json scripts/codex-session.p
   .pipeline/TEMPLATE.md scripts/bg-dispatch.sh; do
   [ -f "$path" ] || die "missing $path; finish scaffold/update before starting"
 done
+# A codex/* tester is a native Codex subagent the lead must be able to spawn.
+if grep -qE '^tester_model: *codex/' .pipeline/.toolkit-version 2>/dev/null; then
+  [ -f .codex/agents/tester.toml ] || die "tester_model is codex/* but .codex/agents/tester.toml is missing"
+  grep -q '^name = "tester"' .codex/agents/tester.toml || die "tester definition has no tester name"
+fi
 # A claude/* reviewer is dispatched through scripts/claude-review.sh, which
 # needs the Claude CLI and the reviewer agent; check now, not at step 3.
 if grep -qE '^reviewer_model: *claude/' .pipeline/.toolkit-version 2>/dev/null; then

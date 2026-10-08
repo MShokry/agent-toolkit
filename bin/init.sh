@@ -377,6 +377,10 @@ CODEX_PLANNER_MODEL_LINE="# model inherits from the lead"
 CODEX_PLANNER_REASONING_LINE="# reasoning effort inherits from the lead"
 [ "$CODEX_PLANNER_MODEL" = inherit ] || CODEX_PLANNER_MODEL_LINE="model = \"$CODEX_PLANNER_MODEL\""
 [ "$CODEX_PLANNER_REASONING" = inherit ] || CODEX_PLANNER_REASONING_LINE="model_reasoning_effort = \"$CODEX_PLANNER_REASONING\""
+# A `codex/<model>` tester runs as a native Codex subagent, not through oc.sh:
+# it gets .codex/agents/tester.toml (model id without the vendor prefix).
+CODEX_TESTER_MODEL=""
+case "$TESTER_MODEL" in codex/*) CODEX_TESTER_MODEL="${TESTER_MODEL#codex/}" ;; esac
 
 # Captured before any render() call touches the target, so it reflects
 # whether this is the very first scaffold of this project — used below to
@@ -398,6 +402,7 @@ SED_ARGS=(
   -e "s|__REVIEWER_MODEL__|$REVIEWER_MODEL|g"
   -e "s|__REVIEWER_FALLBACK_MODEL__|$REVIEWER_FALLBACK_MODEL|g"
   -e "s|__TESTER_MODEL__|$TESTER_MODEL|g"
+  -e "s|__CODEX_TESTER_MODEL__|$CODEX_TESTER_MODEL|g"
   -e "s|__TEST_DIR__|$TEST_DIR|g"
 )
 
@@ -448,6 +453,7 @@ if [ "$UPDATE" -eq 1 ]; then
   check_pair "$TEMPLATES/claude/commands/toolkit-update.md.tmpl" "$TARGET/.claude/commands/toolkit-update.md"
   check_pair "$TEMPLATES/codex/AGENTS.md.tmpl"              "$TARGET/AGENTS.md"
   check_pair "$TEMPLATES/codex/agents/planner.toml.tmpl"   "$TARGET/.codex/agents/planner.toml"
+  [ -z "$CODEX_TESTER_MODEL" ] || check_pair "$TEMPLATES/codex/agents/tester.toml.tmpl" "$TARGET/.codex/agents/tester.toml"
   check_pair "$TEMPLATES/codex/hooks.json.tmpl" "$TARGET/.codex/hooks.json"
   check_pair "$TEMPLATES/codex/hooks/session.py.tmpl" "$TARGET/scripts/codex-session.py"
   check_pair "$TEMPLATES/scripts/codex-lead.sh.tmpl" "$TARGET/scripts/codex-lead.sh"
@@ -525,6 +531,7 @@ render "$TEMPLATES/claude/commands/feature.md.tmpl"  "$TARGET/.claude/commands/f
 render "$TEMPLATES/claude/commands/toolkit-update.md.tmpl" "$TARGET/.claude/commands/toolkit-update.md"
 render "$TEMPLATES/codex/AGENTS.md.tmpl"              "$TARGET/AGENTS.md"
 render "$TEMPLATES/codex/agents/planner.toml.tmpl"   "$TARGET/.codex/agents/planner.toml"
+[ -z "$CODEX_TESTER_MODEL" ] || render "$TEMPLATES/codex/agents/tester.toml.tmpl" "$TARGET/.codex/agents/tester.toml"
 render "$TEMPLATES/codex/hooks.json.tmpl" "$TARGET/.codex/hooks.json"
 render "$TEMPLATES/codex/hooks/session.py.tmpl" "$TARGET/scripts/codex-session.py"
 render "$TEMPLATES/scripts/codex-lead.sh.tmpl" "$TARGET/scripts/codex-lead.sh"
