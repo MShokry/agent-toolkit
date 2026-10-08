@@ -20,6 +20,16 @@ Apply these Codex adaptations:
   runtime approval when needed; never switch to full access or disable approvals.
   Its authenticated API check replaces canonical Preflight's step 3 server
   probe, so `OC_SERVER` overrides and password-gated servers are handled once.
+  Exit 3 means every other check passed and the OpenCode CLI cannot reach its
+  server from your sandbox: run `scripts/oc.sh --status` next, and treat its
+  exit 0 as that probe passing.
+- `.codex/rules/pipeline.rules` lets exactly `scripts/oc.sh`,
+  `scripts/bg-dispatch.sh`, `scripts/claude-review.sh` and
+  `scripts/verify-models.sh` run outside the sandbox without a per-call
+  prompt, in a trusted project. Invoke them by that repo-relative path, never
+  through `bash …` or an absolute path, or the rule does not match. If one
+  still prompts, the rules are not loaded (untrusted project, older Codex):
+  request approval for that exact command, never a wider sandbox.
 - When the canonical flow says to dispatch `planner`, spawn the project-scoped
   Codex `planner` subagent. Wait for it and use its short reply as a receipt;
   its full output belongs in `.pipeline/T-<id>.md`.
@@ -38,9 +48,14 @@ Apply these Codex adaptations:
   id** after the first dispatch; reuse that thread only for tester retries on
   the same task — it is never an OpenCode session. Otherwise dispatch the
   OpenCode tester through `scripts/oc.sh` as the canonical flow shows.
-- Use OpenCode `builder` as the implementer. The Claude `senior-dev` option is
-  unavailable in a Codex-led fallback run. All review-independence rules still
-  apply.
+- The implementer is OpenCode `builder` by default. When the user explicitly
+  asks for Codex to implement, spawn the project `codex-dev` subagent
+  (`.codex/agents/codex-dev.toml`) instead, record **Codex implementer thread
+  id** after the first dispatch, and send its review/test fix loops to that
+  thread only. Its sandbox keeps `.git` read-only; only you commit. The Claude
+  `senior-dev` option is unavailable in a Codex-led run. All
+  review-independence rules still apply: after `codex-dev`, an OpenAI-family
+  reviewer is not independent.
 - Give every new `T-*` task its own branch as the canonical step 2 describes
   (`T-<id>-<slug>`, or the project's prefix, e.g. `codex/`), created from an
   up-to-date base before any implementer runs. Branch creation is the
@@ -63,9 +78,16 @@ Apply these Codex adaptations:
   again, until it prints `finished:` (exit 0) or `wrapper-exited:` (exit 2).
   `still-running` (exit 3) means call it again — never re-dispatch over a live
   label (the script refuses anyway), and never treat a killed `wait` as a dead
-  role. Recover a builder's liveness from *OpenCode builder session id* with
-  `scripts/oc.sh --status <id>`: `active` means still running — wait, do not
-  abort. Never the v1 `GET /session/status`; it does not exist on v2.
+  role. Your exec tool yields after its `yield_time_ms` while the command
+  keeps running: poll that same exec session until `wait` prints its line,
+  rather than starting a second `wait` beside it. Recover a builder's
+  liveness from *OpenCode builder session id* with `scripts/oc.sh --status
+  <id>`: `active` means still running — wait, do not abort. Never the v1 `GET /session/status`; it does not exist on v2.
+- When the reviewer is a Codex model (`reviewer_model: codex/…`, with
+  `.codex/agents/reviewer.toml`), spawn that read-only subagent with the task
+  id and pass number, record **Codex reviewer thread id** after pass 1, and
+  send pass 2 to that thread only. Its reply is the record: branch on its
+  `VERDICT:` line and paste the findings under the canonical pass heading.
 - When the canonical flow says to dispatch a Claude `reviewer`
   (`reviewer_model: claude/…`), run it headlessly: write the brief (what the
   reviewer cannot know from disk) to `.pipeline/T-<id>.review-<N>.brief`, then
@@ -110,12 +132,17 @@ Apply these Codex adaptations:
   may also need runtime approval; never move those files to evade protection.
 - At a restart or compaction, recover the active task from `.pipeline/`, read
   its status, counters, approvals in the Decisions log, and Latest handoff,
-  and verify existing worker activity before dispatching. Do not repeat an
-  approval already recorded, and do not infer approval from silence.
-- On a quota failure, preserve the task and thread ids and report the failing
-  step. Retry through an available scheduled wakeup only; if this runtime
-  cannot schedule one, state that limitation and leave a resumable handoff.
-  Never claim a retry has been scheduled when no mechanism exists.
+  and verify existing worker activity before dispatching. The session hook
+  prints unfinished tasks at session start; that list is a pointer to those
+  files, never a substitute for reading them. Do not repeat an approval
+  already recorded, and do not infer approval from silence.
+- On a usage-limit or quota failure, preserve the task and thread ids and
+  tell the user the step and command once (canonical *OpenCode usage
+  limits*). Then relaunch the same dispatch with `scripts/bg-dispatch.sh
+  start T-<id> <label> --retry-on-limit 1800 -- …` and keep calling `wait` on
+  it: that loop is your scheduler. A Codex subagent (planner, `codex-dev`,
+  reviewer, tester) hitting a limit has no such loop; report it and leave a
+  resumable handoff. Never claim a retry is scheduled when none is running.
 
 If the Codex planner cannot be spawned, stop and tell the user; do not silently
 plan and implement in the lead thread.

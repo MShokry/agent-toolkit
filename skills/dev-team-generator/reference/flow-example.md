@@ -147,7 +147,10 @@ bug, not a timeout): stop and tell the user immediately, naming the step
 and the command that hit it. Do not silently retry, and do not switch
 model/vendor on your own judgement. After that one notification, retry the
 same command automatically on an interval until it succeeds, or until the
-user says to stop or switch. On success, resume from exactly where it
+user says to stop or switch. A lead with no scheduler of its own does not
+skip this: it relaunches the dispatch under a detached retry loop that
+reruns the command only while the failure is a usage limit, and waits on
+that loop like any other dispatch. On success, resume from exactly where it
 stopped and say so.
 
 ### Dispatch-tool session policy

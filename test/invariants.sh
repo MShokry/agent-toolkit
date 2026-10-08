@@ -43,6 +43,10 @@ CODEX_AGENTS="templates/codex/AGENTS.md.tmpl"
 CODEX_FEATURE="templates/codex/skills/feature/SKILL.md.tmpl"
 CODEX_PLANNER="templates/codex/agents/planner.toml.tmpl"
 CODEX_UPDATE="templates/codex/skills/toolkit-update/SKILL.md.tmpl"
+CODEX_DEV="templates/codex/agents/codex-dev.toml.tmpl"
+CODEX_REVIEWER="templates/codex/agents/reviewer.toml.tmpl"
+CODEX_TESTER="templates/codex/agents/tester.toml.tmpl"
+CODEX_RULES="templates/codex/rules/pipeline.rules.tmpl"
 UPDATE="templates/claude/commands/toolkit-update.md.tmpl"
 OC_LEADER="templates/opencode/agents/leader.md.tmpl"
 OC_PLANNER="templates/opencode/agents/planner.md.tmpl"
@@ -149,6 +153,20 @@ rule "Codex update permission gate covers TOML and hooks" \
   'sandbox_mode.*approval policy/reviewer' "$UPDATE"
 rule "planner thread identity is recorded in both state contracts" \
   'planner thread id' "$STATE" "$STATE_EX"
+rule "Codex implementer delegates to the canonical senior-dev contract" \
+  '\.claude/agents/senior-dev\.md' "$CODEX_DEV"
+rule "Codex implementer never commits" \
+  'never try to commit' "$CODEX_DEV"
+rule "Codex reviewer runs in a read-only sandbox under the canonical review contract" \
+  'sandbox_mode = "read-only".*\.opencode/agents/reviewer\.md' "$CODEX_REVIEWER"
+rule "Codex tester never records an AC outcome" \
+  'never fill or tick' "$CODEX_TESTER"
+rule "implementer vendor family decides reviewer independence, Codex included" \
+  'codex-dev.{0,200}(independent|vendor family)|(independent|vendor family).{0,200}codex-dev' "$FEATURE" "$CODEX_FEATURE"
+rule "a lead without a scheduler still retries usage limits, via a detached loop" \
+  'retry-on-limit|detached retry loop' "$FEATURE" "$FLOW" "$CODEX_FEATURE"
+rule "Codex execution rules are scoped to the dispatch wrappers and verified live" \
+  'confirm live.*still prompts' "$CODEX_RULES"
 rule "approval decisions survive restart" \
   'Record approvals|record the approval' "$FEATURE" "$SYSTEM" "$FLOW"
 
@@ -217,11 +235,11 @@ rule "reviewer reads the implementer's stated reasoning" \
 # --- independence of evidence ------------------------------------------------
 rule "tester maps criteria to covering tests" \
   'coverage|covering test' \
-  "$TESTER" "$SYSTEM" "$FLOW" "$STATE" "$STATE_EX"
+  "$TESTER" "$CODEX_TESTER" "$SYSTEM" "$FLOW" "$STATE" "$STATE_EX"
 
 rule "test authorship is recorded" \
   'tests authored by|who authored the tests|authorship' \
-  "$TESTER" "$SYSTEM" "$FLOW" "$STATE" "$STATE_EX"
+  "$TESTER" "$CODEX_TESTER" "$SYSTEM" "$FLOW" "$STATE" "$STATE_EX"
 
 # --- state-file fields present in both copies of the contract ---------------
 rule "reviewer/tester recorded per task" \

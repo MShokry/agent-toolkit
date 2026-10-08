@@ -8,8 +8,8 @@
 > section.
 
 **Status:** draft | spec-approved | in-progress | blocked:question | blocked:spec | in-review | changes-requested | testing | done
-**Owner right now:** planner | senior-dev | builder | reviewer | tester | lead
-**Implementer for this task:** senior-dev (claude/__CLAUDE_MODEL__) | builder (__BUILDER_MODEL__)
+**Owner right now:** planner | senior-dev | codex-dev | builder | reviewer | tester | lead
+**Implementer for this task:** senior-dev (claude/__CLAUDE_MODEL__) | codex-dev (codex/<the lead's model>) | builder (__BUILDER_MODEL__)
 **Task class:** <routine | standard | sensitive — proposed by the planner
 with a one-line why; the lead asks the human only when genuinely torn>
 **Class decided by:** agent | human
@@ -20,6 +20,8 @@ with a one-line why; the lead asks the human only when genuinely torn>
 **OpenCode tester session id:** none yet — set from the OpenCode tester's first call (a fresh session, never the builder's); reused only by a tester retry on this task. Stays `none` when the tester is a Codex subagent.
 **Codex planner thread id:** none yet — Codex lead sets this after the first planner dispatch; reuse for corrections on this task, new thread for a new task
 **Codex tester thread id:** none yet — set after the first dispatch when the tester is a Codex subagent (`tester_model: codex/…`); reused only for tester retries on this task
+**Codex implementer thread id:** none yet — set after the first dispatch when the implementer is the Codex `codex-dev` subagent; reused only for its own fix loops on this task
+**Codex reviewer thread id:** none yet — set after the first pass when the reviewer is a Codex subagent (`reviewer_model: codex/…`); reused only for its later passes on this task
 **OpenCode auto mode:** off — only meaningful when Implementer is `builder`. On means every builder `oc.sh` call for this task passes `--auto`. Set at spec approval: `on` without asking when `.pipeline/.toolkit-version` says `builder_auto: on` (a standing user decision), otherwise the user's answer to the spec-time question. Never turned on mid-task.
 **Review loop count:** 0 / 2
 **Test-fix loops:** 0 / 2

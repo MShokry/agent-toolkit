@@ -6,6 +6,42 @@ import re
 import sys
 
 
+FIELD = re.compile(r"\*\*(Status|Blocked since|Latest handoff):\*\*\s*(.*)")
+MAX_TASKS = 8
+MAX_FIELD = 160
+
+
+def task_number(path):
+    match = re.fullmatch(r"T-(\d+)\.md", path.name)
+    return int(match.group(1)) if match else -1
+
+
+def active_tasks(directory):
+    """One line per task that is not done, read from the state-file header."""
+    lines = []
+    for path in sorted(directory.glob("T-*.md"), key=task_number):
+        if task_number(path) < 0 or path.is_symlink() or not path.is_file():
+            continue
+        fields = {}
+        try:
+            header = path.read_text(errors="replace").splitlines()[:60]
+        except OSError:
+            continue
+        for line in header:
+            match = FIELD.match(line)
+            if match and match.group(1) not in fields:
+                fields[match.group(1)] = match.group(2).strip()[:MAX_FIELD]
+        status = fields.get("Status", "")
+        if not status or status.split()[0] == "done":
+            continue
+        line = f"- {path.stem} [{status}] handoff: {fields.get('Latest handoff') or 'none'}"
+        blocked = fields.get("Blocked since", "")
+        if blocked and not blocked.startswith(("—", "-")):
+            line += f" | blocked since: {blocked}"
+        lines.append(line)
+    return lines[-MAX_TASKS:]
+
+
 def main():
     team = os.environ.get("TEAM_CODEX_SESSION", "")
     if not team:
@@ -38,7 +74,15 @@ def main():
     except FileExistsError:
         if pin.read_text().strip() != session:
             raise ValueError("session differs from the pinned lead; use a different team name")
+    if event["hook_event_name"] != "SessionStart":
+        return  # Capture only; per-prompt output would grow the lead's context.
     print("Team lead session captured. Use $feature for feature work; runtime records live in .pipeline/.")
+    tasks = active_tasks(directory)
+    if tasks:
+        # A resumed or compacted lead starts from disk, not memory. This is a
+        # pointer list; the state files and worker status are the authority.
+        print("Unfinished pipeline tasks (verify each state file and worker status before dispatching):")
+        print("\n".join(tasks))
 
 
 if __name__ == "__main__":

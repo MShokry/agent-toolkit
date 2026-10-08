@@ -73,7 +73,7 @@ files are skipped, not clobbered (`render()`'s core guarantee).
 | `.github/workflows/ci.yml` | Runs `test/smoke.sh` + shellcheck (`bin/init.sh`, the test, and every `templates/scripts/*.tmpl`) |
 | `templates/claude/agents/` | `planner.md.tmpl`, `senior-dev.md.tmpl` — Claude subagent role definitions |
 | `templates/claude/commands/` | `feature.md.tmpl` — the `/feature` pipeline command (the lead's own instructions); `toolkit-update.md.tmpl` — the `/toolkit-update` merge command for already-scaffolded projects |
-| `templates/codex/` | Root `AGENTS.md`, a project-scoped planner agent, and `feature` / `toolkit-update` skills. Thin Codex lead adapter over the canonical Claude command flow |
+| `templates/codex/` | Root `AGENTS.md`; project-scoped `planner` and `codex-dev` (implementer, delegates to `senior-dev.md`) agents; `reviewer.toml` (read-only sandbox) / `tester.toml` only for a `codex/*` reviewer/tester; session hooks; `rules/pipeline.rules` (lets only the dispatch wrappers run outside the sandbox); `feature` / `toolkit-update` skills. Thin Codex lead adapter over the canonical Claude command flow |
 | `templates/opencode/agents/` | `builder.md.tmpl`, `reviewer.md.tmpl`, `tester.md.tmpl` — OpenCode worker role definitions; `leader.md.tmpl`, `planner.md.tmpl` — native V2 adapters for an OpenCode lead |
 | `templates/opencode/commands/` | `feature.md.tmpl`, `toolkit-update.md.tmpl` — direct OpenCode lead commands that point at the canonical Claude flow files |
 | `templates/agents-state/` | `TEMPLATE.md.tmpl` — the `T-<id>` state-file shape every role reads and appends to |

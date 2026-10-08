@@ -724,3 +724,38 @@ under test.
   same non-destructive update triage as other generated artifacts. A generated
   launcher must not depend on the original toolkit checkout still existing;
   additive installation must preserve customization and provenance.
+
+## 36. Lead parity is the harness, not the flow text
+
+Two leads can read the same canonical flow and still feel very different,
+because most of the friction lives in what each harness supplies around it.
+Audit those mechanics directly rather than re-reading the flow:
+
+- **Native roles on the lead's own side.** If one lead can spawn its own
+  implementer and reviewer and the other can only dispatch a remote worker,
+  the second has fewer options at every step. Give each lead native role
+  adapters that delegate to the *same* role contract file (never a second
+  copy of the rules), and make the reviewer's independence check compare the
+  implementer's vendor family, whichever lead spawned it.
+- **Prefer a runtime-enforced boundary where the runtime offers one.** A
+  read-only sandbox for the reviewer is stronger than a permission block that
+  reads correctly. Say which roles are enforced and which are disciplined.
+- **Per-call approval friction is a parity gap.** A sandboxed lead that needs
+  approval for every dispatch, status check and wait gets prompted dozens of
+  times per run. The signal is users hand-adding the same allow rules to
+  personal config. Ship a project-scoped allowlist covering only the
+  toolkit's own wrappers, effective only in a trusted project, treated as a
+  permission change on update, and verified live: wrappers run unprompted,
+  everything else still prompts. A sandbox-testing preflight must stay
+  outside that allowlist, or it stops testing the sandbox.
+- **Waiting and retrying must not depend on scheduler tools.** A lead with no
+  background-notify or scheduled-wakeup tool needs plain commands: a bounded
+  `wait` it can call again, and a detached retry loop that reruns a dispatch
+  only on a usage-limit failure (never a timeout), keeps each failed attempt
+  out of the completion signal, and caps its attempts. Learn how the lead's
+  exec tool handles a long command (killed at a timeout, or yielded and left
+  running) before writing guidance around it.
+- **Recovery should start oriented.** A session-start hook can print one line
+  per unfinished task from the state files, as a pointer the resumed lead must
+  still verify. Keep per-prompt hooks silent so they do not grow the lead's
+  context.

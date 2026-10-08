@@ -59,7 +59,8 @@ files="$(find "$TMP" -type f -not -name run1.log \
 ok "every reported write produced exactly one file ($files rendered + stamp)"
 
 grep -q '^builder_auto:  ask$' "$TMP/.pipeline/.toolkit-version" || fail "stamp lacks the default builder_auto: ask"
-for field in 'OpenCode builder session id' 'OpenCode reviewer session id' 'OpenCode tester session id' 'Codex tester thread id'; do
+for field in 'OpenCode builder session id' 'OpenCode reviewer session id' 'OpenCode tester session id' \
+  'Codex tester thread id' 'Codex implementer thread id' 'Codex reviewer thread id'; do
   grep -q "^\*\*$field:\*\*" "$TMP/.pipeline/TEMPLATE.md" || fail "state template lacks the per-role field: $field"
 done
 ! grep -q '^\*\*OpenCode session id:\*\*' "$TMP/.pipeline/TEMPLATE.md" || fail "state template still has the shared OpenCode session id field"
@@ -81,6 +82,8 @@ ok "self-contained executable dashboard was scaffolded"
 for codex_file in \
   "$TMP/AGENTS.md" \
   "$TMP/.codex/agents/planner.toml" \
+  "$TMP/.codex/agents/codex-dev.toml" \
+  "$TMP/.codex/rules/pipeline.rules" \
   "$TMP/.agents/skills/feature/SKILL.md" \
   "$TMP/.agents/skills/toolkit-update/SKILL.md"; do
   [ -f "$codex_file" ] || fail "Codex scaffold file missing: $codex_file"
@@ -146,6 +149,20 @@ grep -q '^name = "tester"$' "$CT/.codex/agents/tester.toml" || fail "Codex teste
 grep -q 'never fix anything' "$CT/.codex/agents/tester.toml" || fail "Codex tester does not state its report-only boundary"
 grep -q '"codex"' "$CT/scripts/verify-models.sh" || fail "verify-models.sh does not skip codex/* roles"
 ok "a codex/* tester_model scaffolds a Codex tester agent and is skipped by verify-models"
+
+[ ! -e "$TMP/.codex/agents/reviewer.toml" ] || fail "an OpenCode reviewer_model still scaffolded a Codex reviewer agent"
+grep -q '\.claude/agents/senior-dev\.md' "$TMP/.codex/agents/codex-dev.toml" \
+  || fail "Codex implementer does not follow the canonical senior-dev contract"
+CR="$(mktemp -d "${TMPDIR:-/tmp}/toolkit-codex-reviewer.XXXXXX")"
+bash "$ROOT/bin/init.sh" --target "$CR" --project-name smoke \
+  --builder-model a/b --reviewer-model codex/review-model --reviewer-fallback-model d/e \
+  --tester-model a/b > "$CR/run.log" 2>&1 || fail "init.sh with a codex/* reviewer failed"
+grep -q '^model = "review-model"$' "$CR/.codex/agents/reviewer.toml" \
+  || fail "codex/* reviewer_model did not render .codex/agents/reviewer.toml with its model id"
+grep -q '^sandbox_mode = "read-only"$' "$CR/.codex/agents/reviewer.toml" || fail "Codex reviewer is not read-only"
+bash "$ROOT/bin/init.sh" --update --target "$CR" > "$CR/update.log" 2>&1 \
+  || fail "codex/* reviewer did not round-trip through --update triage"
+ok "Codex implementer is always scaffolded; a codex/* reviewer_model gets a read-only Codex reviewer"
 
 for oc_file in agents/leader.md agents/planner.md commands/feature.md commands/toolkit-update.md; do
   [ -f "$TMP/.opencode/$oc_file" ] || fail "OpenCode lead file missing: $oc_file"
@@ -631,6 +648,35 @@ chmod +x "$BG/scripts/oc.sh"
   scripts/bg-dispatch.sh wait T-2 builder 20 >/dev/null || fail "T-2 stub never finished"
 )
 ok "bg-dispatch refuses duplicate labels and non-wrappers; wait reports finished, still-running, wrapper-exited"
+
+# --retry-on-limit: two 429 attempts, then success; other failures never retry.
+cat > "$BG/scripts/oc.sh" <<'STUB'
+#!/usr/bin/env bash
+n=$(( $(cat .pipeline/tries 2>/dev/null || echo 0) + 1 )); echo "$n" > .pipeline/tries
+echo "oc.sh: session=ses_try$n" >&2
+case "$*" in *timeout*) exit 124 ;; esac
+[ "$n" -ge 3 ] || { echo "Error: 429 Too Many Requests" >&2; exit 1; }
+echo reply
+STUB
+(
+  cd "$BG"
+  if scripts/bg-dispatch.sh start T-7 builder --retry-on-limit 5 -- scripts/oc.sh x >/dev/null 2>&1; then
+    fail "bg-dispatch accepted a retry interval under its 60s floor"
+  fi
+  export BG_RETRY_MIN=1
+  rm -f .pipeline/tries
+  scripts/bg-dispatch.sh start T-8 builder --retry-on-limit 1 -- scripts/oc.sh x >/dev/null
+  out="$(scripts/bg-dispatch.sh wait T-8 builder 30)" || fail "retry loop did not finish: $out"
+  grep -q '^finished: oc.sh: session=ses_try3$' <<< "$out" || fail "wait did not report the final attempt: $out"
+  [ "$(grep -c '^bg-dispatch.sh: usage limit' .pipeline/T-8.builder.err)" = 2 ] || fail "limited attempts were not recorded"
+  grep -q '^\[attempt 1\] oc.sh: session=ses_try1$' .pipeline/T-8.builder.err || fail "a limited attempt kept a bare completion line"
+  grep -qx reply .pipeline/T-8.builder.out || fail "final attempt's reply was not kept"
+  rm -f .pipeline/tries
+  scripts/bg-dispatch.sh start T-9 builder --retry-on-limit 1 -- scripts/oc.sh timeout >/dev/null
+  scripts/bg-dispatch.sh wait T-9 builder 30 >/dev/null || true
+  [ "$(cat .pipeline/tries)" = 1 ] || fail "a timeout (exit 124) was retried as a usage limit"
+)
+ok "bg-dispatch --retry-on-limit reruns only usage-limit failures and reports the final attempt"
 
 # --- 10. oc.sh --interrupt / claude-review.sh argument guards ----------------
 if out="$("$TMP/scripts/oc.sh" --interrupt 2>&1)"; then fail "oc.sh --interrupt with no id succeeded"; fi

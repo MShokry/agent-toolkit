@@ -32,6 +32,15 @@ if grep -qE '^tester_model: *codex/' .pipeline/.toolkit-version 2>/dev/null; the
   [ -f .codex/agents/tester.toml ] || die "tester_model is codex/* but .codex/agents/tester.toml is missing"
   grep -q '^name = "tester"' .codex/agents/tester.toml || die "tester definition has no tester name"
 fi
+# A codex/* reviewer is a native read-only Codex subagent the lead spawns.
+if grep -qE '^reviewer_model: *codex/' .pipeline/.toolkit-version 2>/dev/null; then
+  [ -f .codex/agents/reviewer.toml ] || die "reviewer_model is codex/* but .codex/agents/reviewer.toml is missing"
+  grep -q '^sandbox_mode = "read-only"' .codex/agents/reviewer.toml || die "Codex reviewer is not read-only"
+fi
+# The project rules let the dispatch wrappers run outside the sandbox without
+# a prompt per call. Missing is allowed (approval then happens per command).
+[ -f .codex/rules/pipeline.rules ] \
+  || printf 'codex-preflight.sh: note: .codex/rules/pipeline.rules is missing; every scripts/oc.sh call will need its own runtime approval\n' >&2
 # A claude/* reviewer is dispatched through scripts/claude-review.sh, which
 # needs the Claude CLI and the reviewer agent; check now, not at step 3.
 if grep -qE '^reviewer_model: *claude/' .pipeline/.toolkit-version 2>/dev/null; then
@@ -68,7 +77,16 @@ elif command -v gtimeout >/dev/null 2>&1; then
 else
   die "timeout/gtimeout not installed; install coreutils for the OpenCode wrapper"
 fi
-"$TIMEOUT" 10 opencode api GET /api/session --server "$SERVER" --param limit=1 >/dev/null 2>&1 \
-  || die "OpenCode API unavailable at $SERVER (server, authentication, or sandbox network policy); authorize this exact operation if policy blocks it"
+if ! "$TIMEOUT" 10 opencode api GET /api/session --server "$SERVER" --param limit=1 >/dev/null 2>&1; then
+  if [ -f .codex/rules/pipeline.rules ]; then
+    # Every check above passed. The OpenCode CLI cannot reach its server from
+    # inside the sandbox; the project rules run scripts/oc.sh outside it, so
+    # that is the probe that matters for dispatch. Exit 3 = run it next.
+    printf 'codex-preflight.sh: OpenCode API unavailable at %s from this sandbox (server, authentication, or sandbox network policy).\n' "$SERVER" >&2
+    printf 'codex-preflight.sh: all other checks passed; run scripts/oc.sh --status next — .codex/rules/pipeline.rules runs it outside the sandbox, and exit 0 there proves server and credential.\n' >&2
+    exit 3
+  fi
+  die "OpenCode API unavailable at $SERVER (server, authentication, or sandbox network policy); authorize this exact operation if policy blocks it"
+fi
 printf 'codex-preflight.sh: state writes and authenticated OpenCode access passed; verify planner discovery in Codex before dispatch.\n'
 printf 'codex-preflight.sh: git writes and protected config updates may require runtime approval; spec/merge consent remains a separate gate.\n'

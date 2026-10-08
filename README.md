@@ -163,8 +163,10 @@ templates/             every generated file, with __PLACEHOLDER__ tokens
   claude/agents/        planner.md.tmpl, senior-dev.md.tmpl
   claude/commands/      feature.md.tmpl — the /feature pipeline command;
                           toolkit-update.md.tmpl — the /toolkit-update merge command
-  codex/                AGENTS.md.tmpl, a project-scoped planner agent, reviewed
-                          lifecycle hooks, and feature/toolkit-update skills
+  codex/                AGENTS.md.tmpl, project-scoped planner and codex-dev
+                          (implementer) agents, optional read-only reviewer and
+                          tester agents, reviewed lifecycle hooks, execution rules
+                          for the dispatch wrappers, and feature/toolkit-update skills
   opencode/agents/       builder, reviewer, tester (workers); leader, planner —
                           native V2 lead adapters
   opencode/commands/     feature.md.tmpl, toolkit-update.md.tmpl — direct lead commands
@@ -410,7 +412,9 @@ $feature <describe the feature or bug you want fixed>
 Codex discovers the generated root `AGENTS.md`, the repository-scoped skill at
 `.agents/skills/feature/SKILL.md`, and the planner at
 `.codex/agents/planner.toml`. The skill reads the same canonical feature flow,
-but uses the Codex planner and OpenCode builder instead of Claude roles.
+but uses the Codex planner, and the OpenCode builder or (on request) the
+Codex `codex-dev` implementer, instead of Claude roles. A `codex/<model>`
+reviewer or tester runs as a native Codex subagent.
 `scripts/team.sh` makes this choice automatically: Claude when installed,
 otherwise Codex. Override it with `--lead claude` or `--lead codex`.
 The supporting skills are installed under `.agents/skills/`. The generated

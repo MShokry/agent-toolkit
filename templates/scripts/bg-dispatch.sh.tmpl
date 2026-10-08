@@ -13,7 +13,7 @@
 # again until it reports a terminal state.
 #
 # BEGIN USAGE
-#   scripts/bg-dispatch.sh start <T-id> <label> -- scripts/<wrapper> <args…>
+#   scripts/bg-dispatch.sh start <T-id> <label> [--retry-on-limit <seconds>] -- scripts/<wrapper> <args…>
 #   scripts/bg-dispatch.sh wait  <T-id> <label> [max-seconds] [--session ses_…]
 #
 # The command must be one of this repo's dispatch wrappers: scripts/oc.sh
@@ -25,6 +25,20 @@
 # (e.g. `builder`, `builder-fix-1`, `review-2`). `start` refuses while a live
 # dispatch already owns that label — one writer per label, never two.
 #
+# --retry-on-limit <seconds> (at least 60) reruns the same command after that
+# many seconds whenever an attempt exits non-zero with a usage-cap, rate-limit,
+# quota or 429 message in its output — the canonical flow's "retry every 30
+# minutes" for a lead with no scheduler of its own. Use it only after the first
+# limit failure has been reported to the user (the flow's step 1); never as a
+# default. A timeout (exit 124) or any other failure is never retried. Each
+# limited attempt stays in the .err file, prefixed `[attempt N]` so it cannot
+# read as the final completion, followed by a `bg-dispatch.sh: usage limit …`
+# line; `wait` repeats that line while the loop sleeps. It gives up after
+# BG_RETRY_MAX attempts (default 48, one day at 1800s; BG_RETRY_MIN lowers the
+# 60s floor for tests only) and records the last
+# attempt as a normal finish. Stopping the dispatch (kill the pid) also stops
+# the loop and the attempt it is running.
+#
 # `wait` blocks for at most max-seconds (default 540, under Claude Code's 600s
 # tool limit; pass a smaller value when your own tool timeout is shorter) and
 # prints exactly one line, with the exit code saying which:
@@ -33,7 +47,8 @@
 #      only), adds that session's state from `oc.sh --status`: `active` means
 #      the turn is still running server-side — keep waiting, do NOT
 #      re-dispatch.
-#   3  still-running pid=<n> — call `wait` again.
+#   3  still-running pid=<n> — call `wait` again. While a --retry-on-limit
+#      loop is sleeping, the line also carries its latest usage-limit note.
 #   1  usage error.
 # END USAGE
 
@@ -46,6 +61,8 @@ die() { printf 'bg-dispatch.sh: %s\n' "$*" >&2; exit 1; }
 usage() { awk '/^# BEGIN USAGE$/ {f=1; next} /^# END USAGE$/ {f=0} f' "$0" | sed 's/^# \{0,1\}//'; exit 1; }
 
 DONE_RE='^(oc\.sh: session=|claude-review\.sh: done)'
+LIMIT_RE='rate[ _-]?limit|usage (cap|limit)|quota|too many requests|(^|[^0-9])429([^0-9]|$)'
+LIMIT_NOTE_RE='^bg-dispatch\.sh: usage limit'
 
 [ $# -ge 3 ] || usage
 OP="$1" TASK="$2" LABEL="$3"
@@ -60,6 +77,14 @@ alive() { [ -f "$PIDF" ] && kill -0 "$(cat "$PIDF")" 2>/dev/null; }
 
 case "$OP" in
   start)
+    RETRY=""
+    if [ "${1:-}" = "--retry-on-limit" ]; then
+      [ $# -ge 2 ] || die "--retry-on-limit needs a number of seconds"
+      RETRY="$2"
+      [[ "$RETRY" =~ ^[0-9]+$ ]] && [ "$RETRY" -ge "${BG_RETRY_MIN:-60}" ] \
+        || die "--retry-on-limit must be at least ${BG_RETRY_MIN:-60} seconds: $RETRY"
+      shift 2
+    fi
     [ "${1:-}" = "--" ] || die "start needs -- before the wrapper command"
     shift
     case "${1:-}" in
@@ -69,7 +94,14 @@ case "$OP" in
     if alive; then
       die "a dispatch for $TASK $LABEL is still running (pid $(cat "$PIDF")); wait on it or interrupt it first"
     fi
-    nohup "$@" > "$OUT" 2> "$ERR" < /dev/null &
+    if [ -n "$RETRY" ]; then
+      : > "$OUT"
+      : > "$ERR"
+      nohup "$REPO_ROOT/scripts/$(basename "$0")" _retry "$TASK" "$LABEL" "$RETRY" -- "$@" \
+        > /dev/null 2>> "$ERR" < /dev/null &
+    else
+      nohup "$@" > "$OUT" 2> "$ERR" < /dev/null &
+    fi
     echo $! > "$PIDF"
     disown 2>/dev/null || true
     printf 'bg-dispatch.sh: started %s %s pid=%s err=%s out=%s\n' "$TASK" "$LABEL" "$(cat "$PIDF")" "$ERR" "$OUT"
@@ -99,8 +131,47 @@ case "$OP" in
         exit 2
       fi
       NOW="$(date +%s)"
-      [ "$NOW" -lt "$END" ] || { printf 'still-running pid=%s\n' "$(cat "$PIDF")"; exit 3; }
+      if [ "$NOW" -ge "$END" ]; then
+        NOTE="$(grep -E "$LIMIT_NOTE_RE" "$ERR" | tail -1 || true)"
+        printf 'still-running pid=%s%s\n' "$(cat "$PIDF")" "${NOTE:+; $NOTE}"
+        exit 3
+      fi
       sleep $(( END - NOW < 5 ? END - NOW : 5 ))
+    done
+    ;;
+  _retry)
+    # Internal: the detached --retry-on-limit loop that `start` launches.
+    INTERVAL="$1"
+    shift
+    [ "${1:-}" = "--" ] && shift
+    MAX_TRIES="${BG_RETRY_MAX:-48}"
+    TRY_OUT="$BASE.try.out" TRY_ERR="$BASE.try.err"
+    CHILD=""
+    trap '[ -z "$CHILD" ] || kill "$CHILD" 2>/dev/null; exit 143' TERM INT
+    ATTEMPT=1
+    while :; do
+      "$@" > "$TRY_OUT" 2> "$TRY_ERR" < /dev/null &
+      CHILD=$!
+      RC=0
+      wait "$CHILD" || RC=$?
+      CHILD=""
+      if [ "$RC" -ne 0 ] && [ "$RC" -ne 124 ] && [ "$ATTEMPT" -lt "$MAX_TRIES" ] \
+        && cat "$TRY_OUT" "$TRY_ERR" | grep -qiE "$LIMIT_RE"; then
+        sed "s/^/[attempt $ATTEMPT] /" "$TRY_ERR" >> "$ERR"
+        printf 'bg-dispatch.sh: usage limit on attempt %s (exit %s); retry %s at %s\n' \
+          "$ATTEMPT" "$RC" "$((ATTEMPT + 1))" "$(date -r "$(( $(date +%s) + INTERVAL ))" +%H:%M 2>/dev/null \
+            || date -d "@$(( $(date +%s) + INTERVAL ))" +%H:%M)" >> "$ERR"
+        ATTEMPT=$((ATTEMPT + 1))
+        sleep "$INTERVAL" &
+        CHILD=$!
+        wait "$CHILD" || true
+        CHILD=""
+        continue
+      fi
+      cat "$TRY_OUT" > "$OUT"
+      cat "$TRY_ERR" >> "$ERR"
+      rm -f "$TRY_OUT" "$TRY_ERR"
+      exit "$RC"
     done
     ;;
   *) usage ;;

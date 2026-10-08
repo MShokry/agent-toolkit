@@ -21,6 +21,11 @@ hooks = json.loads((root / '.codex/hooks.json').read_text())
 assert set(hooks['hooks']) == {'SessionStart', 'UserPromptSubmit'}
 assert '.pipeline/T-' in agent['developer_instructions']
 assert 'codex_planner_model: test-planner' in (root / '.pipeline/.toolkit-version').read_text()
+dev = tomllib.loads((root / '.codex/agents/codex-dev.toml').read_text())
+assert dev['name'] == 'codex-dev' and dev['sandbox_mode'] == 'workspace-write'
+assert 'model' not in dev  # inherits the lead's model unless the project pins one
+assert '.claude/agents/senior-dev.md' in dev['developer_instructions']
+assert 'prefix_rule(' in (root / '.codex/rules/pipeline.rules').read_text()
 PY
 bash "$ROOT/bin/init.sh" --update --target "$TMP" > "$TMP/update.log" 2>&1 \
   || fail "Codex settings did not round-trip through the stamp"
@@ -106,14 +111,37 @@ assert hook({**event, 'cwd':'/'}).returncode != 0
 assert hook({**event, 'session_id':'../escape'}).returncode != 0
 assert hook(event, '').returncode == 0
 assert (root/'.pipeline/.codex-session-id.hook-test').read_text().strip() == 'hook-one'
+assert hook(event).stdout == ''  # per-prompt capture stays silent
+def task(n, status, handoff):
+    (root/f'.pipeline/T-{n}.md').write_text(
+        f'# T-{n} — x\n\n**Status:** {status}\n**Blocked since:** —\n**Latest handoff:** {handoff}\n')
+task(1, 'done', 'lead → merged → next: none')
+task(2, 'testing', 'reviewer → PASS → next: tester')
+task(10, 'blocked:question', 'codex-dev → blocked → next: lead')
+start = hook({**event, 'hook_event_name':'SessionStart'})
+assert start.returncode == 0, start.stderr
+assert '- T-2 [testing] handoff: reviewer → PASS → next: tester' in start.stdout, start.stdout
+assert '- T-10 [blocked:question]' in start.stdout
+assert start.stdout.index('T-2 ') < start.stdout.index('T-10 ')
+assert 'T-1 ' not in start.stdout
+for n in (1, 2, 10):
+    (root/f'.pipeline/T-{n}.md').unlink()
+assert 'Unfinished' not in hook({**event, 'hook_event_name':'SessionStart'}).stdout
 PY
-ok "real hook handler validates event data, refuses replacement, and ignores ordinary chats"
+ok "real hook handler validates event data, refuses replacement, ignores ordinary chats, and lists unfinished tasks at session start"
 
 PREFLIGHT="$TMP/scripts/codex-preflight.sh"
 OC_SERVER=http://localhost:4999 bash "$PREFLIGHT" > "$TMP/preflight.log" 2>&1 || fail "valid preflight failed"
 grep -qx http://localhost:4999 "$FAKE_OC_ARGS" || fail "preflight ignored OC_SERVER"
-if FAKE_API_FAIL=1 bash "$PREFLIGHT" > "$TMP/preflight.log" 2>&1; then fail "preflight ignored inaccessible API"; fi
+rc=0; FAKE_API_FAIL=1 bash "$PREFLIGHT" > "$TMP/preflight.log" 2>&1 || rc=$?
+[ "$rc" = 3 ] || fail "preflight with project rules did not hand the API probe to oc.sh (rc=$rc)"
 grep -q 'authentication, or sandbox network policy' "$TMP/preflight.log" || fail "preflight obscured the blocked operation"
+grep -q 'run scripts/oc.sh --status next' "$TMP/preflight.log" || fail "preflight did not name the outside-sandbox probe"
+mv "$TMP/.codex/rules/pipeline.rules" "$TMP/rules.hold"
+rc=0; FAKE_API_FAIL=1 bash "$PREFLIGHT" > "$TMP/preflight.log" 2>&1 || rc=$?
+[ "$rc" = 1 ] || fail "preflight without project rules did not fail closed (rc=$rc)"
+grep -q 'pipeline.rules is missing' "$TMP/preflight.log" || fail "preflight did not note the missing rules"
+mv "$TMP/rules.hold" "$TMP/.codex/rules/pipeline.rules"
 if FAKE_HOOKS=false bash "$PREFLIGHT" > "$TMP/preflight.log" 2>&1; then fail "preflight ignored disabled hooks"; fi
 grep -q 'hooks capability is unavailable or disabled' "$TMP/preflight.log" || fail "disabled capability not identified"
 cat > "$FAKEBIN/mktemp" <<'SH'

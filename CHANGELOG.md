@@ -12,6 +12,50 @@ script, flag, or role rule; **PATCH** = prose and docs.
 
 ## Unreleased
 
+- `[contract]` Codex-native implementer and reviewer. The state template adds
+  `codex-dev` to *Owner right now* / *Implementer for this task* and two
+  fields, *Codex implementer thread id* and *Codex reviewer thread id*.
+  `.codex/agents/codex-dev.toml` is always scaffolded: on the user's request
+  it implements under `.claude/agents/senior-dev.md`'s contract, and its
+  `workspace-write` sandbox keeps `.git` read-only. `--reviewer-model
+  codex/<model>` scaffolds `.codex/agents/reviewer.toml` with
+  `sandbox_mode = "read-only"` under `.opencode/agents/reviewer.md`'s
+  contract; the lead pastes its reply. Reviewer independence now compares the
+  implementer's vendor family (Claude, OpenAI/Codex, or the builder's
+  provider), and the "native subagent this lead cannot spawn" rule covers
+  the reviewer as well as the tester. Migration:
+  `migrations/05-codex-native-roles.md`.
+- `[safety]` New `.codex/rules/pipeline.rules`: a project execution-rules
+  allowlist for exactly `scripts/oc.sh`, `scripts/bg-dispatch.sh`,
+  `scripts/claude-review.sh` and `scripts/verify-models.sh`, so a Codex lead
+  stops needing a runtime approval at every dispatch, status check and wait.
+  Effective only in a trusted project. Git writes and the sandbox-testing
+  preflight still prompt. A plain `init.sh` re-run adds it, so review it like a
+  hook; it is a permission change under the update gate. Checked offline with
+  `codex execpolicy check` in `test/codex-sandbox.sh`; verify live before
+  relying on it.
+- `[process]` `bg-dispatch.sh start … --retry-on-limit <seconds> -- …`: a
+  detached loop that reruns a dispatch only while it fails on a usage cap,
+  rate limit, quota or 429 (never a timeout), up to `BG_RETRY_MAX` (48)
+  attempts. Each failed attempt is kept in the `.err` file with an
+  `[attempt N]` prefix so it cannot read as completion; `wait` shows the
+  latest retry note. This is the canonical 30-minute retry for a lead with no
+  scheduler. Previously a Codex lead could only stop and wait for a human.
+- `[process]` `codex-preflight.sh` exits 3 when every check passed except the
+  OpenCode API probe from inside the sandbox and the project rules exist. The
+  lead then runs `scripts/oc.sh --status` outside the sandbox. Preflight also
+  checks a `codex/*` reviewer's agent file is read-only.
+- `[process]` The Codex session hook stays silent on every prompt and, at
+  session start, prints one line per unfinished task (Status, Latest handoff,
+  Blocked since) as a recovery pointer. Renewed `/hooks` trust is needed.
+- `[process]` Codex feature skill: poll the same unified-exec session while
+  `wait` runs instead of starting a second `wait`; use the project rules by
+  repo-relative path; use the native implementer/reviewer. First-run
+  customization now includes `.codex/agents/`.
+- `[process]` `test/invariants.sh` now covers the Codex implementer,
+  reviewer, tester, rules file, vendor-family independence, and the
+  scheduler-free retry (147 pairs).
+
 - `[contract]` OpenCode sessions are scoped **per role per task**, not per
   task. The state file's single *OpenCode session id* becomes *OpenCode
   builder session id*, *OpenCode reviewer session id* and *OpenCode tester

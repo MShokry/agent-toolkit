@@ -1,0 +1,39 @@
+# Codex execution rules for the agent-toolkit pipeline wrappers.
+#
+# Why this file exists: under a Codex lead, every OpenCode dispatch, status
+# check and wait used to need its own runtime approval, because the OpenCode
+# CLI writes under its own home directory and reaches the local server —
+# both outside the workspace sandbox. A long run asked dozens of times, and
+# users ended up hand-adding these exact allow rules to their personal
+# ~/.codex/rules/default.rules. This file is that allowlist, project-scoped
+# and reviewable.
+#
+# Scope is deliberately the toolkit's own dispatch/check wrappers and
+# nothing else. Each is a script in this repository that resolves server,
+# port and credential in one place. Git writes, protected-config writes,
+# and anything else still prompt: spec approval and merge consent are
+# workflow gates, and runtime approval for those stays a separate control.
+#
+# Codex loads project .codex/ layers (config, hooks, rules) only for a
+# trusted project, and these rules let the named commands run outside the
+# sandbox. Review this file the way you review hooks, and treat any change
+# to it as a permission change (the toolkit-update gate covers it). A rule
+# that reads correctly is not proof it is enforced: after scaffolding,
+# confirm live that `scripts/oc.sh --status` runs without a prompt and that
+# an unlisted command (e.g. `git push`) still prompts. Offline check:
+#   codex execpolicy check --rules .codex/rules/pipeline.rules -- scripts/oc.sh --status
+#
+# Invoke the wrappers by their repo-relative path (`scripts/oc.sh …`), not
+# through `bash scripts/…` or an absolute path — the rule matches the
+# command prefix.
+
+prefix_rule(
+    pattern = [[
+        "scripts/oc.sh",
+        "scripts/bg-dispatch.sh",
+        "scripts/claude-review.sh",
+        "scripts/verify-models.sh",
+    ]],
+    decision = "allow",
+    justification = "agent-toolkit dispatch wrappers reach the local OpenCode server or the Claude CLI",
+)

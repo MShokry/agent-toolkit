@@ -79,8 +79,9 @@ Report the last finished task, anything half-recorded, the next planned task
 ## Preflight
 
 1. **First run only:** if `.pipeline/.needs-customization` exists, this
-   project was just scaffolded — the role files under `.claude/agents/` and
-   `.opencode/agents/` still carry generic pitfalls/hard-rules text, not this
+   project was just scaffolded — the role files under `.claude/agents/`,
+   `.opencode/agents/` and `.codex/agents/` (whose `tester.toml` carries its
+   own inline rules) still carry generic pitfalls/hard-rules text, not this
    codebase's actual ones. Ask the user: read the real source tree and this
    project's own CLAUDE.md/AGENTS.md, then fill those sections in with real
    specifics, now, before starting the requested feature? If yes, do that
@@ -286,8 +287,13 @@ Decisions log, set Status to `spec-approved`, and record who implements:
 
 - **`senior-dev`** (Claude subagent, `__CLAUDE_MODEL__`) — when the user
   explicitly asks for Claude to implement instead, for this task.
+- **`codex-dev`** (Codex subagent, `.codex/agents/codex-dev.toml`, the lead's
+  model) — when the user explicitly asks for Codex to implement. Only a Codex
+  lead can spawn it. It follows `senior-dev.md`'s contract; record **Codex
+  implementer thread id** after the first dispatch and send its fix loops to
+  that thread only.
 
-Never run both on one task. Write the choice into *Implementer for this
+Never run two implementers on one task. Write the choice into *Implementer for this
 task* — the reviewer needs it to know whether cross-vendor independence
 holds.
 
@@ -334,7 +340,12 @@ rate limit, usage cap, quota, or `429`:
 2. After that one notification, **retry the same command automatically
    every 30 minutes** (via a loop skill or scheduled wakeup) until it
    succeeds. Do not ask again on every retry — the user already answered
-   once.
+   once. A lead with neither tool relaunches the same dispatch as
+   `scripts/bg-dispatch.sh start T-<id> <label> --retry-on-limit 1800 -- …`
+   and keeps waiting on it: that detached loop reruns the command every 30
+   minutes only while the failure is a usage limit, and `wait` shows its
+   latest retry note. Each retried first call may open a new session — record
+   the `session=` line `wait` reports as finished, not an earlier attempt's.
 3. On success, resume the pipeline from exactly where it stopped and tell
    the user it recovered.
 4. If the user says to stop retrying, or to switch implementer/vendor
@@ -437,11 +448,12 @@ and expensive to paste into the state file. `--raw-out` keeps the full
 stream if you need to audit it; use a new `--raw-out` path per pass.
 
 **Vendor independence.** The reviewer must not be the same model that
-wrote the code. If `senior-dev` (Claude) implemented, `__REVIEWER_MODEL__`
-is independent. But if **`builder`** implemented and it shares a vendor
-family with `__REVIEWER_MODEL__`, switch to `__REVIEWER_FALLBACK_MODEL__`
-instead, and note the substitution in the Decisions log. A reviewer that
-shares the author's blind spots is not a second eye.
+wrote the code. Compare the implementer's vendor family — Claude for
+`senior-dev`, OpenAI/Codex for `codex-dev`, the provider's for `builder` —
+with `__REVIEWER_MODEL__`'s. If they match, switch to
+`__REVIEWER_FALLBACK_MODEL__` instead, and note the substitution in the
+Decisions log. A reviewer that shares the author's blind spots is not a
+second eye.
 
 **A Claude reviewer** (`reviewer_model: claude/<model>` in
 `.pipeline/.toolkit-version`, with `.claude/agents/reviewer.md`) does not go
@@ -455,6 +467,14 @@ writes the reply to `.pipeline/T-<id>.review-<N>.out` with a final
 dispositions). A `MISSING` verdict is a failed dispatch, never a pass. It
 sends the state file and diff to Anthropic — only where the project's
 guidance file authorizes that.
+
+**A Codex reviewer** (`reviewer_model: codex/<model>`, with
+`.codex/agents/reviewer.toml`) is a read-only-sandbox Codex subagent that
+follows `.opencode/agents/reviewer.md`'s review contract. A Codex lead spawns
+it and records **Codex reviewer thread id**; pass 2 goes to that thread. It
+cannot write, so its reply carries the full findings and you paste them under
+the pass heading. A lead that cannot spawn it handles it like a tester it
+cannot spawn (step 4).
 
 Write whichever model you actually dispatched — `__REVIEWER_MODEL__` or
 the fallback — into *Reviewer for this task* in the state file. This is a
@@ -535,13 +555,13 @@ builder's) — record it in *OpenCode tester session id*; a rerun passes
 `--session` from that field. A `codex/*` tester is the Codex `tester`
 subagent instead: record **Codex tester thread id** and reuse only that.
 
-**If the configured tester is a native subagent this lead cannot spawn**
-(`tester_model: codex/…` under a Claude lead, `claude/…` under a Codex lead),
-do not substitute another tester or model on your own judgement. Ask the
-user: hand step 4 to a lead that can spawn it (park the task at `testing`
-with `next: a <vendor>-led session dispatches the tester` in the handoff),
-launch the same role headlessly with its own instructions and model, or use
-the OpenCode tester. Record the answer as a `human` row.
+**If the configured tester (or reviewer) is a native subagent this lead
+cannot spawn** (`codex/…` under a Claude lead, `claude/…` under a Codex lead
+with no headless script for it), do not substitute another role or model on
+your own judgement. Ask the user: hand that step to a lead that can spawn it
+(park the task with `next: a <vendor>-led session dispatches the <role>` in
+the handoff), launch the same role headlessly with its own instructions and
+model, or use the OpenCode role. Record the answer as a `human` row.
 
 The tester reports; it never fixes. Real failures go back to the
 implementer as a new loop — **increment *Test-fix loops*, capped at 2**,

@@ -44,6 +44,27 @@ key and do not replace pins. Each team name has its own pin and process lock.
 The launcher supplies the repository root to the hook command explicitly, so
 capture also works in a nested checkout or a project without a Git root.
 
+## Roles a Codex lead can spawn
+
+| Role | Codex agent | When |
+| --- | --- | --- |
+| planner | `.codex/agents/planner.toml` | always; follows `.claude/agents/planner.md` |
+| implementer | `.codex/agents/codex-dev.toml` | when the user asks for Codex to implement (default stays OpenCode `builder`); follows `.claude/agents/senior-dev.md` |
+| reviewer | `.codex/agents/reviewer.toml` | only for `--reviewer-model codex/<model>`; `sandbox_mode = "read-only"`, follows `.opencode/agents/reviewer.md` |
+| tester | `.codex/agents/tester.toml` | only for `--tester-model codex/<model>` |
+
+Each records its own thread id in the task file, and only that role's retry
+reuses it. `codex-dev` and the planner inherit the lead's model unless the
+project pins one in the TOML. After `codex-dev` implements, an OpenAI-family
+reviewer is not independent; the canonical flow switches to the fallback.
+
+The Codex reviewer is the only role here whose boundary the runtime enforces:
+a read-only sandbox, not a permission block that reads correctly. It cannot
+write the state file, so its reply carries the full findings and the lead
+pastes them. `codex-dev` and the planner run `workspace-write`, which keeps
+`.git`, `.codex/` and `.agents/` read-only but does not restrict them to their
+own source paths.
+
 ## Permissions and preflight
 
 Before `$feature`, the lead runs `scripts/codex-preflight.sh` in its **current
@@ -53,6 +74,24 @@ It checks enabled hook/multi-agent capabilities and the launcher CLI option,
 and prints the installed Codex version; verify custom planner and skill discovery
 in Codex before dispatch. Running it from an unrestricted terminal alone does
 not establish the lead's sandbox access.
+
+`.codex/rules/pipeline.rules` is a project execution-rules file that lets
+exactly `scripts/oc.sh`, `scripts/bg-dispatch.sh`, `scripts/claude-review.sh`
+and `scripts/verify-models.sh` run outside the sandbox without a prompt per
+call. Before it, a long run asked for approval at every dispatch, status check
+and wait, and users ended up adding the same allow rules to their personal
+`~/.codex/rules/default.rules`. Codex loads project rules only in a trusted
+project. Invoke the wrappers by their repo-relative path; `bash scripts/oc.sh`
+or an absolute path does not match. Git writes, `codex-preflight.sh` (which
+must test the sandbox it runs in) and everything else still prompt. Review the
+file like a hook, and confirm live that a wrapper runs without a prompt while
+`git push` still prompts; `bash test/codex-sandbox.sh` checks the decisions
+offline with `codex execpolicy check`.
+
+With the rules present, preflight exits 3 when every check passed except the
+OpenCode API probe from inside the sandbox. The lead then runs
+`scripts/oc.sh --status`, which the rules run outside the sandbox. Exit 0 there
+proves the server and credential.
 
 If policy blocks a command, request runtime approval for that exact operation.
 Local OpenCode access may need network approval; the user-approved commit may
@@ -73,13 +112,23 @@ The Codex lead runs the same canonical flow as the Claude lead; what differs is
 mechanics the Claude harness supplies and Codex does not:
 
 - **No Monitor.** Long dispatches go through `scripts/bg-dispatch.sh start`,
-  and the lead calls `scripts/bg-dispatch.sh wait … <seconds>` with a limit
-  below its own exec timeout until it reports `finished:` or `wrapper-exited:`.
+  and the lead calls `scripts/bg-dispatch.sh wait … <seconds>` until it
+  reports `finished:` or `wrapper-exited:`. Codex's unified exec yields after
+  `yield_time_ms` and keeps the command running, so the lead polls that exec
+  session instead of starting a second `wait`.
+- **No scheduler for usage-limit retries.** After telling the user about a
+  limit once, the lead relaunches the same dispatch with
+  `bg-dispatch.sh start … --retry-on-limit 1800 -- …`. That detached loop
+  reruns it every 30 minutes only while the failure is a usage limit (never a
+  timeout), gives up after `BG_RETRY_MAX` attempts, and `wait` shows its latest
+  retry note. A limit hit by a Codex subagent has no such loop and is reported
+  with a resumable handoff.
 - **No Claude subagents.** A `claude/*` reviewer runs headlessly through
   `scripts/claude-review.sh`, which needs the `claude` CLI, the project's
   `.claude/agents/reviewer.md`, and runtime approval to reach Anthropic.
 - **No structured question tool.** A stop-and-ask is one plain message with
-  numbered options, the recommended one first.
+  numbered options, the recommended one first. (`request_user_input` is
+  still an under-development Codex feature, off by default, as of 0.160.)
 - **Stopping a role** is `scripts/oc.sh --interrupt <id>`, never a raw API call.
 
 The reverse gap exists too: a Claude lead cannot spawn a Codex `tester`
@@ -94,6 +143,11 @@ trust the hooks and submit a prompt, or recover the exact conversation ID from
 `/status` and save it to the pin. Use `--fresh` only to deliberately reset that
 team's lead conversation. After a crash, check that the process is stopped before
 removing its stale `.pipeline/.codex-lead-lock.<team-name>` directory.
+
+At session start (startup, resume, or after compaction), the capture hook also
+prints one line per unfinished task: id, Status, Latest handoff, and Blocked
+since. It is a pointer for the resumed lead, not a substitute for reading the
+state files or checking worker activity. Per-prompt capture prints nothing.
 
 The lead records its planner thread ID in the task file. Corrections and the
 single spec bounce reuse that thread. After interruption, check worker status
@@ -135,6 +189,11 @@ OpenCode server. Verify each scenario before claiming model-level parity:
    approval, confirm it stages the task record with the code and tags the commit.
 6. Change a sandbox or hook setting in a scratch update; confirm it is surfaced
    for explicit permission-change consent and renewed hook trust.
+7. In a trusted project, confirm `scripts/oc.sh --status` and a
+   `bg-dispatch.sh wait` run without a prompt while `git push` still prompts.
+   Then ask for Codex to implement a small task: confirm `codex-dev` is
+   discovered, records its thread id, cannot commit, and that the review step
+   picks an independent (non-OpenAI) reviewer.
 
 Do not label the no-model tests as a completed live multi-agent run.
 

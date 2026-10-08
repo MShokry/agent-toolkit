@@ -45,15 +45,16 @@ Apply these OpenCode adaptations:
   dispatch is unavailable, stop and report it rather than silently implementing.
 - Use `scripts/oc.sh` for builder, reviewer, and tester with explicit models
   from the canonical flow or user-approved project assignments. Use builder
-  for implementation; Claude's `senior-dev` is unavailable unless a real
-  Claude Code dispatch mechanism is explicitly supplied. Never substitute a
+  for implementation; Claude's `senior-dev` and Codex's `codex-dev` are
+  unavailable unless a real Claude Code or Codex dispatch mechanism is
+  explicitly supplied. Never substitute a
   model or relax review independence merely because OpenCode leads the run.
 - A `claude/*` reviewer in `.pipeline/.toolkit-version` is not an OpenCode
   role: run it with `scripts/claude-review.sh T-<id> <pass> <brief-file>`,
   which runs the project's `.claude/agents/reviewer.md` headlessly with
   read-only tools and writes `.pipeline/T-<id>.review-<N>.out`. A `codex/*`
-  tester cannot be spawned from OpenCode either: follow the canonical flow and
-  ask the user rather than substituting another tester.
+  reviewer or tester cannot be spawned from OpenCode either: follow the
+  canonical flow and ask the user rather than substituting another role.
 - Launch every worker dispatch with `scripts/bg-dispatch.sh start T-<id>
   <label> -- <scripts/oc.sh … | scripts/claude-review.sh …>` and wait with
   `scripts/bg-dispatch.sh wait T-<id> <label> <seconds>`, repeating until it

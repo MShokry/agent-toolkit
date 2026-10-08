@@ -17,6 +17,9 @@
 #     [--codex-planner-model <id|inherit>] [--codex-planner-reasoning <effort|inherit>]
 #     [--builder-auto <ask|on>]
 #   Codex settings default to inherit: preserve local/parent choices.
+#   A `codex/<model>` --reviewer-model or --tester-model makes that role a
+#   native Codex subagent (.codex/agents/reviewer.toml, read-only sandbox, or
+#   .codex/agents/tester.toml) instead of an OpenCode dispatch.
 #   --builder-auto records the project's standing answer to OpenCode `--auto`
 #   for builder dispatches: `ask` (default) asks at every spec approval; `on`
 #   is a standing user decision, recorded per task without asking again.
@@ -391,6 +394,9 @@ CODEX_PLANNER_REASONING_LINE="# reasoning effort inherits from the lead"
 # it gets .codex/agents/tester.toml (model id without the vendor prefix).
 CODEX_TESTER_MODEL=""
 case "$TESTER_MODEL" in codex/*) CODEX_TESTER_MODEL="${TESTER_MODEL#codex/}" ;; esac
+# Same for a `codex/<model>` reviewer: .codex/agents/reviewer.toml, read-only.
+CODEX_REVIEWER_MODEL=""
+case "$REVIEWER_MODEL" in codex/*) CODEX_REVIEWER_MODEL="${REVIEWER_MODEL#codex/}" ;; esac
 
 # Captured before any render() call touches the target, so it reflects
 # whether this is the very first scaffold of this project — used below to
@@ -413,6 +419,7 @@ SED_ARGS=(
   -e "s|__REVIEWER_FALLBACK_MODEL__|$REVIEWER_FALLBACK_MODEL|g"
   -e "s|__TESTER_MODEL__|$TESTER_MODEL|g"
   -e "s|__CODEX_TESTER_MODEL__|$CODEX_TESTER_MODEL|g"
+  -e "s|__CODEX_REVIEWER_MODEL__|$CODEX_REVIEWER_MODEL|g"
   -e "s|__TEST_DIR__|$TEST_DIR|g"
 )
 
@@ -464,6 +471,9 @@ if [ "$UPDATE" -eq 1 ]; then
   check_pair "$TEMPLATES/codex/AGENTS.md.tmpl"              "$TARGET/AGENTS.md"
   check_pair "$TEMPLATES/codex/agents/planner.toml.tmpl"   "$TARGET/.codex/agents/planner.toml"
   [ -z "$CODEX_TESTER_MODEL" ] || check_pair "$TEMPLATES/codex/agents/tester.toml.tmpl" "$TARGET/.codex/agents/tester.toml"
+  [ -z "$CODEX_REVIEWER_MODEL" ] || check_pair "$TEMPLATES/codex/agents/reviewer.toml.tmpl" "$TARGET/.codex/agents/reviewer.toml"
+  check_pair "$TEMPLATES/codex/agents/codex-dev.toml.tmpl" "$TARGET/.codex/agents/codex-dev.toml"
+  check_pair "$TEMPLATES/codex/rules/pipeline.rules.tmpl" "$TARGET/.codex/rules/pipeline.rules"
   check_pair "$TEMPLATES/codex/hooks.json.tmpl" "$TARGET/.codex/hooks.json"
   check_pair "$TEMPLATES/codex/hooks/session.py.tmpl" "$TARGET/scripts/codex-session.py"
   check_pair "$TEMPLATES/scripts/codex-lead.sh.tmpl" "$TARGET/scripts/codex-lead.sh"
@@ -542,6 +552,9 @@ render "$TEMPLATES/claude/commands/toolkit-update.md.tmpl" "$TARGET/.claude/comm
 render "$TEMPLATES/codex/AGENTS.md.tmpl"              "$TARGET/AGENTS.md"
 render "$TEMPLATES/codex/agents/planner.toml.tmpl"   "$TARGET/.codex/agents/planner.toml"
 [ -z "$CODEX_TESTER_MODEL" ] || render "$TEMPLATES/codex/agents/tester.toml.tmpl" "$TARGET/.codex/agents/tester.toml"
+[ -z "$CODEX_REVIEWER_MODEL" ] || render "$TEMPLATES/codex/agents/reviewer.toml.tmpl" "$TARGET/.codex/agents/reviewer.toml"
+render "$TEMPLATES/codex/agents/codex-dev.toml.tmpl" "$TARGET/.codex/agents/codex-dev.toml"
+render "$TEMPLATES/codex/rules/pipeline.rules.tmpl" "$TARGET/.codex/rules/pipeline.rules"
 render "$TEMPLATES/codex/hooks.json.tmpl" "$TARGET/.codex/hooks.json"
 render "$TEMPLATES/codex/hooks/session.py.tmpl" "$TARGET/scripts/codex-session.py"
 render "$TEMPLATES/scripts/codex-lead.sh.tmpl" "$TARGET/scripts/codex-lead.sh"
@@ -666,8 +679,11 @@ Next steps:
      Load the "delegate" skill when available; it is the context-discipline
      half of this.
   4. In Codex, review/trust the generated hooks with /hooks (existing hooks
-     are never overwritten). Run scripts/codex-preflight.sh from the lead
-     sandbox. Git/config writes may need runtime approval after pipeline consent.
+     are never overwritten), and review .codex/rules/pipeline.rules: it lets
+     the toolkit's dispatch wrappers run outside the sandbox without a prompt
+     per call, in a trusted project only. Run scripts/codex-preflight.sh from
+     the lead sandbox. Git/config writes may need runtime approval after
+     pipeline consent.
      Make sure $TARGET has real project-specific guidance. The generated
      AGENTS.md is lead integration plus an explicitly unpopulated guidance
      section; fill it when no project CLAUDE.md already supplies constraints.
