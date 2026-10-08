@@ -32,9 +32,70 @@ Apply these Codex adaptations:
   and written decisions. New task -> new thread; release the thread when the
   task ends, keeping the recorded id for audit. Respect the model/reasoning
   settings in the planner file; otherwise inherit the lead's settings.
+- When the canonical flow dispatches the tester: if the project defines a
+  Codex `tester` agent (`.codex/agents/tester.toml`, `tester_model: codex/…`),
+  spawn it, use its short reply as a receipt, and record **Codex tester thread
+  id** after the first dispatch; reuse that thread only for tester retries on
+  the same task — it is never an OpenCode session. Otherwise dispatch the
+  OpenCode tester through `scripts/oc.sh` as the canonical flow shows.
 - Use OpenCode `builder` as the implementer. The Claude `senior-dev` option is
   unavailable in a Codex-led fallback run. All review-independence rules still
   apply.
+- Give every new `T-*` task its own `codex/T-<id>-<slug>` branch, created from
+  an up-to-date base before any implementer runs. Branch creation is the
+  lead's action — no implementer permission block grants it — and one task's
+  work never lands on another task's branch. Request runtime approval for the
+  precise `git switch -c` when the sandbox needs it; never widen scope to get it.
+- `scripts/oc.sh` — a dispatch, `--status`, and `--interrupt` alike — needs
+  the approved, narrowly scoped runtime permission to run outside the
+  workspace sandbox. The OpenCode CLI opens a log under its own home directory
+  before it reaches the local server, so a sandboxed call fails `EPERM` and
+  reports nothing. Treat that as the sandbox, never as a dead server, and
+  never broaden the sandbox, enable unrestricted network access, or put
+  `.pipeline/.oc-password` on a command line to get around it. Prefer the
+  wrapper over direct `opencode api` calls: it resolves server, port file and
+  credential in one place.
+- You have no background-watch tool. Launch every OpenCode dispatch and every
+  headless Claude review with `scripts/bg-dispatch.sh start T-<id> <label> --
+  <wrapper …>`, then call `scripts/bg-dispatch.sh wait T-<id> <label> <seconds>
+  [--session id]` with `<seconds>` below your own command timeout, again and
+  again, until it prints `finished:` (exit 0) or `wrapper-exited:` (exit 2).
+  `still-running` (exit 3) means call it again — never re-dispatch over a live
+  label (the script refuses anyway), and never treat a killed `wait` as a dead
+  role. Recover a builder's liveness from *OpenCode builder session id* with
+  `scripts/oc.sh --status <id>`: `active` means still running — wait, do not
+  abort. Never the v1 `GET /session/status`; it does not exist on v2.
+- When the canonical flow says to dispatch a Claude `reviewer`
+  (`reviewer_model: claude/…`), run it headlessly: write the brief (what the
+  reviewer cannot know from disk) to `.pipeline/T-<id>.review-<N>.brief`, then
+  `scripts/bg-dispatch.sh start T-<id> review-<N> -- scripts/claude-review.sh
+  T-<id> <N> .pipeline/T-<id>.review-<N>.brief`. The reply lands in
+  `.pipeline/T-<id>.review-<N>.out`; branch on its `VERDICT:` line and paste it
+  under the canonical `### Pass N — <date> — verdict: <V>` heading.
+  `verdict=MISSING` is a failed dispatch, never a pass. The `claude` CLI
+  reaches Anthropic and writes under `~/.claude`, so it needs the same narrow
+  runtime approval as `oc.sh`, and it may only send what the project's
+  guidance file authorizes for review.
+- Stopping a role on purpose — the user says stop, or switches model or
+  implementer — is `scripts/oc.sh --interrupt <id>`, then stopping the
+  wrapper, then `--status` to confirm. Follow the canonical *mid-task model or
+  implementer switch* steps for the rest.
+- A status question ("where did the team stop?", "what's next?") runs the
+  canonical *Where the team stopped* section and nothing else: report and
+  stop; never dispatch from a status question. A task another lead parked for
+  you names you in its handoff (`next: a Codex-led session dispatches the
+  tester`) — pick it up from that line and the Decisions log, not from memory.
+- You have no structured question tool. A stop-and-ask is one message: the
+  question, numbered options with the recommended one first and marked, one
+  line each on what happens next — then stop and wait. Never fold a question
+  into a progress report where it can be skimmed past.
+- Read every role's claim about the environment ("another dispatch is writing
+  my files", "the server is down") as a lead to check, not a fact; the
+  canonical *concurrent writer* paragraph names the checks.
+- Update the status board every time a task's Status changes, not only at
+  the end, so a lead from another vendor resuming the task reads the same
+  board. After a merge you are told about, write the canonical merge record
+  before starting anything else.
 - Load the installed `delegate`, `karpathy-guidelines`, and `status-board`
   repository skills when the canonical flow calls for them.
 - Do not replace the state-file handoff with Codex subagent chat context. Read

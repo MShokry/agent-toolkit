@@ -41,6 +41,50 @@
 # inlines the full contents of every file the agent reads, so it is unreadable
 # for a human and expensive to paste back into a state file.
 #
+# --status is the read-only companion to a dispatch: it launches no agent,
+# takes no prompt, and needs neither --agent nor --model. It reports whether
+# the OpenCode sessions you name are currently active, which is the question
+# a detached dispatch leaves behind when its own wrapper is killed before it
+# can print the `oc.sh: session=` line:
+#
+#   scripts/oc.sh --status ses_abc ses_def   # one "active" / "not active" line each
+#   scripts/oc.sh --status                   # the raw active-session map
+#
+# Why not GET /session/status, the name the v1 workflow used: it does not
+# exist on v2. Live against v2.0.23 it answers the web UI's
+# HTML, and /api/session/status is a 400 because v2 reads `status` as a
+# session id. v2's endpoint is GET /api/session/active — see type
+# V2SessionActiveData in the installed SDK at
+# .opencode/node_modules/@opencode-ai/sdk/dist/v2/gen/types.gen.d.ts — whose
+# 200 body is {"data": {<sessionID>: {type: "running"}}}, i.e. exactly
+# {"data":{}} when nothing is running, which is still a success.
+#
+# Server, credential and API resolution are the ones every dispatch already
+# uses, so this call cannot drift from them and the password never reaches a
+# command line. Raw curl is not an alternative: v2 always auth-gates the API.
+#
+# Exit 0 on success — including "no session is active"; 1 on a usage,
+# transport or malformed-response error.
+#
+# --interrupt is --status's write companion: it stops the named sessions'
+# running turns server-side and launches nothing:
+#
+#   scripts/oc.sh --interrupt ses_abc         # one "interrupted" / "not running" line each
+#
+# Use it when the lead deliberately stops a dispatch (a mid-task model switch,
+# a user's "stop"), never to "unstick" a session --status still reports active
+# on its own — an active session is working, and the rule is to wait for it.
+# Killing only the local wrapper does not stop the turn: the agent keeps
+# editing the tree with nobody listening (T-035). Interrupt first, then kill
+# the wrapper, then confirm with --status. v2's endpoint is
+# POST /api/session/<id>/interrupt (v1 called it /session/<id>/abort), which
+# answers {"interrupted": bool} and is a clean no-op for an idle session. Same
+# server/credential resolution as every dispatch; the password never reaches a
+# command line.
+#
+# Exit 0 when every named session ended up not running; 1 on a usage or
+# transport error, or if a session is still active afterwards.
+#
 # --auto passes OpenCode's own --auto through to `opencode run`: it is
 # documented to auto-approve any permission not explicitly `deny`d in the
 # dispatched agent's own permission block, `deny` entries (e.g. builder.md's
@@ -241,6 +285,9 @@ TEXT_ONLY=0
 RAW_OUT=""
 SESSION=""
 AUTO=0
+STATUS=0
+STATUS_IDS=""
+INTERRUPT=0
 
 die() { printf '%s\n' "oc.sh: $*" >&2; exit 1; }
 
@@ -248,6 +295,27 @@ usage() {
   awk '/^# BEGIN USAGE$/ {f=1; next} /^# END USAGE$/ {f=0} f' "$0" | sed 's/^# \{0,1\}//'
   exit 1
 }
+
+# GNU timeout is `timeout` on Linux and via coreutils on macOS, `gtimeout` when
+# coreutils is installed unprefixed-off. Resolve whichever exists. Defined here
+# rather than next to the watchdog because oc_api() — the one authenticated API
+# call, shared by the watchdog and the --status operation below — needs it.
+if command -v timeout >/dev/null 2>&1; then
+  TIMEOUT_BIN="timeout"
+elif command -v gtimeout >/dev/null 2>&1; then
+  TIMEOUT_BIN="gtimeout"
+else
+  die "neither 'timeout' nor 'gtimeout' found — install coreutils (brew install coreutils)"
+fi
+
+# The single authenticated API entry point: `opencode api` authenticates via
+# OPENCODE_PASSWORD (already exported above) and plain curl could not reproduce
+# that auth in testing — v2 always auth-gates the API (see the password section
+# of this header). Resolved in one place so the watchdog and `--status` can
+# never drift from a dispatch, and so the password never reaches a command
+# line. Bounded with $TIMEOUT_BIN since `opencode api` has no per-request
+# timeout of its own.
+oc_api() { "$TIMEOUT_BIN" 10 opencode api "$@" --server "$SERVER" 2>/dev/null; }
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -259,10 +327,70 @@ while [ $# -gt 0 ]; do
     --raw-out)     [ $# -ge 2 ] || die "--raw-out needs a value";     RAW_OUT="$2";     shift 2 ;;
     --session)     [ $# -ge 2 ] || die "--session needs a value";     SESSION="$2";     shift 2 ;;
     --auto)        AUTO=1; shift ;;
+    # Everything after --status is a session id, so --status is always last.
+    --status)      STATUS=1; shift; STATUS_IDS="$*"; break ;;
+    # Same shape: everything after --interrupt is a session id.
+    --interrupt)   INTERRUPT=1; shift; STATUS_IDS="$*"; break ;;
     -h|--help)     usage ;;
     *)             die "unknown argument: $1  (try --help)" ;;
   esac
 done
+
+# --- read-only status operation ------------------------------------------
+# Every active/not-active verdict below is keyed to a session id the caller
+# named, so this never reports on a session nobody asked about. With no ids
+# it prints v2's raw active-session map, which is what makes the "nothing is
+# running" case observable as {"data":{}}.
+if [ "$STATUS" -eq 1 ]; then
+  printf '%s\n' "oc.sh: status: server=$SERVER ids=${STATUS_IDS:-all}" >&2
+  ACTIVE="$(oc_api GET /api/session/active || true)"
+  [ -n "$ACTIVE" ] || die "could not read active sessions from $SERVER — start a server with:
+     scripts/team.sh   (or OPENCODE_PASSWORD=\"\$(cat .pipeline/.oc-password)\" opencode serve --port 4096)"
+  ACTIVE="$ACTIVE" python3 -c '
+import json, os, sys
+raw = os.environ["ACTIVE"]
+try:
+    d = json.loads(raw)
+except ValueError:
+    sys.exit("oc.sh: unreadable /api/session/active response — refusing to call sessions inactive")
+if isinstance(d, dict) and "data" in d:
+    d = d["data"]
+if not isinstance(d, dict):
+    sys.exit("oc.sh: unexpected /api/session/active shape (expected an object)")
+ids = sys.argv[1:]
+if not ids:
+    sys.stdout.write(raw.strip() + "\n")
+else:
+    for i in ids:
+        print("%s: %s" % (i, "active" if i in d else "not active"))
+' ${STATUS_IDS:-}
+  exit 0
+fi
+
+# --- interrupt operation ----------------------------------------------------
+# Only ever touches the sessions the caller named; there is no "interrupt all".
+if [ "$INTERRUPT" -eq 1 ]; then
+  [ -n "$STATUS_IDS" ] || die "--interrupt needs at least one session id"
+  printf '%s\n' "oc.sh: interrupt: server=$SERVER ids=$STATUS_IDS" >&2
+  FAILED=0
+  for SID in $STATUS_IDS; do
+    case "$SID" in ses_*) : ;; *) die "not a session id: $SID" ;; esac
+    oc_api POST "/api/session/$SID/interrupt" >/dev/null || true
+    ACTIVE="$(oc_api GET /api/session/active || true)"
+    [ -n "$ACTIVE" ] || die "could not read active sessions from $SERVER after interrupting $SID"
+    if ACTIVE="$ACTIVE" python3 -c '
+import json, os, sys
+d = json.loads(os.environ["ACTIVE"])
+d = d.get("data", d) if isinstance(d, dict) else d
+sys.exit(0 if isinstance(d, dict) and sys.argv[1] in d else 1)
+' "$SID"; then
+      printf '%s: still active\n' "$SID"; FAILED=1
+    else
+      printf '%s: not running\n' "$SID"
+    fi
+  done
+  exit "$FAILED"
+fi
 
 [ -n "$AGENT" ] || die "--agent is required"
 [ -n "$MODEL" ] || die "--model is required"
@@ -287,16 +415,6 @@ if [ -z "$PROMPT" ]; then
   fi
 fi
 [ -n "$PROMPT" ] || die "no prompt given (--prompt, --prompt-file, or stdin)"
-
-# GNU timeout is `timeout` on Linux and via coreutils on macOS, `gtimeout` when
-# coreutils is installed unprefixed-off. Resolve whichever exists.
-if command -v timeout >/dev/null 2>&1; then
-  TIMEOUT_BIN="timeout"
-elif command -v gtimeout >/dev/null 2>&1; then
-  TIMEOUT_BIN="gtimeout"
-else
-  die "neither 'timeout' nor 'gtimeout' found — install coreutils (brew install coreutils)"
-fi
 
 # Fail fast with a clear message rather than letting --server silently fall
 # back to a cold local server, which is the slow path this wrapper exists to
@@ -329,12 +447,6 @@ AUTO_ARGS=()
 
 # md5 of stdin, portable across macOS (`md5`) and Linux (`md5sum`).
 _md5() { if command -v md5 >/dev/null 2>&1; then md5 -q; else md5sum | cut -d' ' -f1; fi; }
-
-# `opencode api` authenticates via OPENCODE_PASSWORD (already exported above);
-# plain curl could not reproduce that auth in testing (see usage header).
-# Bounded with $TIMEOUT_BIN since, unlike the old curl calls, `opencode api`
-# has no built-in per-request timeout of its own.
-oc_api() { "$TIMEOUT_BIN" 10 opencode api "$@" --server "$SERVER" 2>/dev/null; }
 
 # Every current session id, newest first (empty on any error). v2 paginates
 # (default page size well under this project's total session count), but

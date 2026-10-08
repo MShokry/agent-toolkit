@@ -55,6 +55,18 @@ printf '%s\n' "$LINES" | while IFS= read -r line; do
       echo "promote-findings.sh: skip doc path escaping the repo root: $line" >&2
       continue ;;
   esac
+  # A tag naming a directory (a builder once wrote `[.pipeline/]`) used to
+  # abort the whole run on the write below, silently dropping every later
+  # finding. Skip it and keep going.
+  case "$DOC" in
+    */)
+      echo "promote-findings.sh: skip tag naming a directory, not a doc file: $line" >&2
+      continue ;;
+  esac
+  if [ -d "$DOC" ]; then
+    echo "promote-findings.sh: skip tag naming a directory, not a doc file: $line" >&2
+    continue
+  fi
   mkdir -p "$(dirname "$DOC")"
   [ -f "$DOC" ] || printf '# %s\n' "$(basename "$DOC" .md)" > "$DOC"
   if grep -qF "$TEXT" "$DOC" 2>/dev/null; then

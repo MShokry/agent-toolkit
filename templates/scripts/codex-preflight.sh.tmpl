@@ -24,9 +24,17 @@ codex resume --help | grep -q -- '--no-daemon' \
 for path in .codex/agents/planner.toml .codex/hooks.json scripts/codex-session.py \
   .agents/skills/feature/SKILL.md .agents/skills/delegate/SKILL.md \
   .agents/skills/status-board/SKILL.md .agents/skills/karpathy-guidelines/SKILL.md \
-  .pipeline/TEMPLATE.md; do
+  .pipeline/TEMPLATE.md scripts/bg-dispatch.sh; do
   [ -f "$path" ] || die "missing $path; finish scaffold/update before starting"
 done
+# A claude/* reviewer is dispatched through scripts/claude-review.sh, which
+# needs the Claude CLI and the reviewer agent; check now, not at step 3.
+if grep -qE '^reviewer_model: *claude/' .pipeline/.toolkit-version 2>/dev/null; then
+  command -v claude >/dev/null 2>&1 || die "reviewer_model is claude/* but the claude CLI is not installed"
+  for path in scripts/claude-review.sh .claude/agents/reviewer.md; do
+    [ -f "$path" ] || die "reviewer_model is claude/* but $path is missing"
+  done
+fi
 grep -q '^name = "planner"' .codex/agents/planner.toml || die "planner definition has no planner name"
 if [ -f .agents/TEMPLATE.md ] || compgen -G ".agents/T-*.md" >/dev/null; then
   die "legacy .agents runtime state remains; complete the pipeline-directory migration first"

@@ -559,4 +559,66 @@ out="$("$PF" T-02 2>&1)"
 grep -q 'already present, skipped' <<< "$out" || fail "promotion not idempotent"
 ok "promote-findings copies legit findings, refuses escaping paths, is idempotent"
 
+cat > "$TMP/.pipeline/T-03.md" <<'MD'
+## Findings for docs
+
+- [.pipeline/] a lead note mis-tagged with a directory
+- [docs/GOTCHAS.md] finding after the directory tag
+MD
+out="$("$PF" T-03 2>&1)" || fail "promote-findings aborted on a directory tag: $out"
+grep -q 'skip tag naming a directory' <<< "$out" || fail "directory tag was not skipped"
+grep -q 'finding after the directory tag' "$TMP/docs/GOTCHAS.md" || fail "finding after a directory tag was dropped"
+ok "promote-findings skips a directory tag and still promotes later findings"
+
+# --- 9. bg-dispatch.sh -------------------------------------------------------
+# A stub oc.sh in a scratch copy: the real one needs a live server.
+BG="$(mktemp -d "${TMPDIR:-/tmp}/toolkit-bg.XXXXXX")"
+mkdir -p "$BG/scripts" "$BG/.pipeline"
+cp "$TMP/scripts/bg-dispatch.sh" "$BG/scripts/"
+cat > "$BG/scripts/oc.sh" <<'STUB'
+#!/usr/bin/env bash
+if [ "$1" = --status ]; then echo "$2: not active"; exit 0; fi
+echo "oc.sh: agent=x session=new" >&2
+case "$*" in *die*) exit 1 ;; esac
+sleep "${SLEEP:-2}"; echo reply; echo "oc.sh: session=ses_stub" >&2
+STUB
+chmod +x "$BG/scripts/oc.sh"
+(
+  cd "$BG"
+  scripts/bg-dispatch.sh start T-1 builder -- scripts/oc.sh x >/dev/null
+  if scripts/bg-dispatch.sh start T-1 builder -- scripts/oc.sh x >/dev/null 2>&1; then
+    fail "bg-dispatch started a second live dispatch on one label"
+  fi
+  out="$(scripts/bg-dispatch.sh wait T-1 builder 20)" || fail "wait did not report finished: $out"
+  grep -q '^finished: oc.sh: session=ses_stub' <<< "$out" || fail "wait printed the wrong completion: $out"
+  SLEEP=6 scripts/bg-dispatch.sh start T-2 builder -- scripts/oc.sh x >/dev/null
+  rc=0; out="$(scripts/bg-dispatch.sh wait T-2 builder 1)" || rc=$?
+  { [ "$rc" -eq 3 ] && grep -q '^still-running' <<< "$out"; } || fail "wait did not time out as still-running (rc=$rc): $out"
+  scripts/bg-dispatch.sh start T-3 tester -- scripts/oc.sh die >/dev/null
+  sleep 1
+  rc=0; out="$(scripts/bg-dispatch.sh wait T-3 tester 5 --session ses_x)" || rc=$?
+  { [ "$rc" -eq 2 ] && grep -q 'ses_x: not active' <<< "$out"; } || fail "wait did not report a dead wrapper (rc=$rc): $out"
+  if scripts/bg-dispatch.sh start T-4 x -- bash -c true >/dev/null 2>&1; then
+    fail "bg-dispatch ran a command that is not a dispatch wrapper"
+  fi
+  scripts/bg-dispatch.sh wait T-2 builder 20 >/dev/null || fail "T-2 stub never finished"
+)
+ok "bg-dispatch refuses duplicate labels and non-wrappers; wait reports finished, still-running, wrapper-exited"
+
+# --- 10. oc.sh --interrupt / claude-review.sh argument guards ----------------
+if out="$("$TMP/scripts/oc.sh" --interrupt 2>&1)"; then fail "oc.sh --interrupt with no id succeeded"; fi
+grep -q 'needs at least one session id' <<< "$out" || fail "oc.sh --interrupt gave no usage error: $out"
+printf 'reviewer_model: opencode/some-model\n' > "$BG/.pipeline/.toolkit-version"
+cp "$TMP/scripts/claude-review.sh" "$BG/scripts/"
+mkdir -p "$BG/.claude/agents"; : > "$BG/.claude/agents/reviewer.md"
+: > "$BG/.pipeline/T-5.md"; : > "$BG/.pipeline/T-5.diff"
+FAKECLAUDE="$(mktemp -d "${TMPDIR:-/tmp}/toolkit-claude.XXXXXX")"
+printf '#!/usr/bin/env bash\necho "claude stub must not run" >&2; exit 9\n' > "$FAKECLAUDE/claude"
+chmod +x "$FAKECLAUDE/claude"
+if out="$(cd "$BG" && PATH="$FAKECLAUDE:$PATH" scripts/claude-review.sh T-5 1 2>&1)"; then
+  fail "claude-review ran for a non-claude reviewer_model"
+fi
+grep -q 'not claude/\*' <<< "$out" || fail "claude-review did not refuse a non-claude reviewer_model: $out"
+ok "oc.sh --interrupt and claude-review.sh refuse bad input without dispatching"
+
 printf '\nsmoke: all checks passed (%s)\n' "$PASSED"

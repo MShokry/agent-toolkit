@@ -67,6 +67,25 @@ tests a temporary write under `.pipeline/` before planning and reports a blocked
 operation to the lead. Changing the runtime directory does not make that
 source-write boundary enforced.
 
+## Lead parity with Claude
+
+The Codex lead runs the same canonical flow as the Claude lead; what differs is
+mechanics the Claude harness supplies and Codex does not:
+
+- **No Monitor.** Long dispatches go through `scripts/bg-dispatch.sh start`,
+  and the lead calls `scripts/bg-dispatch.sh wait … <seconds>` with a limit
+  below its own exec timeout until it reports `finished:` or `wrapper-exited:`.
+- **No Claude subagents.** A `claude/*` reviewer runs headlessly through
+  `scripts/claude-review.sh`, which needs the `claude` CLI, the project's
+  `.claude/agents/reviewer.md`, and runtime approval to reach Anthropic.
+- **No structured question tool.** A stop-and-ask is one plain message with
+  numbered options, the recommended one first.
+- **Stopping a role** is `scripts/oc.sh --interrupt <id>`, never a raw API call.
+
+The reverse gap exists too: a Claude lead cannot spawn a Codex `tester`
+subagent. The canonical flow says to ask the user rather than substitute — for
+example, park the task at `testing` for a Codex-led session.
+
 ## Recovery
 
 Resuming uses `.pipeline/.codex-session-id.<team-name>`, never `--last`. A failed

@@ -12,6 +12,32 @@ script, flag, or role rule; **PATCH** = prose and docs.
 
 ## Unreleased
 
+- `[process]` Codex-lead parity with the Claude lead. New
+  `scripts/bg-dispatch.sh` (`start`/`wait`) is the detached-dispatch watch for
+  any lead — a Codex lead has no Monitor, so it loops on `wait` instead of
+  losing dispatches to its own exec timeout. New `scripts/claude-review.sh`
+  runs the project's Claude `reviewer` agent headlessly (read-only tool list,
+  Edit/Write refused) so a non-Claude lead can dispatch a `claude/*` reviewer.
+  `scripts/oc.sh` gains `--status` (v2 `/api/session/active`) and
+  `--interrupt` (v2 `/api/session/<id>/interrupt`); the feature flow now uses
+  them instead of raw `opencode api` calls. `codex-preflight.sh` checks the new
+  wrappers and, for a `claude/*` reviewer, the Claude CLI and agent file.
+- `[process]` Canonical feature flow: a *Where the team stopped* status check
+  (board + handoffs + `gh pr list` reconciliation + stale-`main` check); the
+  merge record after a merge; the mid-task model/implementer switch procedure
+  (interrupt, ask keep-vs-discard, update manifest and role file,
+  `verify-models.sh`, fresh session); verifying a role's "concurrent writer"
+  claim before acting on it; the exact `### Pass N — <date> — verdict: <V>`
+  heading `verify-state.sh` keys off; what to do when the lead cannot spawn
+  the configured tester. The Codex feature skill gains the matching
+  adaptations (no Monitor, no structured question tool, headless Claude
+  review, per-task branches, sandboxed `oc.sh`).
+- `[safety]` `promote-findings.sh` skips a *Findings for docs* tag that names
+  a directory instead of aborting the run and silently dropping every later
+  finding.
+- `[process]` `init.sh` ignores `.pipeline/T-*.{out,err,pid,brief}` dispatch
+  traces in a git target.
+
 - `[contract]` Merged upstream v0.10.0 (OpenCode lead, standalone dashboard,
   Herdr plugin) onto this line without changing the Codex/`.pipeline/`
   contract: the new OpenCode `leader`/`planner`/commands, `scripts/dashboard`,

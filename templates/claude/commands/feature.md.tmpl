@@ -54,6 +54,28 @@ does not know it.
   `verify-state.sh` reports as exceeded is an escalation, never one more
   lap.
 
+## Where the team stopped
+
+When the request is a status question ("where did the team stop?", "what's
+next?") or this session is resuming cold, answer it before dispatching
+anything:
+
+1. The status board, then the `Latest handoff`, `Status` and `Blocked since`
+   lines of every `T-*.md` that is not `done` **and** of the newest few that
+   are.
+2. If the project uses GitHub, `gh pr list --state all --limit 10` —
+   reconcile it against the board. A PR that GitHub shows **merged** while
+   the state file or board still says "awaiting merge approval" is a missing
+   merge record (step 5), not an open task.
+3. Local `main` against `origin/main`. A stale local `main` silently bases
+   the next task branch on old code; fast-forward it with
+   `git fetch . origin/main:main` (never a reset).
+4. `scripts/oc.sh --status` — a running session means a role is still
+   working; say so instead of re-dispatching.
+
+Report the last finished task, anything half-recorded, the next planned task
+(from deferred scope in the last spec), and the options — then stop.
+
 ## Preflight
 
 1. **First run only:** if `.pipeline/.needs-customization` exists, this
@@ -329,8 +351,52 @@ before it exited — verified live: the session's message shows a
 a turn hanging open. Retrying the same session immediately is safe; you do
 not need to check whether the prior call is still active first. (This only
 holds when `oc.sh` itself did the killing. If a session was killed some
-other way — you interrupted it by hand, the machine slept — abort it
-yourself before reusing it: `OPENCODE_PASSWORD="$(cat .pipeline/.oc-password)" opencode api POST /api/session/<id>/interrupt --server $OC_SERVER`.)
+other way — you interrupted it by hand, the machine slept — interrupt it
+yourself before reusing it: `scripts/oc.sh --interrupt <id>`. It resolves the
+server and password the way every dispatch does.)
+
+**Launch every `oc.sh` dispatch detached, never as a plain shell call.** The
+lead's own shell tool kills commands long before `oc.sh`'s 2400s ceiling
+(Claude Code at 600s even when backgrounded; Codex at its exec timeout). A
+killed wrapper prints no `oc.sh: session=` line and no reply while the turn
+keeps running server-side — it looks dead and is not. So:
+
+```bash
+scripts/bg-dispatch.sh start T-<id> builder -- scripts/oc.sh --agent builder …
+scripts/bg-dispatch.sh wait  T-<id> builder 540 --session ses_xxx
+```
+
+`start` does the `nohup … & disown`, writes `.pipeline/T-<id>.<label>.{out,err,pid}`,
+and refuses a second live dispatch on the same label. `wait` blocks at most
+the given seconds and prints one line: `finished:` (exit 0), `wrapper-exited:`
+(exit 2, with the session's server-side state), or `still-running` (exit 3 —
+call it again). A lead with a background-watch tool may use it instead; a
+lead without one loops on `wait`. If the wrapper died before printing a
+session id, `scripts/oc.sh --status` lists what is still running: `active`
+means working — wait for it, do **not** abort it.
+
+**Stopping a dispatch on purpose** (the user says stop, or switches model or
+implementer mid-task) is `scripts/oc.sh --interrupt ses_xxx`, *then* killing
+the wrapper, then `--status` to confirm `not active`. Killing only the
+wrapper leaves the turn editing the tree with nobody listening. Never
+interrupt a session just because it is slow.
+
+**A mid-task model or implementer switch** is the user's call, and leaves
+partial work behind. In order: interrupt as above; ask the user whether the
+interrupted run's uncommitted files are discarded or kept for the new run to
+finish (recommend discard — a diff half by one model is reviewable by
+nobody); update the role's model in **both** `.pipeline/.toolkit-version`
+and the role file's `model:` line; run `scripts/verify-models.sh`; start a
+**new** session (never reuse one bound to the old model); log the switch as
+a `human` row in the Decisions log. A model id written in prose anywhere in
+these instructions is an example; the manifest is the source.
+
+**When a role reports a concurrent writer** ("another dispatch is editing my
+files"), check before believing it: the server's session list for the task,
+`scripts/oc.sh --status`, and the role's own `--raw-out` stream for its write
+times. Roles have mistaken their own `oc.sh` wrapper for a second dispatch.
+If the pipeline did not make the write, ask the user what else is writing
+the repo; do not let the role pick a winner.
 
 ## 3 — Review
 
@@ -353,6 +419,19 @@ family with `__REVIEWER_MODEL__`, switch to `__REVIEWER_FALLBACK_MODEL__`
 instead, and note the substitution in the Decisions log. A reviewer that
 shares the author's blind spots is not a second eye.
 
+**A Claude reviewer** (`reviewer_model: claude/<model>` in
+`.pipeline/.toolkit-version`, with `.claude/agents/reviewer.md`) does not go
+through `oc.sh`. A Claude lead spawns it as a subagent; any other lead runs it
+headlessly: `scripts/claude-review.sh T-<id> <pass> [brief-file]`, detached
+through `bg-dispatch.sh` (`-- scripts/claude-review.sh …`). It allows only
+reads and the commands in its `REVIEW_TOOLS` list, refuses Edit/Write, and
+writes the reply to `.pipeline/T-<id>.review-<N>.out` with a final
+`verdict=` line. Put in the brief what the reviewer cannot know from disk
+(mid-run implementer decisions, whether a tester will run, prior-pass
+dispositions). A `MISSING` verdict is a failed dispatch, never a pass. It
+sends the state file and diff to Anthropic — only where the project's
+guidance file authorizes that.
+
 Write whichever model you actually dispatched — `__REVIEWER_MODEL__` or
 the fallback — into *Reviewer for this task* in the state file. This is a
 separate record from the Decisions-log substitution note above: that's a
@@ -360,7 +439,10 @@ one-time entry explaining *why*, this field is the durable answer to
 *who*, for anyone reading the task later.
 
 If the reviewer's permission block allows writing `.pipeline/**`, it writes
-its own verdict into *Review verdicts*. Either way, **verify with the
+its own verdict into *Review verdicts*; otherwise you paste it, under a
+heading of exactly `### Pass N — <YYYY-MM-DD> — verdict: <PASS |
+CHANGES_REQUESTED>` — `verify-state.sh` keys off that heading, not the
+`VERDICT:` line in the body, and a bare `### Pass 1` fails it. Either way, **verify with the
 script, not by eye:** run `scripts/verify-state.sh T-<id>` — it fails
 loudly on a misplaced or duplicated `### Pass N` heading, an unfilled
 placeholder verdict, or (once Status is `in-review` or later) no filled
@@ -371,6 +453,9 @@ The reviewer's `--text` reply opens with a machine-readable
 `VERDICT: PASS` or `VERDICT: CHANGES_REQUESTED` line (see `reviewer.md`'s
 Output format). **Branch on that line** — not on a read of the raw `.jsonl`
 event stream and not on a scan of the findings prose.
+
+A *Findings for docs* tag must name a doc **file** (`[docs/ARCHITECTURE.md]`).
+A note for the lead that belongs in no doc gets no `[…]` tag at all.
 
 If the reviewer tagged anything under *Findings for docs* — a platform
 gotcha, a design gap, an incident that outlives this one task — run
@@ -421,6 +506,14 @@ scripts/oc.sh --agent tester --model __TESTER_MODEL__ --text \
   --raw-out .pipeline/T-<id>.test.jsonl \
   --prompt "Run the suites for .pipeline/T-<id>.md and triage failures."
 ```
+
+**If the configured tester is a native subagent this lead cannot spawn**
+(`tester_model: codex/…` under a Claude lead, `claude/…` under a Codex lead),
+do not substitute another tester or model on your own judgement. Ask the
+user: hand step 4 to a lead that can spawn it (park the task at `testing`
+with `next: a <vendor>-led session dispatches the tester` in the handoff),
+launch the same role headlessly with its own instructions and model, or use
+the OpenCode tester. Record the answer as a `human` row.
 
 The tester reports; it never fixes. Real failures go back to the
 implementer as a new loop — **increment *Test-fix loops*, capped at 2**,
@@ -501,6 +594,16 @@ control, only after the human has said yes.
   `git log --all --grep '\[T-<id>\]'` find every commit for this task —
   the path back from "something about this commit needs investigating" to
   the full record in `.pipeline/T-<id>.md`.
+
+**After the user merges, write the merge record — the task is not closed
+until the record says it merged.** `gh pr view <N> --json mergedAt,mergeCommit`
+(or your host's equivalent) gives the facts. On a branch
+`<prefix>T-<id>-merge-record` cut from an up-to-date `main`, set the state
+file's handoff to `PR #N merged to main as <sha>`, add a lead row with the
+merge date, update the status-board row, commit `[T-<id>] Record PR #N
+merge`, and — with the user's consent — push and open the PR. A task whose
+record still says "awaiting merge approval" after it merged is what the
+status check at the top of this file exists to catch.
 
 **Then ask, once: is there anything about *how this ran* worth writing
 down?** Not about the code — that is the reviewer's job and *Findings for

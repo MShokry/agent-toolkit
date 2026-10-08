@@ -473,6 +473,8 @@ if [ "$UPDATE" -eq 1 ]; then
   check_pair "$TEMPLATES/scripts/verify-spec.sh.tmpl"      "$TARGET/scripts/verify-spec.sh"
   check_pair "$TEMPLATES/scripts/verify-models.sh.tmpl"    "$TARGET/scripts/verify-models.sh"
   check_pair "$TEMPLATES/scripts/promote-findings.sh.tmpl" "$TARGET/scripts/promote-findings.sh"
+  check_pair "$TEMPLATES/scripts/bg-dispatch.sh.tmpl"     "$TARGET/scripts/bg-dispatch.sh"
+  check_pair "$TEMPLATES/scripts/claude-review.sh.tmpl"   "$TARGET/scripts/claude-review.sh"
 
   CUR_SHA="$(git -C "$TOOLKIT_ROOT" rev-parse --short HEAD 2>/dev/null || echo unknown)"
   # shellcheck disable=SC2016 # literal backticks/quotes are intentional
@@ -548,10 +550,13 @@ render "$TEMPLATES/scripts/verify-state.sh.tmpl"     "$TARGET/scripts/verify-sta
 render "$TEMPLATES/scripts/verify-spec.sh.tmpl"      "$TARGET/scripts/verify-spec.sh"
 render "$TEMPLATES/scripts/verify-models.sh.tmpl"    "$TARGET/scripts/verify-models.sh"
 render "$TEMPLATES/scripts/promote-findings.sh.tmpl" "$TARGET/scripts/promote-findings.sh"
+render "$TEMPLATES/scripts/bg-dispatch.sh.tmpl"     "$TARGET/scripts/bg-dispatch.sh"
+render "$TEMPLATES/scripts/claude-review.sh.tmpl"   "$TARGET/scripts/claude-review.sh"
 
 chmod +x "$TARGET/scripts/oc.sh" "$TARGET/scripts/team.sh" "$TARGET/scripts/dashboard" \
          "$TARGET/scripts/verify-state.sh" "$TARGET/scripts/verify-spec.sh" \
          "$TARGET/scripts/verify-models.sh" "$TARGET/scripts/promote-findings.sh" \
+         "$TARGET/scripts/bg-dispatch.sh" "$TARGET/scripts/claude-review.sh" \
          "$TARGET/scripts/codex-lead.sh" \
          "$TARGET/scripts/codex-preflight.sh" 2>/dev/null || true
 
@@ -602,6 +607,14 @@ if [ -d "$TARGET/.git" ]; then
     printf 'init.sh: added .pipeline/.claude-session-id.* to %s\n' "$GITIGNORE"
   fi
   for pattern in '.pipeline/.codex-session-id.*' '.pipeline/.codex-started.*' '.pipeline/.codex-lead-lock.*'; do
+    if ! grep -qxF "$pattern" "$GITIGNORE" 2>/dev/null; then
+      printf '\n%s\n' "$pattern" >> "$GITIGNORE"
+      printf 'init.sh: added %s to %s\n' "$pattern" "$GITIGNORE"
+    fi
+  done
+  # scripts/bg-dispatch.sh's per-dispatch pid/output files and the lead's
+  # review briefs: runtime traces, not records (the state file is the record).
+  for pattern in '/.pipeline/T-*.out' '/.pipeline/T-*.err' '/.pipeline/T-*.pid' '/.pipeline/T-*.brief'; do
     if ! grep -qxF "$pattern" "$GITIGNORE" 2>/dev/null; then
       printf '\n%s\n' "$pattern" >> "$GITIGNORE"
       printf 'init.sh: added %s to %s\n' "$pattern" "$GITIGNORE"

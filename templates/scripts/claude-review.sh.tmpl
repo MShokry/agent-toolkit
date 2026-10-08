@@ -1,0 +1,95 @@
+#!/usr/bin/env bash
+#
+# Run the project's Claude Code `reviewer` agent headlessly against one task's
+# diff — the dispatch path for a lead that cannot spawn a Claude subagent
+# itself (a Codex or OpenCode lead). A Claude lead may keep using its native
+# `reviewer` subagent; both read the same .claude/agents/reviewer.md.
+#
+# BEGIN USAGE
+#   scripts/claude-review.sh <T-id> <pass-number> [brief-file]
+#
+# Reviews .pipeline/<T-id>.diff against .pipeline/<T-id>.md. The optional
+# brief file carries what the reviewer cannot know from disk (mid-run
+# implementer decisions, whether step 4 will run, prior-pass dispositions);
+# its text is appended to the standard prompt.
+#
+# Writes the reviewer's full reply to .pipeline/<T-id>.review-<N>.out and
+# prints, as the last stderr line, `claude-review.sh: done verdict=<V> out=…`
+# where <V> is PASS, CHANGES_REQUESTED, or MISSING (no VERDICT: line — treat
+# as a failed dispatch, never as a pass). Exit 0 when a verdict was returned.
+#
+# Run it detached for anything but a tiny diff:
+#   scripts/bg-dispatch.sh start T-035 review-2 -- scripts/claude-review.sh T-035 2
+# (bg-dispatch.sh's `-out`/`-err` files are separate from the review-<N>.out
+# this script writes; the latter is the record to paste.)
+# END USAGE
+#
+# What it may do: read, search, inspect git, and run scripts/verify-state.sh.
+# Add the project's own read-only check commands (its test runner, linter in
+# check mode, route listing) to REVIEW_TOOLS below when customizing. Edit and
+# Write are disallowed and, in --print mode, any tool outside the allow-list
+# is refused rather than prompted — so it cannot modify source or the state
+# file. The lead still pastes the verdict, exactly as with the subagent.
+#
+# This sends the task's state file and diff to Anthropic. Use it only where
+# the project has authorized that for reviews (say so in AGENTS.md or
+# CLAUDE.md), and never pass credentials, .env files or .pipeline/.oc-password
+# in a brief.
+
+set -eu
+
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$REPO_ROOT"
+
+die() { printf 'claude-review.sh: %s\n' "$*" >&2; exit 1; }
+usage() { awk '/^# BEGIN USAGE$/ {f=1; next} /^# END USAGE$/ {f=0} f' "$0" | sed 's/^# \{0,1\}//'; exit 1; }
+
+[ $# -ge 2 ] && [ $# -le 3 ] || usage
+TASK="$1" PASS="$2" BRIEF="${3:-}"
+[[ "$TASK" =~ ^T-[0-9]+$ ]] || die "task id must look like T-035: $TASK"
+[[ "$PASS" =~ ^[0-9]+$ ]] || die "pass number must be a number: $PASS"
+[ -f ".pipeline/$TASK.md" ] || die "no state file .pipeline/$TASK.md"
+[ -f ".pipeline/$TASK.diff" ] || die "no diff .pipeline/$TASK.diff"
+[ -f .claude/agents/reviewer.md ] || die "no .claude/agents/reviewer.md — this project has no Claude reviewer agent"
+[ -z "$BRIEF" ] || [ -f "$BRIEF" ] || die "brief file not found: $BRIEF"
+command -v claude >/dev/null 2>&1 || die "claude CLI not installed"
+
+# The manifest names the reviewer as `claude/<model>`; the CLI wants
+# `claude-<model>`. Anything else means the reviewer is not a Claude role and
+# belongs to oc.sh, not here.
+REVIEWER_MODEL="$(sed -n 's/^reviewer_model: *//p' .pipeline/.toolkit-version 2>/dev/null | head -1)"
+case "$REVIEWER_MODEL" in
+  claude/*) MODEL="claude-${REVIEWER_MODEL#claude/}" ;;
+  *) die "reviewer_model in .pipeline/.toolkit-version is '${REVIEWER_MODEL:-unset}', not claude/* — dispatch the reviewer through scripts/oc.sh instead" ;;
+esac
+
+OUT=".pipeline/$TASK.review-$PASS.out"
+PROMPT="Review $TASK, Pass $PASS. Spec: .pipeline/$TASK.md. Diff: .pipeline/$TASK.diff. Prior passes, if any, are under Review verdicts in the state file; answer each prior finding by number. Return your verdict in your output format, starting with the VERDICT: line, ready to paste under ### Pass $PASS."
+if [ -n "$BRIEF" ]; then
+  PROMPT="$PROMPT
+
+Lead's brief:
+$(cat "$BRIEF")"
+fi
+
+printf 'claude-review.sh: task=%s pass=%s model=%s out=%s\n' "$TASK" "$PASS" "$MODEL" "$OUT" >&2
+
+# Read-only tools the reviewer may use. Edit/Write stay disallowed below.
+REVIEW_TOOLS=(
+  'Read' 'Grep' 'Glob'
+  'Bash(git diff:*)' 'Bash(git show:*)' 'Bash(git log:*)' 'Bash(git status:*)' 'Bash(git ls-files:*)'
+  'Bash(scripts/verify-state.sh:*)'
+)
+
+STATUS=0
+# The prompt goes in on stdin: --allowedTools/--disallowedTools are variadic
+# and would swallow a trailing positional prompt as one more tool name.
+printf '%s\n' "$PROMPT" | claude -p --agent reviewer --model "$MODEL" \
+  --allowedTools "${REVIEW_TOOLS[@]}" \
+  --disallowedTools 'Edit' 'Write' 'NotebookEdit' \
+  > "$OUT" || STATUS=$?
+
+VERDICT="$(grep -m1 -oE '^VERDICT: (PASS|CHANGES_REQUESTED)' "$OUT" | sed 's/^VERDICT: //' || true)"
+printf 'claude-review.sh: done verdict=%s exit=%s out=%s\n' "${VERDICT:-MISSING}" "$STATUS" "$OUT" >&2
+[ -n "$VERDICT" ] || exit 1
+exit 0
