@@ -437,16 +437,19 @@ fewest rules about removing it.
   of internal, and give the human something concrete to push back on other
   than the planner's own framing.
 
-## 21. Session scope is one task, not one sub-agent
+## 21. Session scope is one task per role
 
-When a dispatch tool supports session continuity it is tempting to give
-every dispatched role a fresh session "for independence". That trades a
-real cost for a partial benefit: a fresh reviewer/tester must re-read every
-file the implementer already read — on a large implementation that burns
-more context than the independence is worth. The rule that held up: **same
-task → same session, new task → new session, for all sub-agents alike.**
-The implementer, reviewer, and tester of one task share its single
-session; nothing carries across tasks.
+This lesson was first written the other way round — "same task → same
+session for all sub-agents alike", on the theory that a fresh reviewer or
+tester re-reading every file costs more than the independence is worth. It
+did not hold up. On opencode v2 a session pins the tool set of the agent
+that opened it: a tester dispatched into the builder's session reported
+"file-edit tool is not exposed" twice and could not record its results,
+while a fresh session wrote them first time. A shared session also handed
+the reviewer the builder's in-session reasoning instead of just the diff.
+The rule that held up: **same task and same role → same session; another
+role → its own session; new task → new sessions.** Each role's id lives in
+its own state-file field, and only that role's retry reuses it.
 
 ## 22. Track classifications with their decision source
 

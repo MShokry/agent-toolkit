@@ -41,8 +41,9 @@ Apply these Codex adaptations:
 - Use OpenCode `builder` as the implementer. The Claude `senior-dev` option is
   unavailable in a Codex-led fallback run. All review-independence rules still
   apply.
-- Give every new `T-*` task its own `codex/T-<id>-<slug>` branch, created from
-  an up-to-date base before any implementer runs. Branch creation is the
+- Give every new `T-*` task its own branch as the canonical step 2 describes
+  (`T-<id>-<slug>`, or the project's prefix, e.g. `codex/`), created from an
+  up-to-date base before any implementer runs. Branch creation is the
   lead's action — no implementer permission block grants it — and one task's
   work never lands on another task's branch. Request runtime approval for the
   precise `git switch -c` when the sandbox needs it; never widen scope to get it.

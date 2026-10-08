@@ -80,8 +80,8 @@ rule "task class proposed by model, tracked with decision source" \
   'class decided by|record \*\*who decided\*\*|who decided.*agent.*human' \
   "$FEATURE" "$SYSTEM" "$FLOW"
 
-rule "session scope is one task for all sub-agents" \
-  'same task.*same session|new task.*new session' \
+rule "session scope is one task per role" \
+  'same role.*same session|another role.*its own session' \
   "$FEATURE" "$SYSTEM" "$FLOW"
 
 rule "ask before splitting a very large task" \

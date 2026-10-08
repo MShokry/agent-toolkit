@@ -14,7 +14,7 @@ fill it in per task.
 **Reviewer for this task:** none yet — set by the lead before dispatching review; a model/vendor independent from the implementer
 **Tester for this task:** none yet — set by the lead before dispatching test
 **Planner thread id:** none yet — when the planner has a separate thread, record/reuse it for corrections on this task
-**Dispatch session id:** none yet — set after the first dispatch call, reused for every later call on this task
+**Dispatch session ids:** builder none yet · reviewer none yet · tester none yet — each role's first dispatch on this task starts its own session; only that role's retry reuses it
 **Wide-auto-approve mode:** off — only meaningful if the implementer's tool has one (see lessons-learned.md entry 1). On means it's used for this task's implement call, per the user's answer at spec approval. Off is the default; never turn this on without asking.
 **Review loop count:** 0 / 2
 **Test-fix loops:** 0 / 2
@@ -155,11 +155,13 @@ reads between steps instead of the whole file.>
   re-derive "what's the state of this task" by reading the whole file —
   one line, updated by whoever finishes a step, is the entire between-steps
   read.
-- **Dispatch session id** exists only because some tools support continuing
-  a session across multiple dispatches within one task (see
-  `flow-example.md`'s "Dispatch-tool session policy") — if the tool(s) in
-  use don't have that concept, drop this field rather than leaving a
-  perpetually-empty one.
+- **Dispatch session ids** exist only because some tools support continuing
+  a session across dispatches within one task (see `flow-example.md`'s
+  "Dispatch-tool session policy"). One id per role, never one shared id: a
+  shared session handed the reviewer the builder's reasoning and, on a tool
+  that pins a session's tool set, left the tester unable to write. If the
+  tool(s) in use don't have that concept, drop the field rather than leaving
+  it perpetually empty.
 - **Wide-auto-approve mode** exists specifically so this decision is
   recorded per-task, not inferred from a dispatch command someone has to go
   find — see `lessons-learned.md` entry 1 for why this can never default

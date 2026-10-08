@@ -15,9 +15,12 @@ with a one-line why; the lead asks the human only when genuinely torn>
 **Class decided by:** agent | human
 **Reviewer for this task:** none yet — set by the lead before dispatching review; a model/vendor independent from the implementer (see `.claude/commands/feature.md` step 3's rotation policy)
 **Tester for this task:** none yet — set by the lead before dispatching test
-**OpenCode session id:** none yet — set after the first `oc.sh` call, reused for every later call on this task
+**OpenCode builder session id:** none yet — set from the builder's first `oc.sh` call; reused only by a builder retry on this task. Never another role's session.
+**OpenCode reviewer session id:** none yet — set from the OpenCode reviewer's first call (a fresh session, never the builder's); reused only by its later passes on this task. Stays `none` when the reviewer is a Claude or Codex subagent.
+**OpenCode tester session id:** none yet — set from the OpenCode tester's first call (a fresh session, never the builder's); reused only by a tester retry on this task. Stays `none` when the tester is a Codex subagent.
 **Codex planner thread id:** none yet — Codex lead sets this after the first planner dispatch; reuse for corrections on this task, new thread for a new task
-**OpenCode auto mode:** off — only meaningful when Implementer is `builder`. On means `oc.sh --auto` is used for this task's implement call, per the user's answer at spec approval. Off is the default; never turn this on without asking.
+**Codex tester thread id:** none yet — set after the first dispatch when the tester is a Codex subagent (`tester_model: codex/…`); reused only for tester retries on this task
+**OpenCode auto mode:** off — only meaningful when Implementer is `builder`. On means every builder `oc.sh` call for this task passes `--auto`. Set at spec approval: `on` without asking when `.pipeline/.toolkit-version` says `builder_auto: on` (a standing user decision), otherwise the user's answer to the spec-time question. Never turned on mid-task.
 **Review loop count:** 0 / 2
 **Test-fix loops:** 0 / 2
 **Spec bounces:** 0 / 1

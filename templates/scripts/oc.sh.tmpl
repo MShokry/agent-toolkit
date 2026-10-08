@@ -31,10 +31,12 @@
 # --session <id> continues an existing OpenCode session instead of starting a
 # new one — pass the session id captured from an earlier call's "session=..."
 # line (also visible in --raw-out as each event's sessionID). The pipeline's
-# session scope is one feature/task, not one call: implement, review, and test
-# for the same T-<id> continue the same session; a new one starts only for the
-# next task. Every call (with or without --session) prints the session id it
-# used to stderr on completion so the caller can record it.
+# session scope is one task *per role*, not one call: a role's first call for a
+# task omits --session and starts one, and only that same role's retry passes
+# the id back. Builder, reviewer and tester never share a session — on v2 a
+# session pins the opening agent's tool set (see .claude/commands/feature.md).
+# Every call (with or without --session) prints the session id it used to
+# stderr on completion so the caller can record it.
 #
 # --text extracts just the agent's final prose from the JSON event stream. The
 # raw stream is still what crosses the wire (and is kept with --raw-out), but it
@@ -583,7 +585,8 @@ set -e
 [ -n "$RAW_OUT" ] && cp "$RAW_TMP" "$RAW_OUT"
 
 # Report the session id actually used, whatever the outcome, so the caller can
-# persist it and continue the same session on the next call for this task. The
+# persist it in this role's field and continue that session on the role's next
+# call for this task. The
 # watchdog resolves it even for a fresh run; fall back to the raw stream.
 USED_SESSION="$WATCH_SID"
 [ -n "$USED_SESSION" ] || USED_SESSION="$(grep -o '"sessionID":"[^"]*"' "$RAW_TMP" 2>/dev/null | head -1 | cut -d'"' -f4)"

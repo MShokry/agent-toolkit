@@ -314,8 +314,7 @@ written by `team.sh`). Do not start the lead with `--auto`.
 OpenCode starts a fresh lead chat by default; `--continue` might resume a worker
 instead. To resume a known lead explicitly, set `TEAM_OPENCODE_SESSION=ses_...`
 when launching `team.sh`. `--fresh` ignores it. This does not change the
-canonical worker-session policy or eliminate its documented shared-context
-tradeoff. Verify live agent discovery and denied actions before trusting
+canonical per-role worker-session policy. Verify live agent discovery and denied actions before trusting
 permission controls; the smoke suite does not make that guarantee.
 
 For an already-stamped project, a plain `bin/init.sh --target <project>` adds
@@ -469,11 +468,11 @@ exactly how to verify before loosening it (dispatch the agent, try to
 make it edit a source file, confirm it's refused). Do not trust "the
 reviewer can't touch source" without having run that check once against
 your actual OpenCode server.
-- **Session reuse (implement → review → test in one OpenCode session) is
-documented as a real tradeoff, not a free win.** It saves reload cost but
-feeds the reviewer the implementer's full read/edit trace, which can be
-larger than the diff it's meant to review. Measure it before assuming
-it's cheaper.
+- **One OpenCode session per role per task, not one per task.** Sharing one
+session across implement, review and test was the earlier policy; it fed
+the reviewer the implementer's full trace instead of the diff, and on
+opencode v2 it left the tester without file-edit tools (a session pins the
+opening agent's tool set). A retry still reuses its own role's session.
 - **Implementation/review/test role files are self-contained, one full copy
 per tool — not a
 canonical file with thin per-tool shims.** `senior-dev` (Claude) and

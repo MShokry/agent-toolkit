@@ -58,6 +58,21 @@ files="$(find "$TMP" -type f -not -name run1.log \
 [ "$wrote" = "$((files + stamp_written))" ] || fail "claimed $wrote writes but $((files + stamp_written)) files exist"
 ok "every reported write produced exactly one file ($files rendered + stamp)"
 
+grep -q '^builder_auto:  ask$' "$TMP/.pipeline/.toolkit-version" || fail "stamp lacks the default builder_auto: ask"
+for field in 'OpenCode builder session id' 'OpenCode reviewer session id' 'OpenCode tester session id' 'Codex tester thread id'; do
+  grep -q "^\*\*$field:\*\*" "$TMP/.pipeline/TEMPLATE.md" || fail "state template lacks the per-role field: $field"
+done
+! grep -q '^\*\*OpenCode session id:\*\*' "$TMP/.pipeline/TEMPLATE.md" || fail "state template still has the shared OpenCode session id field"
+AU="$(mktemp -d "${TMPDIR:-/tmp}/toolkit-auto.XXXXXX")"
+bash "$ROOT/bin/init.sh" --target "$AU" --project-name smoke --builder-auto on > "$AU/run.log" 2>&1 \
+  || fail "init.sh --builder-auto on failed"
+grep -q '^builder_auto:  on$' "$AU/.pipeline/.toolkit-version" || fail "--builder-auto on was not stamped"
+if bash "$ROOT/bin/init.sh" --target "$(mktemp -d "${TMPDIR:-/tmp}/toolkit-auto-bad.XXXXXX")" \
+  --project-name smoke --builder-auto yes > /dev/null 2>&1; then
+  fail "init.sh accepted an invalid --builder-auto value"
+fi
+ok "builder_auto is stamped (ask by default, on when given) and the state template has one session field per role"
+
 [ -x "$TMP/scripts/dashboard" ] || fail "project dashboard missing or not executable"
 cmp -s "$ROOT/integrations/herdr/dashboard.py" "$TMP/scripts/dashboard" \
   || fail "project dashboard differs from the shared standalone source"

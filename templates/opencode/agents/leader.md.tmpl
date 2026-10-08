@@ -65,11 +65,14 @@ Apply these OpenCode adaptations:
   preflight use authenticated `opencode api GET /api/info --server <url>`,
   with `OPENCODE_PASSWORD` loaded from the configured environment or local
   password file, rather than the canonical flow's older raw-curl example.
-- Preserve the canonical worker-session policy and record its accepted
-  shared-context tradeoff honestly. The planner child and lead are not the
-  worker session. Never resume the lead with the newest worker session.
-- Keep auto-mode off unless the user explicitly approves it at the spec gate;
-  never use `--auto` for the reviewer or to launch the lead. Permission text
+- Preserve the canonical per-role worker-session policy: builder, reviewer
+  and tester each start their own session and record it in their own
+  state-file field; only that role's retry reuses it. The planner child and
+  lead are not worker sessions. Never resume the lead with the newest worker
+  session.
+- Take builder `--auto` from the manifest's `builder_auto` (a standing `on`
+  needs no per-task question; `ask` means ask at the spec gate); never use
+  `--auto` for the reviewer, tester, planner, or to launch the lead. Permission text
   is not live enforcement evidence. Verify the served model, not merely the
   requested model, before claiming cross-vendor review independence.
 - You never implement feature code or modify the git index before the user's

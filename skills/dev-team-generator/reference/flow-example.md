@@ -153,11 +153,14 @@ stopped and say so.
 ### Dispatch-tool session policy
 
 If the dispatched tool supports continuing a session, scope a session to
-one task, not one call — **same task → same session, new task → new
-session, for all sub-agents alike**: implement, review, and test for the
-same task continue a single session instead of each starting cold. A fresh
-session per reviewer/tester would mean re-reading every file from scratch
-on every dispatch — that burns the context the reuse exists to save.
+one task **per role**, not one call — **same task and same role → same
+session, another role → its own session, new task → new sessions**. A
+builder retry continues the builder's session; the reviewer and tester each
+start fresh and reuse only their own on a later pass or rerun. One session
+shared by implement, review and test looked cheaper but broke in practice:
+a tool that pins a session's tool set to the agent that opened it left the
+tester unable to write its results, and the reviewer inherited the
+builder's reasoning instead of judging the diff.
 Record whatever session identifier the tool's dispatch prints, and pass it
 on subsequent calls for the same task.
 

@@ -147,10 +147,13 @@ Record **who decided** (`agent` | `human`) next to it — and record, don't
 act: a class never changes session policy, permissions, or budgets
 mid-task.
 
-**Session scope is one task, for all sub-agents alike:** same task → same
-session (implement, review, test continue it); new task → new session. A
-fresh session per reviewer/tester re-reads every file from scratch — that
-burns the context reuse exists to save.
+**Session scope is one task per role:** same task and same role → same
+session (a retry continues it); another role → its own session, recorded in
+its own state-file field; new task → new sessions. Sharing one session across
+implement, review and test broke on opencode v2 (a session pins the tool set
+of the agent that opened it, so a tester in the builder's session could not
+write its results) and fed the reviewer the builder's reasoning instead of
+just the diff.
 
 **A second review pass closes the first, it does not restart it:** every
 earlier finding marked fixed, withdrawn, disputed (answering the author's

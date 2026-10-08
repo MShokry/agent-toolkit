@@ -48,6 +48,10 @@ For a runtime still under `.agents/`, apply
 bootstrap. Update triage reads the legacy stamp; a plain run refuses to create
 new runtime state before migration is complete.
 
+A project whose state template still has a single *OpenCode session id* field
+needs [migration 04](../migrations/04-per-role-sessions.md): one session per
+role per task, and a `builder_auto` decision in the stamp.
+
 ```bash
 <toolkit-checkout>/bin/init.sh --update --target <project>  # inspect first
 <toolkit-checkout>/bin/init.sh --target <project>           # missing files only

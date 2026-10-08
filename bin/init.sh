@@ -15,7 +15,11 @@
 #     [--claude-model sonnet] [--test-dir e2e]
 #     [--codex-model <id|inherit>] [--codex-reasoning <effort|inherit>]
 #     [--codex-planner-model <id|inherit>] [--codex-planner-reasoning <effort|inherit>]
+#     [--builder-auto <ask|on>]
 #   Codex settings default to inherit: preserve local/parent choices.
+#   --builder-auto records the project's standing answer to OpenCode `--auto`
+#   for builder dispatches: `ask` (default) asks at every spec approval; `on`
+#   is a standing user decision, recorded per task without asking again.
 #
 #   The four model flags and --claude-model/--test-dir all default (see
 #   apply_defaults() below) to the lineup two independent real projects
@@ -76,6 +80,7 @@ REVIEWER_MODEL=""
 REVIEWER_FALLBACK_MODEL=""
 TESTER_MODEL=""
 TEST_DIR=""
+BUILDER_AUTO=""
 UPDATE=0
 SHOW_DIFF=0
 ONLY=""
@@ -102,6 +107,7 @@ while [ $# -gt 0 ]; do
     --reviewer-fallback-model)   [ $# -ge 2 ] || die "--reviewer-fallback-model needs a value"; REVIEWER_FALLBACK_MODEL="$2"; shift 2 ;;
     --tester-model)              [ $# -ge 2 ] || die "--tester-model needs a value"; TESTER_MODEL="$2"; shift 2 ;;
     --test-dir)                  [ $# -ge 2 ] || die "--test-dir needs a value"; TEST_DIR="$2"; shift 2 ;;
+    --builder-auto)              [ $# -ge 2 ] || die "--builder-auto needs a value"; BUILDER_AUTO="$2"; shift 2 ;;
     --update)                    UPDATE=1; shift ;;
     --diff)                      SHOW_DIFF=1; shift ;;
     --only)                      [ $# -ge 2 ] || die "--only needs a value"; ONLY="$2"; shift 2 ;;
@@ -217,6 +223,7 @@ write_stamp() {
     printf 'reviewer_fallback_model: %s\n' "$REVIEWER_FALLBACK_MODEL"
     printf 'tester_model:  %s\n' "$TESTER_MODEL"
     printf 'test_dir:      %s\n' "$TEST_DIR"
+    printf 'builder_auto:  %s\n' "$BUILDER_AUTO"
   } > "$STAMP.tmp"
   mv "$STAMP.tmp" "$STAMP"
 }
@@ -241,6 +248,8 @@ apply_defaults() {
     case "$value" in inherit|minimal|low|medium|high|xhigh|max|ultra) ;; *) die "invalid Codex reasoning effort: $value" ;; esac
   done
   [ -n "$TEST_DIR" ] || TEST_DIR="e2e"
+  [ -n "$BUILDER_AUTO" ] || BUILDER_AUTO="ask"
+  case "$BUILDER_AUTO" in ask|on) ;; *) die "invalid --builder-auto: $BUILDER_AUTO (ask or on)" ;; esac
   # Lineup two independent real projects converged on. Not a guarantee these
   # exact ids exist on your OpenCode server — run `opencode models` and pass
   # explicit flags when they don't.
@@ -266,7 +275,8 @@ load_flags_from_stamp() {
     "reviewer_model|REVIEWER_MODEL" \
     "reviewer_fallback_model|REVIEWER_FALLBACK_MODEL" \
     "tester_model|TESTER_MODEL" \
-    "test_dir|TEST_DIR"; do
+    "test_dir|TEST_DIR" \
+    "builder_auto|BUILDER_AUTO"; do
     key="${spec%%|*}"; var="${spec##*|}"
     if [ -z "${!var}" ]; then
       load_stamp_value "$key"

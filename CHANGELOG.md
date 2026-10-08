@@ -12,6 +12,24 @@ script, flag, or role rule; **PATCH** = prose and docs.
 
 ## Unreleased
 
+- `[contract]` OpenCode sessions are scoped **per role per task**, not per
+  task. The state file's single *OpenCode session id* becomes *OpenCode
+  builder session id*, *OpenCode reviewer session id* and *OpenCode tester
+  session id* (plus *Codex tester thread id*); each role's first call starts
+  its own session and only its own retry reuses it. Sharing one session broke
+  on opencode v2 (a session pins the opening agent's tool set, so the tester
+  could not write its results) and fed the reviewer the builder's reasoning.
+  SYSTEM.md, the invariant rule, the dev-team-generator references, `oc.sh`,
+  and the OpenCode lead follow. Migration: `migrations/04-per-role-sessions.md`.
+- `[process]` Every task gets its own branch (`T-<id>-<slug>`, keeping any
+  project prefix) before an implementer runs, so each merge gate proposes
+  exactly one PR.
+- `[process]` `init.sh --builder-auto ask|on` stamps `builder_auto` in
+  `.pipeline/.toolkit-version`. `on` is a standing user decision: builder
+  dispatches pass `--auto` without a per-task question; `ask` (default) keeps
+  the spec-time question. The flow now names the builder's `deny` list as the
+  only thing `--auto` does not approve.
+
 - `[process]` Codex-lead parity with the Claude lead. New
   `scripts/bg-dispatch.sh` (`start`/`wait`) is the detached-dispatch watch for
   any lead — a Codex lead has no Monitor, so it loops on `wait` instead of
