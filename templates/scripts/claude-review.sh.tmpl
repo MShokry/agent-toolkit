@@ -44,7 +44,7 @@ cd "$REPO_ROOT"
 die() { printf 'claude-review.sh: %s\n' "$*" >&2; exit 1; }
 usage() { awk '/^# BEGIN USAGE$/ {f=1; next} /^# END USAGE$/ {f=0} f' "$0" | sed 's/^# \{0,1\}//'; exit 1; }
 
-[ $# -ge 2 ] && [ $# -le 3 ] || usage
+if [ $# -lt 2 ] || [ $# -gt 3 ]; then usage; fi
 TASK="$1" PASS="$2" BRIEF="${3:-}"
 [[ "$TASK" =~ ^T-[0-9]+$ ]] || die "task id must look like T-035: $TASK"
 [[ "$PASS" =~ ^[0-9]+$ ]] || die "pass number must be a number: $PASS"

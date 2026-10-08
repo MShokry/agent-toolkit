@@ -346,6 +346,7 @@ if [ "$STATUS" -eq 1 ]; then
   ACTIVE="$(oc_api GET /api/session/active || true)"
   [ -n "$ACTIVE" ] || die "could not read active sessions from $SERVER — start a server with:
      scripts/team.sh   (or OPENCODE_PASSWORD=\"\$(cat .pipeline/.oc-password)\" opencode serve --port 4096)"
+  # shellcheck disable=SC2086 # intentional: one argv entry per session id
   ACTIVE="$ACTIVE" python3 -c '
 import json, os, sys
 raw = os.environ["ACTIVE"]
