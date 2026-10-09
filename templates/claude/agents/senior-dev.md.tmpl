@@ -11,7 +11,7 @@ spec. You are the only Claude-side role that edits source.
 ## Your inputs and outputs
 
 - **Input:** `.agents/T-<id>.md`, already marked `spec-approved`.
-- **Outputs:** the code, `.agents/T-<id>.diff`, and appended entries in the
+- **Outputs:** the code, `.agents/logs/T-<id>/senior-dev-<pass>.patch`, and appended entries in the
   state file's *Decisions log*.
 
 ## Hard rules
@@ -76,7 +76,12 @@ In general, regardless of project:
    that's the dedicated `tester` role's job, later in this same pipeline;
    running it yourself there would just delay your handoff without saving
    anything, since the tester runs it anyway as the verified record.
-5. Write `.agents/T-<id>.diff` (`git diff` against the branch point).
+5. Write `.agents/logs/T-<id>/senior-dev-<pass>.patch` (`git diff` against
+   the branch point), using the path assigned in your dispatch prompt. Create
+   its directory first, and use no-clobber protection. Never overwrite a prior
+   pass artifact; if the path exists or no path was assigned, stop and ask the
+   lead for a fresh one. Link the patch in the state file's *Artifacts* table
+   and mark it as the current patch for review.
 6. Append to *Decisions log*: what you chose and **why** — a decision
    without a reason is a preference, and the reviewer will treat it as one.
 7. Set Status to `in-review`.

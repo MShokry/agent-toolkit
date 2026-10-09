@@ -58,6 +58,23 @@ run — see `templates/claude/commands/feature.md.tmpl`'s "Token discipline"
 section for the reasoning in full, even though that file's own format is
 Claude-Code-specific.
 
+**Artifact layout:** keep `.agents/` root for task state (`T-<id>.md`), shared
+guidance/configuration, and toolkit metadata; installed skills stay in their
+own subdirectory. Create `.agents/prompts/T-<id>/` and `.agents/logs/T-<id>/`
+before dispatch. Save prompts as `<role>-<pass>.md`, exported transcripts as
+`<role>-<pass>.jsonl`, and patches as `<implementer>-<pass>.patch`. Every
+`oc.sh` call uses matching `--prompt-file` / `--raw-out` task/role/pass paths.
+Use a new unused positive pass number on every attempt, including retries;
+this is separate from loop-budget counters. Never overwrite a prior pass
+artifact; use no-clobber writes. Link all artifacts in the state file's
+*Artifacts* table using state-relative Markdown links, identifying the current
+patch for review. Findings and verdicts remain in the state file.
+Never move an artifact while its associated run is active. Explicit legacy
+migrations stage moves and link updates as one transaction, publish the state
+file atomically, and rollback on failure. The dashboard shows task state/status
+only, not individual prompt/transcript files; at most one optional Artifacts
+link per task.
+
 **Nobody may declare their own work done — and someone must declare it.**
 The acceptance criteria are the contract; a criterion nobody records an
 outcome for means the pipeline stopped one step short of saying what it

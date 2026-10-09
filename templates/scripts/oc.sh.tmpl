@@ -24,9 +24,12 @@
 #
 # Usage:
 #   scripts/oc.sh --agent reviewer --model hcnsec/DeepSeek-V4-Pro \
-#                 --prompt-file .agents/T-001.review-request.md
-#   scripts/oc.sh --agent tester --model hcnsec/auto --prompt "run the suite"
-#   echo "..." | scripts/oc.sh --agent reviewer --model hcnsec/glm-5.3
+#     --prompt-file .agents/prompts/T-001/reviewer-1.md \
+#     --raw-out .agents/logs/T-001/reviewer-1.jsonl --text
+# Create task prompt/log directories before dispatch. Every call requires these
+# matching task/role/pass paths; retries use a new pass. Never overwrite a prior
+# pass artifact. Inline/stdin prompts are not accepted. Link artifacts in the
+# task state file; never move an artifact while its associated run is active.
 #
 # --session <id> continues an existing OpenCode session instead of starting a
 # new one — pass the session id captured from an earlier call's "session=..."
@@ -170,7 +173,7 @@
 #
 # --- Pipeline telemetry -----------------------------------------------------
 #
-# Every call appends one JSON line to .agents/logs/pipeline.jsonl (the dir is
+# Every call appends one JSON line to .agents/logs/T-<id>/pipeline.jsonl (the dir is
 # created on first use, and init.sh adds it to a target repo's .gitignore —
 # it is machine state, like .agents/.oc-port). Fields: ts, agent, model,
 # session, wall_s, status, kill_reason, and — best-effort from
@@ -211,7 +214,7 @@ set -eu
 CEIL_SECS="${OC_TIMEOUT:-2400}"
 IDLE_SECS="${OC_IDLE_TIMEOUT:-600}"
 POLL_SECS="${OC_POLL:-20}"
-REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
 
 if [ -n "${OC_SERVER:-}" ]; then
   SERVER="$OC_SERVER"
@@ -253,7 +256,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --agent)       [ $# -ge 2 ] || die "--agent needs a value";       AGENT="$2";       shift 2 ;;
     --model)       [ $# -ge 2 ] || die "--model needs a value";       MODEL="$2";       shift 2 ;;
-    --prompt)      [ $# -ge 2 ] || die "--prompt needs a value";      PROMPT="$2";      shift 2 ;;
+    --prompt)      die "inline prompts are not supported; use --prompt-file .agents/prompts/T-<id>/<role>-<pass>.md" ;;
     --prompt-file) [ $# -ge 2 ] || die "--prompt-file needs a value"; PROMPT_FILE="$2"; shift 2 ;;
     --text)        TEXT_ONLY=1; shift ;;
     --raw-out)     [ $# -ge 2 ] || die "--raw-out needs a value";     RAW_OUT="$2";     shift 2 ;;
@@ -267,26 +270,29 @@ done
 [ -n "$AGENT" ] || die "--agent is required"
 [ -n "$MODEL" ] || die "--model is required"
 
-# Resolve a relative --raw-out against the caller's CWD now, before this
-# script cd's into $REPO_ROOT below (v2's `opencode run` dropped --dir; the
-# project directory is now whatever the process's CWD is when it runs).
-if [ -n "$RAW_OUT" ]; then
-  case "$RAW_OUT" in
-    /*) : ;;
-    *) RAW_OUT="$(pwd)/$RAW_OUT" ;;
-  esac
-fi
-
-# Prompt from --prompt, --prompt-file, or stdin, in that order.
-if [ -z "$PROMPT" ]; then
-  if [ -n "$PROMPT_FILE" ]; then
-    [ -f "$PROMPT_FILE" ] || die "prompt file not found: $PROMPT_FILE"
-    PROMPT="$(cat "$PROMPT_FILE")"
-  elif [ ! -t 0 ]; then
-    PROMPT="$(cat)"
-  fi
-fi
-[ -n "$PROMPT" ] || die "no prompt given (--prompt, --prompt-file, or stdin)"
+# Resolve paths against the caller's CWD before switching to the repo root.
+[ -n "$PROMPT_FILE" ] || die "--prompt-file is required"
+[ -n "$RAW_OUT" ] || die "--raw-out is required"
+[ -f "$PROMPT_FILE" ] || die "prompt file not found: $PROMPT_FILE"
+PROMPT_FILE="$(cd "$(dirname "$PROMPT_FILE")" && pwd -P)/$(basename "$PROMPT_FILE")"
+case "$PROMPT_FILE" in
+  "$REPO_ROOT/.agents/prompts/"*) ARTIFACT="${PROMPT_FILE#"$REPO_ROOT/.agents/prompts/"}" ;;
+  *) die "prompt must be under .agents/prompts/T-<id>/" ;;
+esac
+TASK_ID="${ARTIFACT%%/*}"
+PASS_FILE="${ARTIFACT#*/}"
+[[ "$TASK_ID" =~ ^T-[[:alnum:]_-]+$ ]] || die "invalid artifact task id: $TASK_ID"
+[[ "$AGENT" =~ ^[[:alnum:]_-]+$ ]] || die "invalid agent name: $AGENT"
+[[ "$PASS_FILE" =~ ^${AGENT}-[1-9][0-9]*\.md$ ]] \
+  || die "prompt must be named $AGENT-<pass>.md (positive pass number)"
+EXPECTED_RAW="$REPO_ROOT/.agents/logs/$TASK_ID/${PASS_FILE%.md}.jsonl"
+mkdir -p "$REPO_ROOT/.agents/logs/$TASK_ID"
+[ -d "$(dirname "$RAW_OUT")" ] || die "transcript directory does not exist"
+RAW_OUT="$(cd "$(dirname "$RAW_OUT")" && pwd -P)/$(basename "$RAW_OUT")"
+[ "$RAW_OUT" = "$EXPECTED_RAW" ] || die "transcript must match prompt: $EXPECTED_RAW"
+[ ! -e "$RAW_OUT" ] && [ ! -L "$RAW_OUT" ] || die "artifact already exists: $RAW_OUT; use a new pass"
+PROMPT="$(cat "$PROMPT_FILE")"
+[ -n "$PROMPT" ] || die "prompt file is empty"
 
 # GNU timeout is `timeout` on Linux and via coreutils on macOS, `gtimeout` when
 # coreutils is installed unprefixed-off. Resolve whichever exists.
@@ -315,6 +321,13 @@ printf '%s\n' "oc.sh: agent=$AGENT model=$MODEL ceiling=${CEIL_SECS}s idle=${IDL
 # its own CWD. RAW_OUT was already resolved to an absolute path above, so
 # this is safe to do now.
 cd "$REPO_ROOT"
+
+# Reserve the transcript atomically before dispatch. A second caller cannot
+# truncate this pass, and writing through the held descriptor avoids a later
+# path replacement causing us to overwrite some other artifact.
+set -C
+exec 3> "$RAW_OUT" || die "cannot reserve artifact: $RAW_OUT; use a new pass"
+set +C
 
 RAW_TMP="$(mktemp "${TMPDIR:-/tmp}/oc-raw.XXXXXX")"
 trap 'rm -f "$RAW_TMP"' EXIT
@@ -468,7 +481,8 @@ wait "$OC_PID"
 STATUS=$?
 set -e
 
-[ -n "$RAW_OUT" ] && cp "$RAW_TMP" "$RAW_OUT"
+cat "$RAW_TMP" >&3
+exec 3>&-
 
 # Report the session id actually used, whatever the outcome, so the caller can
 # persist it and continue the same session on the next call for this task. The
@@ -479,7 +493,7 @@ USED_SESSION="$WATCH_SID"
 
 # --- pipeline telemetry (best-effort; never fails the run) ----------------
 {
-  TELEMETRY_DIR="$REPO_ROOT/.agents/logs"
+  TELEMETRY_DIR="$REPO_ROOT/.agents/logs/$TASK_ID"
   if mkdir -p "$TELEMETRY_DIR" 2>/dev/null; then
     "$TIMEOUT_BIN" 10 opencode api GET "/api/session/${USED_SESSION:-none}" --server "$SERVER" 2>/dev/null | python3 -c '
 import json, sys, datetime

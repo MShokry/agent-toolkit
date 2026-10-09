@@ -111,6 +111,20 @@ rule "check the spec with a script before approval" \
   "$FEATURE" "$SYSTEM" "$FLOW" "$PLANNER"
 
 # --- Codex lead adapter -----------------------------------------------------
+rule "task-scoped prompt and log directories" \
+  '\.agents/prompts/T-<id>.*\.agents/logs/T-<id>' \
+  "$FEATURE" "$SYSTEM" "$FLOW" "$OC_LEADER"
+rule "prior pass artifacts survive retries" \
+  'never overwrite a prior( >)? pass artifact' \
+  "$FEATURE" "$SYSTEM" "$FLOW" "$STATE" "$STATE_EX" "$BUILDER" "$SENIOR" "$LESSONS" "$OC_LEADER"
+rule "active artifacts cannot move" \
+  'never move an artifact while its associated.*run is active' \
+  "$FEATURE" "$SYSTEM" "$FLOW" "$STATE" "$STATE_EX"
+rule "state file links artifacts and names current patch" \
+  'current patch.*review' "$STATE" "$STATE_EX" "$REVIEWER"
+rule "dashboard shows task state only" \
+  'dashboard shows task state/status only' "$FEATURE" "$SYSTEM" "$FLOW"
+
 rule "Codex feature skill delegates to the canonical lead flow" \
   '\.claude/commands/feature\.md' \
   "$CODEX_FEATURE"

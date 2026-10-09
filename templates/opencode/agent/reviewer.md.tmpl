@@ -88,7 +88,9 @@ from the repository, record it as a finding at severity `info` and move on.
   implementer wrote **why** it made each call, and where it answers findings
   from your previous pass. Reviewing a diff without reading the author's
   stated reasoning is how a review turns into a rewrite request.
-- `.agents/T-<id>.diff` — what to review.
+- The current patch linked in the state file's *Artifacts* table, under
+  `.agents/logs/T-<id>/<implementer>-<pass>.patch` — what to review. Use the
+  explicit current-patch link, not a guessed filename or an older pass.
 - This project's own guidance file (`CLAUDE.md` / `AGENTS.md` / README) and
   any architecture/security docs it points to.
 

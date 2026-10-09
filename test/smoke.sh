@@ -520,4 +520,125 @@ out="$("$PF" T-02 2>&1)"
 grep -q 'already present, skipped' <<< "$out" || fail "promotion not idempotent"
 ok "promote-findings copies legit findings, refuses escaping paths, is idempotent"
 
+# --- 9. artifact dispatch contract (fake CLI; no agents or LLM calls) ---------
+MOCK_OC="$TMP/mock-oc"
+mkdir -p "$MOCK_OC" "$TMP/.agents/prompts/T-artifacts" "$TMP/.agents/logs/T-other"
+cat > "$MOCK_OC/timeout" <<'EOF'
+#!/usr/bin/env bash
+shift
+exec "$@"
+EOF
+cat > "$MOCK_OC/opencode" <<'EOF'
+#!/usr/bin/env bash
+case "$1" in
+  api) printf '{"data":[]}\n' ;;
+  run)
+    printf 'run\n' >> "$OC_TEST_CALLS"
+    cat >/dev/null
+    sleep 0.05
+    printf '{"type":"text","sessionID":"ses_mock","part":{"text":"receipt"}}\n'
+    exit "${MOCK_OC_STATUS:-0}"
+    ;;
+  *) exit 99 ;;
+esac
+EOF
+chmod +x "$MOCK_OC/timeout" "$MOCK_OC/opencode"
+mock_oc() {
+  (cd "$TMP" && PATH="$MOCK_OC:$PATH" OC_POLL=0.01 OC_TEST_CALLS="$TMP/mock-calls" \
+    scripts/oc.sh --agent builder --model fake/model --session ses_mock "$@")
+}
+for attempt in 1 2 3 4; do
+  printf 'Implement the test task.\n' > "$TMP/.agents/prompts/T-artifacts/builder-$attempt.md"
+done
+if mock_oc --prompt "inline" > "$TMP/oc-check.log" 2>&1; then
+  fail "oc.sh accepted an inline prompt"
+fi
+if mock_oc --prompt-file .agents/prompts/T-artifacts/builder-1.md > "$TMP/oc-check.log" 2>&1; then
+  fail "oc.sh accepted a missing transcript"
+fi
+if mock_oc --raw-out .agents/logs/T-artifacts/builder-1.jsonl < /dev/null > "$TMP/oc-check.log" 2>&1; then
+  fail "oc.sh accepted a missing prompt file"
+fi
+if mock_oc --prompt-file .agents/prompts/T-artifacts/builder-1.md \
+    --raw-out .agents/logs/T-other/builder-1.jsonl > "$TMP/oc-check.log" 2>&1; then
+  fail "oc.sh accepted a different transcript task"
+fi
+if mock_oc --prompt-file .agents/prompts/T-artifacts/builder-1.md \
+    --raw-out .agents/logs/T-artifacts/builder-2.jsonl > "$TMP/oc-check.log" 2>&1; then
+  fail "oc.sh accepted a mismatched pass"
+fi
+printf 'wrong role\n' > "$TMP/.agents/prompts/T-artifacts/reviewer-1.md"
+if mock_oc --prompt-file .agents/prompts/T-artifacts/reviewer-1.md \
+    --raw-out .agents/logs/T-artifacts/reviewer-1.jsonl > "$TMP/oc-check.log" 2>&1; then
+  fail "oc.sh accepted a mismatched role"
+fi
+[ ! -e "$TMP/mock-calls" ] || fail "invalid dispatch reached the fake worker"
+printf 'invalid pass\n' > "$TMP/.agents/prompts/T-artifacts/builder-0.md"
+if mock_oc --prompt-file .agents/prompts/T-artifacts/builder-0.md \
+    --raw-out .agents/logs/T-artifacts/builder-0.jsonl > "$TMP/oc-check.log" 2>&1; then
+  fail "oc.sh accepted pass zero"
+fi
+printf 'legacy prompt\n' > "$TMP/.agents/T-artifacts.request.md"
+if mock_oc --prompt-file .agents/T-artifacts.request.md \
+    --raw-out .agents/logs/T-artifacts/builder-1.jsonl > "$TMP/oc-check.log" 2>&1; then
+  fail "oc.sh accepted a legacy root-level prompt"
+fi
+ln -s "$TMP/missing-transcript" "$TMP/.agents/logs/T-artifacts/builder-1.jsonl"
+if mock_oc --prompt-file .agents/prompts/T-artifacts/builder-1.md \
+    --raw-out .agents/logs/T-artifacts/builder-1.jsonl > "$TMP/oc-check.log" 2>&1; then
+  fail "oc.sh followed a dangling transcript symlink"
+fi
+[ ! -e "$TMP/missing-transcript" ] || fail "transcript symlink target was created"
+rm "$TMP/.agents/logs/T-artifacts/builder-1.jsonl"
+ok "oc.sh rejects missing/inline prompts and mismatched artifact task/role/pass before dispatch"
+
+mock_oc --prompt-file .agents/prompts/T-artifacts/builder-1.md \
+  --raw-out .agents/logs/T-artifacts/builder-1.jsonl > "$TMP/oc-check.log" 2>&1 \
+  || { cat "$TMP/oc-check.log"; fail "valid artifact dispatch failed"; }
+grep -q 'receipt' "$TMP/.agents/logs/T-artifacts/builder-1.jsonl" || fail "transcript not saved"
+[ -s "$TMP/.agents/logs/T-artifacts/pipeline.jsonl" ] || fail "task telemetry not saved"
+[ ! -e "$TMP/.agents/logs/pipeline.jsonl" ] || fail "telemetry was saved outside its task"
+cp "$TMP/.agents/logs/T-artifacts/builder-1.jsonl" "$TMP/transcript-before"
+if mock_oc --prompt-file .agents/prompts/T-artifacts/builder-1.md \
+    --raw-out .agents/logs/T-artifacts/builder-1.jsonl > "$TMP/oc-check.log" 2>&1; then
+  fail "oc.sh overwrote a previous pass"
+fi
+cmp -s "$TMP/transcript-before" "$TMP/.agents/logs/T-artifacts/builder-1.jsonl" \
+  || fail "previous transcript changed"
+[ "$(wc -l < "$TMP/mock-calls" | tr -d ' ')" = 1 ] || fail "duplicate dispatch reached worker"
+ok "oc.sh saves task transcript and refuses duplicate passes without changing evidence"
+
+# Absolute paths work even when the caller is in a nested project directory.
+(cd "$TMP/docs" && PATH="$MOCK_OC:$PATH" OC_POLL=0.01 OC_TEST_CALLS="$TMP/mock-calls" \
+  "$TMP/scripts/oc.sh" --agent builder --model fake/model --session ses_mock \
+  --prompt-file "$TMP/.agents/prompts/T-artifacts/builder-2.md" \
+  --raw-out "$TMP/.agents/logs/T-artifacts/builder-2.jsonl") > "$TMP/oc-check.log" 2>&1 \
+  || fail "nested caller with absolute artifact paths failed"
+if MOCK_OC_STATUS=7 mock_oc --prompt-file .agents/prompts/T-artifacts/builder-3.md \
+    --raw-out .agents/logs/T-artifacts/builder-3.jsonl > "$TMP/oc-check.log" 2>&1; then
+  fail "oc.sh lost the worker failure status"
+else
+  [ "$?" -eq 7 ] || fail "oc.sh changed the worker failure status"
+fi
+grep -q 'receipt' "$TMP/.agents/logs/T-artifacts/builder-3.jsonl" || fail "failed-run transcript lost"
+ok "new passes preserve earlier artifacts, work from nested cwd, and retain failed-run evidence"
+
+# Two callers race for one pass: exactly one may reserve and launch it.
+for caller in 1 2; do
+  (
+    if mock_oc --prompt-file .agents/prompts/T-artifacts/builder-4.md \
+        --raw-out .agents/logs/T-artifacts/builder-4.jsonl > "$TMP/race-$caller.log" 2>&1; then
+      printf '0\n' > "$TMP/race-$caller.status"
+    else
+      printf '%s\n' "$?" > "$TMP/race-$caller.status"
+    fi
+  ) &
+done
+wait
+successes="$(grep -l '^0$' "$TMP/race-1.status" "$TMP/race-2.status" | wc -l | tr -d ' ')"
+[ "$successes" = 1 ] || fail "concurrent callers did not reserve one exclusive pass"
+[ "$(wc -l < "$TMP/mock-calls" | tr -d ' ')" = 4 ] || fail "concurrent duplicate reached worker"
+grep -q 'receipt' "$TMP/.agents/logs/T-artifacts/builder-4.jsonl" || fail "raced transcript lost"
+ok "oc.sh atomically reserves transcripts against concurrent duplicate dispatch"
+
 printf '\nsmoke: all checks passed (%s)\n' "$PASSED"

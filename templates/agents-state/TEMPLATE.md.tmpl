@@ -48,6 +48,20 @@ this line, or `scripts/verify-state.sh`, says something needs a look.>
 
 ---
 
+## Artifacts
+
+> The lead links every dispatch prompt and transcript; the implementer links
+> each patch and identifies the current patch for review. Paths are relative
+> to this state file: `prompts/T-<id>/<role>-<pass>.md` and
+> `logs/T-<id>/<role>-<pass>.jsonl` / `<implementer>-<pass>.patch`.
+> Use positive, unused pass numbers, including retries. Never overwrite a prior
+> pass artifact. Never move an artifact while its associated run is active;
+> update links atomically with any explicit, idle-only legacy migration.
+> Findings and verdicts stay in this state file, not in separate review files.
+
+| Role / attempt | Prompt | Transcript | Patch / current for review? |
+| --- | --- | --- | --- |
+
 ## Goal
 
 <One paragraph. What the user actually wants, in their terms. Not a

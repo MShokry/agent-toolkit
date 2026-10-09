@@ -44,6 +44,27 @@ exceeded budget as an escalation, never one more lap.
    path or hang.
 3. Confirm the working tree is clean enough to produce a meaningful diff.
 
+## Artifact layout (every dispatch)
+
+Keep `.agents/` root for task state (`T-<id>.md`), shared guidance/configuration,
+and toolkit metadata; installed skills retain their own subdirectory. Create
+`.agents/prompts/T-<id>/` and `.agents/logs/T-<id>/` before dispatch. Save prompts
+as `<role>-<pass>.md`, exported transcripts as `<role>-<pass>.jsonl`, and patches
+as `<implementer>-<pass>.patch`. For an `oc.sh` adapter, every call uses matching
+`--prompt-file` and `--raw-out` paths; adapt this behavior for other tools.
+Choose a new unused positive pass number on every attempt, including retries,
+separate from review/test-fix budget counters. Never overwrite a prior pass
+artifact; use no-clobber writes. Link every artifact in the state file's
+*Artifacts* table with state-relative Markdown links and mark the current patch
+for review. Include its assigned path in the implementer's prompt. Findings and
+verdicts stay in the state file; do not fabricate transcripts a tool cannot export.
+
+Never move an artifact while its associated run is active. Explicit legacy
+migrations stage moves and updated links as one transaction, publish the state
+file atomically, and rollback on failure. The dashboard shows task state/status
+only, not individual prompt/transcript files; at most one optional Artifacts
+link per task.
+
 ## Token/context discipline
 
 This exists to keep the lead's own context small on a long-running task —

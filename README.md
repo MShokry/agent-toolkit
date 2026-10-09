@@ -39,6 +39,11 @@ It discovers the project from your current directory (including nested folders),
 shows live pipeline boxes/task cards, and refreshes every two seconds. No Herdr,
 agent CLI, server, or model calls required. Python 3.8+ on macOS/Linux is enough.
 Use arrows or `j/k` to scroll, `b` for blocked tasks, and `q` to close.
+Task cards show the latest recorded review verdict and test result, owner,
+acceptance progress, and loop budgets. Blocked/unknown tasks appear first;
+completed tasks last. Status colors distinguish blockers (red), attention
+(yellow), planning (blue), building (cyan), review/test (magenta), and done
+(green). Labels remain readable without color; no new controls or model calls.
 
 For another project or a plain-text snapshot:
 
@@ -74,7 +79,7 @@ flowchart TD
     Approve -- no or open questions --> Req
     Approve -- yes --> Impl[Implementer<br/>builder or senior-dev]
     Impl -- spec unbuildable, max 1 bounce --> Planner
-    Impl -->|code, T-id.diff, Decisions log| Review[Reviewer]
+    Impl -->|code, per-pass patch, Decisions log| Review[Reviewer]
     Review -- CHANGES_REQUESTED, max 2 loops --> Impl
     Review -- PASS --> Test[Tester]
     Test -- failures, max 2 loops --> Impl
@@ -87,6 +92,36 @@ flowchart TD
 
 Every arrow into or out of a role is really a write to, or a read from,
 `.agents/T-<id>.md` — see below.
+
+### Task files stay visible; artifacts stay grouped
+
+```text
+.agents/
+├── T-023.md                     # task state, decisions, findings, results
+├── TEAM.md / TEMPLATE.md        # shared guidance (plus toolkit metadata/skills)
+├── prompts/T-023/
+│   ├── builder-1.md
+│   ├── reviewer-1.md
+│   └── tester-1.md
+└── logs/T-023/
+    ├── builder-1.jsonl
+    ├── builder-1.patch
+    ├── reviewer-1.jsonl
+    ├── tester-1.jsonl
+    └── pipeline.jsonl           # append-only task telemetry
+```
+
+Every `oc.sh` dispatch requires matching `--prompt-file` and `--raw-out`
+task/role/pass paths. Create directories and write the prompt before dispatch;
+use a new positive pass number for every attempt, including retries. Prior
+prompts, transcripts, and patches are never overwritten. State files link to
+them in an **Artifacts** table and identify the current patch for review;
+review findings and test results remain in the state file itself.
+
+The dashboard lists task state/status only, not individual artifacts. Existing
+files are not moved automatically, and active-run artifacts must never move.
+See [migration 02](migrations/02-artifact-layout.md) before upgrading a project
+with root-level prompts/logs or old `oc.sh` callers.
 
 ### Context stays small, by construction
 
@@ -118,7 +153,7 @@ and test log it dispatched.
 | -------------------------------------- | ---------------------- | ------------------------------------------- | ------------------------------------------------------- |
 | Lead                                   | state file             | the acceptance-criteria ledger, Status      | the only role that records whether a criterion was met  |
 | Planner                                | whole repo             | `.agents/T-<id>.md` only                    | never touches source; owns criteria *text*, not outcome |
-| Implementer (`senior-dev` / `builder`) | whole repo             | source + `.agents/T-<id>.diff` + state file | the only roles that edit source                         |
+| Implementer (`senior-dev` / `builder`) | whole repo             | source + `.agents/logs/T-<id>/<implementer>-<pass>.patch` + state file | the only roles that edit source                         |
 | Reviewer                               | whole repo (read-only) | state file only, or nothing — see below     | blanket `edit`/`write: deny` by default in this toolkit |
 | Tester                                 | whole repo (read-only) | `<test-dir>/**` + state file only           | never fixes, only reports                               |
 

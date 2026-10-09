@@ -139,6 +139,11 @@ Herdr**, with stage boxes, bordered task cards, and acceptance bars—not just
 command output. It refreshes every two seconds even while the lead is idle or
 closed. Use **Up/Down** or **j/k** to scroll, **Page Up/Down** for a page,
 **b** to filter blocked tasks, **r** to refresh, and **q** to close.
+Cards show owner, latest recorded review verdict/test result, acceptance ticks,
+blocker timing, and loop budgets. Blocked/unknown tasks come first, done tasks
+last. Red means blocked/unknown; yellow attention; blue planning; cyan building;
+magenta review/testing; green done. Budget limits are highlighted, not enforced
+by this read-only view. Prompts/transcripts are not listed as tasks.
 
 Herdr's plugin v1 does **not** support embedded HTML or native non-terminal
 plugin panels. This is a visual terminal interface, not a browser/webview.

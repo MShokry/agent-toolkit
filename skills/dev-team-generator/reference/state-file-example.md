@@ -40,6 +40,20 @@ reads between steps instead of the whole file.>
 
 ---
 
+## Artifacts
+
+> Link every dispatch prompt, transcript (when exported), and patch here.
+> Paths are relative to this state file: `prompts/T-<id>/<role>-<pass>.md`,
+> `logs/T-<id>/<role>-<pass>.jsonl`, and `<implementer>-<pass>.patch` in
+> that logs directory. Mark the current patch explicitly for review. Use
+> unused positive pass numbers, including retries. Never overwrite a prior
+> pass artifact. Never move an artifact while its associated run is active;
+> update links atomically with any explicit, idle-only legacy migration.
+> Findings and verdicts remain in the state file.
+
+| Role / attempt | Prompt | Transcript | Patch / current for review? |
+| --- | --- | --- | --- |
+
 ## Goal
 
 <One paragraph. What the user actually wants, in their terms. Not a solution.>

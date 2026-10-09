@@ -72,25 +72,38 @@ Safety rails:
 ## How to test / verify
 
 Prereq: `opencode serve` up (`scripts/team.sh`, or `opencode serve --port 4096`).
+Create `.agents/prompts/T-watchdog/` and `.agents/logs/T-watchdog/` first.
+Write each request below into its named prompt file without overwriting an
+existing attempt. Every repeat needs a new unused pass number and matching
+transcript path; link them from the test task's state file.
 
 1. **Fast turn still works**
    ```
-   printf 'reply with exactly: pong' | scripts/oc.sh --agent tester --model hcnsec/auto --text
+   scripts/oc.sh --agent tester --model hcnsec/auto --text \
+     --prompt-file .agents/prompts/T-watchdog/tester-1.md \
+     --raw-out .agents/logs/T-watchdog/tester-1.jsonl
    ```
+   Prompt: `reply with exactly: pong`.
    → prints `pong`, exit 0, one `oc.sh: session=ses_…` line.
 
 2. **A long active run is NOT killed** (the regression this fixes)
    ```
-   time ( printf 'Read every file under scripts/ and CLAUDE.md one at a time; for each write a detailed 6-bullet analysis. Be exhaustive, do not rush.' \
-     | scripts/oc.sh --agent reviewer --model opencode-go/kimi-k2.7-code --text --raw-out /tmp/t.jsonl )
+   time scripts/oc.sh --agent reviewer --model opencode-go/kimi-k2.7-code --text \
+     --prompt-file .agents/prompts/T-watchdog/reviewer-1.md \
+     --raw-out .agents/logs/T-watchdog/reviewer-1.jsonl
    ```
+   Prompt: read every file under scripts/ and project guidance one at a time,
+   writing a detailed six-bullet analysis for each; be exhaustive.
    → runs for minutes, exit 0, real output. **Not** `ABORTED — … did not change for 600s`. (resto-agent verified a 2-minute run here.)
 
 3. **The watchdog still catches a wedge** — force a tiny idle window against a run that stalls
    ```
    OC_IDLE_TIMEOUT=30 OC_POLL=10 scripts/oc.sh --agent builder --model opencode-go/glm-5.3-flash \
-     --prompt 'Run this and report its output: <a command that hangs, or point at a black-holed endpoint>'
+     --prompt-file .agents/prompts/T-watchdog/builder-1.md \
+     --raw-out .agents/logs/T-watchdog/builder-1.jsonl
    ```
+   Prompt: run and report a safe, deliberately stalled command in a disposable
+   environment. Never point this test at production.
    → exit 124 within ~40 s; stderr `oc.sh: ABORTED — the session's last message did not change for 30s …` + `Aborted server-side session ses_…`. Then confirm the turn actually stopped:
    ```
    curl -s $OC_SERVER/session/<id>/message?limit=1 | python3 -c 'import json,sys;print(json.load(sys.stdin)[-1]["info"]["time"])'
@@ -99,8 +112,11 @@ Prereq: `opencode serve` up (`scripts/team.sh`, or `opencode serve --port 4096`)
 
 4. **The ceiling still bounds a runaway**
    ```
-   OC_TIMEOUT=60 scripts/oc.sh --agent reviewer --model opencode-go/kimi-k2.7-code --prompt '<a task that needs >60s>'
+   OC_TIMEOUT=60 scripts/oc.sh --agent reviewer --model opencode-go/kimi-k2.7-code \
+     --prompt-file .agents/prompts/T-watchdog/reviewer-2.md \
+     --raw-out .agents/logs/T-watchdog/reviewer-2.jsonl
    ```
+   Prompt: a safe read-only analysis task expected to take more than 60 seconds.
    → exit 124, stderr `ABORTED — the run hit the absolute 60s ceiling`.
 
 5. **Portability**: `bash -n scripts/oc.sh` clean. Needs `python3`, `curl`,

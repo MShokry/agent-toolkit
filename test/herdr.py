@@ -339,6 +339,21 @@ class AdapterTests(unittest.TestCase):
         self.assertIn("[BUILD]", plugin.stage_graph("changes-requested"))
         self.assertIn("[APPROVAL]", plugin.stage_graph("spec-approved"))
 
+    def test_dashboard_lists_task_state_only_not_artifacts(self):
+        (self.project / ".agents/T-023.md").write_text("**Status:** testing\n")
+        for relative in ("prompts/T-023/reviewer-1.md", "logs/T-023/T-fake.md",
+                         "T-023.review-request.md", "TEAM.md", "TEMPLATE.md"):
+            artifact = self.project / ".agents" / relative
+            artifact.parent.mkdir(parents=True, exist_ok=True)
+            artifact.write_text("**Status:** done\n")
+        output = plugin.board_text(self.project)
+        self.assertIn("tasks: 1 | active: 1", output)
+        self.assertIn("T-023", output)
+        self.assertNotIn("reviewer-1", output)
+        self.assertNotIn("review-request", output)
+        self.assertNotIn("T-fake", output)
+        self.assertEqual(self.fake.calls, [])
+
     def test_dashboard_updates_from_files_and_wraps_for_narrow_panes(self):
         task = self.project / ".agents/T-live.md"
         task.write_text("**Status:** in-review\n")
@@ -373,6 +388,42 @@ class AdapterTests(unittest.TestCase):
         self.assertNotIn("T-finished", output)
         self.assertTrue(all(len(text) <= 24 for text, _ in rows))
         self.assertTrue(any(tone == "warning" for _, tone in rows))
+        self.assertEqual(self.fake.calls, [])
+
+    def test_visual_cards_show_recorded_evidence_and_budget_attention(self):
+        (self.project / ".agents/T-evidence.md").write_text(
+            "# T-evidence — Useful title\n**Status:** testing\n"
+            "**Review loop count:** 2 / 2\n**Test-fix loops:** 0 / 2\n**Spec bounces:** 0 / 1\n"
+            "## Review verdicts\n### Pass 1 — date — verdict: CHANGES_REQUESTED\n"
+            "### Pass 2 — date — verdict: PASS\n"
+            "## Test results\n### Run 1 — date\n- Result: 4 passed\n"
+            "### Run 2 — date\n- Result: 5 passed, 1 failed\n")
+        rows = plugin.visual_lines(self.project, 100)
+        output = "\n".join(text for text, _ in rows)
+        self.assertIn("Review: PASS (pass 2)", output)
+        self.assertIn("Latest test result: 5 passed, 1 failed", output)
+        self.assertNotIn("Latest test result: 4 passed", output)
+        self.assertTrue(any("Loops:" in text and tone == "attention" for text, tone in rows))
+        self.assertTrue(any("T-evidence / testing" in text and tone == "review" for text, tone in rows))
+        self.assertTrue(any("Review: PASS" in text and tone == "success" for text, tone in rows))
+        self.assertEqual(self.fake.calls, [])
+
+    def test_visual_cards_prioritize_attention_and_do_not_invent_evidence(self):
+        for name, status in (("a-done", "done"), ("b-active", "in-progress"),
+                             ("z-blocked", "blocked:question")):
+            (self.project / (".agents/T-" + name + ".md")).write_text(
+                "**Status:** " + status + "\n**Blocked since:** 2026-10-09 — needs scope\n"
+                "## Review verdicts\n### Pass 1 — <date> — verdict: <PASS | CHANGES_REQUESTED>\n"
+                "## Test results\n### Run 1 — <date>\n- Result:\n- Command: ignored\n")
+        rows = plugin.visual_lines(self.project, 80)
+        output = "\n".join(text for text, _ in rows)
+        self.assertLess(output.index("T-z-blocked /"), output.index("T-b-active /"))
+        self.assertLess(output.index("T-b-active /"), output.index("T-a-done /"))
+        self.assertIn("Review: not recorded", output)
+        self.assertIn("Latest test result: not recorded", output)
+        self.assertIn("Waiting since: 2026-10-09", output)
+        self.assertTrue(any("T-b-active /" in text and tone == "active" for text, tone in rows))
+        self.assertTrue(any("T-a-done /" in text and tone == "success" for text, tone in rows))
         self.assertEqual(self.fake.calls, [])
 
     def test_interactive_board_selects_visual_ui_without_model_calls(self):

@@ -31,9 +31,55 @@ def stage_graph(status):
     return " -> ".join("[" + stage + "]" if stage == active else stage for stage in STAGES)
 
 
+def status_tone(status):
+    if status.startswith("blocked:") or status not in STATUS_STAGE:
+        return "warning"
+    if status == "done":
+        return "success"
+    if status in ("spec-approved", "changes-requested"):
+        return "attention"
+    if status in ("in-review", "testing"):
+        return "review"
+    return "pending" if status == "draft" else "active"
+
+
+def section(text, name):
+    match = re.search(r"^## " + re.escape(name) + r"[ \t]*$([\s\S]*?)(?=^## |\Z)", text, re.MULTILINE)
+    return match.group(1) if match else ""
+
+
+def evidence_summary(text):
+    reviews = re.findall(r"^### Pass (\d+)\b[^\n]*?verdict:[ \t]*(PASS|CHANGES_REQUESTED)[ \t]*$",
+                         section(text, "Review verdicts"), re.MULTILINE)
+    review = max(reviews, key=lambda item: int(item[0])) if reviews else None
+    review_text = "{} (pass {})".format(review[1], review[0]) if review else "not recorded"
+    runs = re.split(r"^### Run \d+\b[^\n]*$", section(text, "Test results"), flags=re.MULTILINE)
+    results = re.findall(r"^-[ \t]*Result:[ \t]*([^\n]+)", runs[-1], re.MULTILINE) if len(runs) > 1 else []
+    test_text = clean(results[-1]).strip() if results else "not recorded"
+    if not test_text or test_text.startswith("<"):
+        test_text = "not recorded"
+    return review_text, test_text, review[1] if review else None
+
+
+def budget_tone(text):
+    values = [header(text, name) for name in ("Review loop count", "Test-fix loops", "Spec bounces")]
+    counts = []
+    for value in values:
+        match = re.fullmatch(r"(\d+)\s*/\s*(\d+)", value)
+        if match:
+            counts.append(tuple(map(int, match.groups())))
+    if any(used > cap for used, cap in counts):
+        return "warning"
+    return "attention" if any(used == cap for used, cap in counts) else "muted"
+
+
 def task_records(root):
     records, warnings = [], []
     for task in sorted((root / ".agents").glob("T-*.md")):
+        # Task records only, not legacy T-001.review-request.md artifacts.
+        # Prompts/logs in task subdirectories are deliberately never scanned.
+        if not re.fullmatch(r"T-[A-Za-z0-9_-]+\.md", task.name):
+            continue
         if root not in task.resolve().parents:
             warnings.append(clean(task.name) + " — external symlink skipped")
             continue
@@ -84,6 +130,7 @@ def board_text(root, width=None):
                        "? Unknown/unfilled status" if status not in STATUS_STAGE else "owner: " + header(text, "Owner right now")),
             "  AC [" + "#" * ticks + "." * (10 - ticks) + "] recorded ticks only",
             "  handoff: " + header(text, "Latest handoff"),
+            "  review: {} | latest test result: {}".format(*evidence_summary(text)[:2]),
             "  review " + header(text, "Review loop count") + "; test-fix " + header(text, "Test-fix loops") + "; spec " + header(text, "Spec bounces"), "",
         ])
     lines.extend(warnings)
@@ -106,9 +153,10 @@ def visual_lines(root, width, blocked_only=False):
     def card(title, body, tone="normal"):
         inner = width - 4
         rows.append(("+" + "-" * (width - 2) + "+", tone))
-        for text in [title, *body]:
+        for entry in [(title, tone), *body]:
+            text, row_tone = entry if isinstance(entry, tuple) else (entry, "normal")
             for piece in textwrap.wrap(clean(text), width=inner) or [""]:
-                rows.append(("| " + piece.ljust(inner) + " |", tone))
+                rows.append(("| " + piece.ljust(inner) + " |", row_tone))
         rows.extend([("+" + "-" * (width - 2) + "+", tone), ("", "normal")])
 
     line("AGENT TOOLKIT / VISUAL DASHBOARD", "heading")
@@ -118,8 +166,14 @@ def visual_lines(root, width, blocked_only=False):
     card("PROJECT SUMMARY", [
         "Tasks {}   Active {}   Blocked {}   Done {}   Unknown {}".format(
             len(records), len(records) - len(blocked) - done - unknown, len(blocked), done, unknown),
-        "Herdr done/idle is NOT acceptance. Ticks are recorded, not verified.",
+        ("Ready to build {}   Changes requested {}".format(
+            sum(r["status"] == "spec-approved" for r in records),
+            sum(r["status"] == "changes-requested" for r in records)), "attention"),
+        "ACs {}/{} ticked across all tasks (recorded evidence only)".format(
+            sum(r["met"] for r in records), sum(r["total"] for r in records)),
+        ("Herdr done/idle is NOT acceptance. Ticks are recorded, not verified.", "muted"),
     ], "heading")
+    line("COLOR KEY: red blocked/unknown | yellow attention | blue planning | cyan building | magenta review/test | green done", "muted")
     line("PIPELINE / recorded stage counts", "heading")
     per_row = max(1, (width + 4) // 16)
     for start in range(0, len(STAGES), per_row):
@@ -141,18 +195,27 @@ def visual_lines(root, width, blocked_only=False):
     visible = blocked if blocked_only else records
     if not visible:
         line("No blocked tasks." if blocked_only else "No task records yet. Ask the lead for a task/spec.", "muted")
-    for record in sorted(visible, key=lambda r: (not r["status"].startswith("blocked:"), r["task"].name)):
+    priority = {"changes-requested": 1, "spec-approved": 2, "in-review": 3,
+                "testing": 3, "in-progress": 4, "draft": 5, "done": 6}
+    for record in sorted(visible, key=lambda r: (priority.get(r["status"], 0), r["task"].name)):
         text, status = record["text"], record["status"]
         bar_width = min(24, width - 6)
         ticks = record["met"] * bar_width // record["total"] if record["total"] else 0
-        tone = ("warning" if status.startswith("blocked:") else "success" if status == "done"
-                else "muted" if status not in STATUS_STAGE else "normal")
+        tone = status_tone(status)
+        review, test_result, verdict = evidence_summary(text)
+        first_line = text.splitlines()[0] if text.splitlines() else ""
+        title = re.sub(r"^" + re.escape(record["task"].stem) + r"\s*[—–:-]\s*", "", first_line.lstrip("# "))
+        if not first_line.startswith("# "):
+            title = "Untitled task"
         card(clean(record["task"].stem) + " / " + status, [
-            text.splitlines()[0].lstrip("# ") if text.splitlines() else "",
-            stage_graph(status), "Owner: " + header(text, "Owner right now"),
+            title,
+            (stage_graph(status), tone), "Owner: " + header(text, "Owner right now"),
             "AC [" + "#" * ticks + "." * (bar_width - ticks) + "] {}/{} recorded".format(record["met"], record["total"]),
+            ("Review: " + review, "success" if verdict == "PASS" else "attention" if verdict else "muted"),
+            "Latest test result: " + test_result,
+            *([("Waiting since: " + header(text, "Blocked since"), "warning")] if status.startswith("blocked:") else []),
             "Handoff: " + header(text, "Latest handoff"),
-            "Loops: review " + header(text, "Review loop count") + " / test-fix " + header(text, "Test-fix loops") + " / spec " + header(text, "Spec bounces"),
+            ("Loops: review " + header(text, "Review loop count") + " / test-fix " + header(text, "Test-fix loops") + " / spec " + header(text, "Spec bounces"), budget_tone(text)),
         ], tone)
     for warning in warnings:
         line(warning, "warning")
@@ -179,7 +242,9 @@ def visual_board(root):
             except curses.error:
                 pass
             for index, (name, color) in enumerate((
-                    ("heading", curses.COLOR_CYAN), ("warning", curses.COLOR_YELLOW),
+                    ("heading", curses.COLOR_CYAN), ("warning", curses.COLOR_RED),
+                    ("attention", curses.COLOR_YELLOW), ("pending", curses.COLOR_BLUE),
+                    ("active", curses.COLOR_CYAN), ("review", curses.COLOR_MAGENTA),
                     ("success", curses.COLOR_GREEN), ("muted", curses.COLOR_WHITE)), 1):
                 if index < curses.COLOR_PAIRS:
                     curses.init_pair(index, color, background)
@@ -195,6 +260,8 @@ def visual_board(root):
             screen.erase()
             for y, (text, tone) in enumerate(rows[offset:offset + available]):
                 attr = colors.get(tone, 0) | (curses.A_BOLD if tone == "heading" else 0)
+                if tone == "muted":
+                    attr |= curses.A_DIM
                 try:
                     screen.addnstr(y, 0, text, max(0, width - 1), attr)
                 except curses.error:

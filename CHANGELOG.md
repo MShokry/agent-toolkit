@@ -10,6 +10,25 @@ update workflow. Version bumps mean: **MAJOR** = state-file contract /
 role authority / script interface changed; **MINOR** = new template,
 script, flag, or role rule; **PATCH** = prose and docs.
 
+## v0.10.1 — 2026-10-09
+
+- `[contract]` Task state remains at `.agents/T-<id>.md`; prompts and transcripts
+  now use `prompts/T-<id>/<role>-<pass>.md` and
+  `logs/T-<id>/<role>-<pass>.jsonl`, with numbered implementation patches and
+  an Artifacts table linking evidence/current patch. `oc.sh` requires matching
+  prompt/transcript paths, rejects inline/stdin prompts, and reserves transcripts
+  without clobbering earlier attempts. Retries allocate fresh pass numbers;
+  telemetry is append-only under each task's logs directory. Existing projects
+  reconcile callers/role instructions together; see migration 02. No automatic
+  artifact moves, especially during active runs.
+- `[process]` Dashboard discovery excludes legacy dotted artifact filenames as
+  well as nested prompts/logs, displaying task records only. Added mocked
+  dispatch safety tests and cross-copy artifact-policy invariants.
+- `[process]` Dashboard task cards now show latest recorded review/test evidence,
+  blocker timing, and highlighted loop budgets. Attention-first ordering,
+  project acceptance totals, and distinct status colors improve scanning
+  without adding controls, artifact clutter, dependencies, or model calls.
+
 ## v0.10.0 — 2026-10-06
 
 - `[safety]` Corrected earlier permission-verification conclusions in worker

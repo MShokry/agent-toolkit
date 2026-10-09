@@ -7,6 +7,20 @@ When you port one of these into a generated file, port the *mechanism and
 the reason*, not any tool-specific flag name that happens to appear here as
 the worked example.
 
+## Artifact evidence must survive retries without cluttering task discovery
+
+Mixing prompts/transcripts with task records makes the task list noisy and can
+make broad filename discovery mistake an artifact for a task. Group artifacts
+by task beneath dedicated prompt/log directories, keep decisions/findings in
+the task state, and link evidence/current patch there. Allocate a fresh role
+attempt number on every dispatch, including retries; never overwrite a prior
+pass artifact. Reserve output files with an exclusive/no-clobber write before
+launch, not a check followed by a later overwriting copy. Attempt numbers and
+loop-budget counters are separate concepts. Dashboard discovery must select
+only state filenames and never recursively list generated evidence. Never move
+artifacts during an active run; legacy relocation needs paused readers/dispatch,
+staged verified copies, atomic state-link publication, and rollback on failure.
+
 ## 1. A "wide auto-approve" flag is opt-in per task, never a standing default
 
 Many non-interactive CLI tools have some flag that auto-approves anything

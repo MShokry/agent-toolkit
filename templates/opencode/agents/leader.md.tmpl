@@ -49,8 +49,10 @@ Apply these OpenCode adaptations:
   Claude Code dispatch mechanism is explicitly supplied. Never substitute a
   model or relax review independence merely because OpenCode leads the run.
 - Run long worker shell calls in the background when the host supports it.
-  Write prompts to files and pass `--prompt-file`; capture output and use a
-  different `--raw-out` path for each role/pass. Do not poll background tool
+  Write prompts to `.agents/prompts/T-<id>/<role>-<pass>.md` and pass
+  `--prompt-file`; use matching `.agents/logs/T-<id>/<role>-<pass>.jsonl`
+  `--raw-out` paths, following the canonical artifact layout and state links.
+  Never overwrite a prior pass artifact, including on retries. Do not poll background tool
   calls when the host supplies completion notifications. If the host cannot
   background a dispatch, disclose that limitation before a long run.
 - Resolve server/password using `scripts/oc.sh`'s conventions. For the API

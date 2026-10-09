@@ -82,7 +82,7 @@ calls.
   one. The harness already auto-summarizes long conversations in the
   background; no manual step is needed.
 - Implementer, reviewer, and tester write their own outputs directly into
-  `.agents/T-<id>.md` / `.agents/T-<id>.diff` (see each role's write scope
+  `.agents/T-<id>.md` / `.agents/logs/T-<id>/<implementer>-<pass>.patch` (see each role's write scope
   in `.opencode/agent/*.md`). The lead's job is to **verify placement and
   content**, not to retype or re-paste what a role already wrote to disk.
 - Don't read a role's raw `--raw-out .jsonl` event stream as a matter of
@@ -199,6 +199,33 @@ permissions, or budgets mid-task.
 
 ## 2 — Implement
 
+### Artifact layout (every dispatch)
+
+Keep `.agents/` root for `T-<id>.md` task state, shared guidance/configuration,
+and toolkit metadata; installed skills remain in `.agents/skills/`. Generated
+prompts belong in `.agents/prompts/T-<id>/<role>-<pass>.md`; transcripts in
+`.agents/logs/T-<id>/<role>-<pass>.jsonl`; implementation patches in
+`.agents/logs/T-<id>/<implementer>-<pass>.patch`.
+
+Before every dispatch, create both task directories with `mkdir -p`, choose
+the next unused positive pass number for that role, and write the prompt with
+no-clobber protection (`set -C` in a subshell). Never overwrite a prior pass
+artifact, including on rate-limit retries or resumed runs. Pass numbers count
+dispatch attempts, not review/test-fix budget loops. Link each prompt,
+transcript, and patch in the state file's *Artifacts* table (Markdown paths
+relative to the state file), including the current patch before review.
+Every `scripts/oc.sh` call must use matching `--prompt-file` and `--raw-out`
+paths above; the wrapper rejects missing/mismatched paths and existing
+transcripts. Include the assigned patch path in each implementer prompt.
+For `senior-dev`, use the same prompt/patch layout; link a transcript only if
+its tool exports one, never fabricate one.
+
+Never move an artifact while its associated agent run is active. Legacy moves
+are an explicit, idle-only migration: stage the moves and updated links as one
+transaction, publishing the state file atomically; rollback if any step fails.
+The dashboard shows task state/status only, not individual prompt/transcript
+files (at most one optional Artifacts link per task).
+
 Once approved, set Status to `spec-approved` and record who implements:
 
 - **`builder`** (OpenCode, `__BUILDER_MODEL__`) — the default when a
@@ -207,9 +234,14 @@ Once approved, set Status to `spec-approved` and record who implements:
 
   ```bash
   scripts/oc.sh --agent builder --model __BUILDER_MODEL__ --text \
-    --raw-out .agents/T-<id>.build.jsonl \
-    --prompt "Implement .agents/T-<id>.md. Read this project's own guidance file first."
+    --raw-out .agents/logs/T-<id>/builder-1.jsonl \
+    --prompt-file .agents/prompts/T-<id>/builder-1.md
   ```
+
+  Write that prompt before dispatch: implement `.agents/T-<id>.md`, read the
+  project's own guidance first, and save the patch to
+  `.agents/logs/T-<id>/builder-1.patch`. Examples show first attempts only;
+  allocate a new unused number on every subsequent attempt.
 
   Add `--auto` to that command only if *OpenCode auto mode* in the state
   file is `on` — i.e. only if the user said yes to it at spec approval
@@ -267,9 +299,10 @@ rate limit, usage cap, quota, or `429`:
 1. **Stop and tell the user immediately.** Name the step and the exact
    command that hit the limit. Do not silently retry, and do not switch
    model/vendor on your own judgement.
-2. After that one notification, **retry the same command automatically
+2. After that one notification, **retry the same dispatch automatically
    every 30 minutes** (via a loop skill or scheduled wakeup) until it
-   succeeds. Do not ask again on every retry — the user already answered
+   succeeds, allocating new prompt/transcript/patch pass paths each time
+   while preserving the task, role, model, session, and request. Do not ask again on every retry — the user already answered
    once.
 3. On success, resume the pipeline from exactly where it stopped and tell
    the user it recovered.
@@ -318,9 +351,13 @@ yourself before reusing it: `curl -X POST $OC_SERVER/session/<id>/abort`.)
 ```bash
 scripts/oc.sh --agent reviewer --model __REVIEWER_MODEL__ --text \
   --session "<id from OpenCode session id>" \
-  --raw-out .agents/T-<id>.review.jsonl \
-  --prompt "Review .agents/T-<id>.diff against .agents/T-<id>.md. Both passes."
+  --raw-out .agents/logs/T-<id>/reviewer-1.jsonl \
+  --prompt-file .agents/prompts/T-<id>/reviewer-1.md
 ```
+
+Write the prompt to review the current patch linked in *Artifacts* against
+`.agents/T-<id>.md`, doing both review passes. Never guess the patch from a
+filename or assume builder pass 1 is still current.
 
 Always pass `--text`. Without it the JSON event stream inlines the full
 contents of every file the agent read, which is unreadable and expensive
@@ -399,9 +436,12 @@ before dispatching, same as the reviewer's field above.
 ```bash
 scripts/oc.sh --agent tester --model __TESTER_MODEL__ --text \
   --session "<id from OpenCode session id>" \
-  --raw-out .agents/T-<id>.test.jsonl \
-  --prompt "Run the suites for .agents/T-<id>.md and triage failures."
+  --raw-out .agents/logs/T-<id>/tester-1.jsonl \
+  --prompt-file .agents/prompts/T-<id>/tester-1.md
 ```
+
+Write the prompt to run the suites for `.agents/T-<id>.md` and triage failures,
+including any reviewer findings routed to verification.
 
 The tester reports; it never fixes. Real failures go back to the
 implementer as a new loop — **increment *Test-fix loops*, capped at 2**,
