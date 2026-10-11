@@ -72,7 +72,7 @@ Safety rails:
 ## How to test / verify
 
 Prereq: `opencode serve` up (`scripts/team.sh`, or `opencode serve --port 4096`).
-Create `.agents/prompts/T-watchdog/` and `.agents/logs/T-watchdog/` first.
+Create `.agent-pipeline/prompts/T-watchdog/` and `.agent-pipeline/logs/T-watchdog/` first.
 Write each request below into its named prompt file without overwriting an
 existing attempt. Every repeat needs a new unused pass number and matching
 transcript path; link them from the test task's state file.
@@ -80,8 +80,8 @@ transcript path; link them from the test task's state file.
 1. **Fast turn still works**
    ```
    scripts/oc.sh --agent tester --model hcnsec/auto --text \
-     --prompt-file .agents/prompts/T-watchdog/tester-1.md \
-     --raw-out .agents/logs/T-watchdog/tester-1.jsonl
+     --prompt-file .agent-pipeline/prompts/T-watchdog/tester-1.md \
+     --raw-out .agent-pipeline/logs/T-watchdog/tester-1.jsonl
    ```
    Prompt: `reply with exactly: pong`.
    → prints `pong`, exit 0, one `oc.sh: session=ses_…` line.
@@ -89,8 +89,8 @@ transcript path; link them from the test task's state file.
 2. **A long active run is NOT killed** (the regression this fixes)
    ```
    time scripts/oc.sh --agent reviewer --model opencode-go/kimi-k2.7-code --text \
-     --prompt-file .agents/prompts/T-watchdog/reviewer-1.md \
-     --raw-out .agents/logs/T-watchdog/reviewer-1.jsonl
+     --prompt-file .agent-pipeline/prompts/T-watchdog/reviewer-1.md \
+     --raw-out .agent-pipeline/logs/T-watchdog/reviewer-1.jsonl
    ```
    Prompt: read every file under scripts/ and project guidance one at a time,
    writing a detailed six-bullet analysis for each; be exhaustive.
@@ -99,8 +99,8 @@ transcript path; link them from the test task's state file.
 3. **The watchdog still catches a wedge** — force a tiny idle window against a run that stalls
    ```
    OC_IDLE_TIMEOUT=30 OC_POLL=10 scripts/oc.sh --agent builder --model opencode-go/glm-5.3-flash \
-     --prompt-file .agents/prompts/T-watchdog/builder-1.md \
-     --raw-out .agents/logs/T-watchdog/builder-1.jsonl
+     --prompt-file .agent-pipeline/prompts/T-watchdog/builder-1.md \
+     --raw-out .agent-pipeline/logs/T-watchdog/builder-1.jsonl
    ```
    Prompt: run and report a safe, deliberately stalled command in a disposable
    environment. Never point this test at production.
@@ -113,8 +113,8 @@ transcript path; link them from the test task's state file.
 4. **The ceiling still bounds a runaway**
    ```
    OC_TIMEOUT=60 scripts/oc.sh --agent reviewer --model opencode-go/kimi-k2.7-code \
-     --prompt-file .agents/prompts/T-watchdog/reviewer-2.md \
-     --raw-out .agents/logs/T-watchdog/reviewer-2.jsonl
+     --prompt-file .agent-pipeline/prompts/T-watchdog/reviewer-2.md \
+     --raw-out .agent-pipeline/logs/T-watchdog/reviewer-2.jsonl
    ```
    Prompt: a safe read-only analysis task expected to take more than 60 seconds.
    → exit 124, stderr `ABORTED — the run hit the absolute 60s ceiling`.

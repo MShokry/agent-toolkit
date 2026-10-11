@@ -24,7 +24,7 @@ file — it's the one line each role updates when it finishes, naming what
 happened and who's next. Open the full file only when that line, a
 verification-script failure, or a real decision point tells you to.
 
-Everything passes through the state file (`.agents/T-<id>.md` or
+Everything passes through the state file (`.agent-pipeline/T-<id>.md` or
 equivalent). Context is never carried between roles by memory alone — if
 it isn't written there, the next role doesn't know it.
 
@@ -46,9 +46,16 @@ exceeded budget as an escalation, never one more lap.
 
 ## Artifact layout (every dispatch)
 
-Keep `.agents/` root for task state (`T-<id>.md`), shared guidance/configuration,
-and toolkit metadata; installed skills retain their own subdirectory. Create
-`.agents/prompts/T-<id>/` and `.agents/logs/T-<id>/` before dispatch. Save prompts
+Keep `.agent-pipeline/` root for task state (`T-<id>.md`), shared guidance/configuration,
+and toolkit metadata. Keep native discovery directories separate from pipeline
+state; installed skills stay in the tool's native path (e.g. `.agents/skills/`).
+Gitignore generated prompts, logs, credentials, and local sessions, not native
+skills. Do not force-add ignored pipeline records or artifacts; an entirely
+local state directory still supplies on-disk role handoffs.
+Directory migrations require an approved move plan at a task boundary,
+never during a task; preserve user data, refuse collisions, and reconcile
+references and permissions before resuming dispatch. Create
+`.agent-pipeline/prompts/T-<id>/` and `.agent-pipeline/logs/T-<id>/` before dispatch. Save prompts
 as `<role>-<pass>.md`, exported transcripts as `<role>-<pass>.jsonl`, and patches
 as `<implementer>-<pass>.patch`. For an `oc.sh` adapter, every call uses matching
 `--prompt-file` and `--raw-out` paths; adapt this behavior for other tools.

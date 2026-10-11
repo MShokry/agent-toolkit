@@ -62,7 +62,7 @@ def project_root(start):
         raise PluginError("No absolute project cwd supplied by Herdr; select a project pane.")
     path = Path(start).resolve()
     for root in (path, *path.parents):
-        if (root / ".agents/TEMPLATE.md").is_file() and (root / ".claude/commands/feature.md").is_file():
+        if (root / ".agent-pipeline/TEMPLATE.md").is_file() and (root / ".claude/commands/feature.md").is_file():
             return root
     raise PluginError("Project is not scaffolded. Run bin/init.sh explicitly first; adoption never scaffolds.")
 
@@ -211,7 +211,7 @@ def brief_leader(root, workspace, binding):
     prompt = (
         "Act as this project's agent-toolkit lead in this existing session, not as an implementer. "
         "Read the project's AGENTS.md and CLAUDE.md when present. " + instruction + " "
-        "Read .claude/commands/feature.md in full; keep the pipeline in .agents/T-<id>.md. "
+        "Read .claude/commands/feature.md in full; keep the pipeline in .agent-pipeline/T-<id>.md. "
         "This role briefing is not a feature request, spec approval, auto-mode consent, or merge approval. "
         "Do not dispatch work or modify files yet. Confirm readiness briefly and ask for the task. "
         "Herdr hosts terminals only; keep reviewer independence, loop budgets, permission checks, "

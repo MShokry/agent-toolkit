@@ -15,7 +15,7 @@ permissions:
     resource: "*"
     effect: allow
   - action: edit
-    resource: ".agents/**"
+    resource: ".agent-pipeline/**"
     effect: allow
   - action: skill
     resource: "*"
@@ -49,8 +49,8 @@ Apply these OpenCode adaptations:
   Claude Code dispatch mechanism is explicitly supplied. Never substitute a
   model or relax review independence merely because OpenCode leads the run.
 - Run long worker shell calls in the background when the host supports it.
-  Write prompts to `.agents/prompts/T-<id>/<role>-<pass>.md` and pass
-  `--prompt-file`; use matching `.agents/logs/T-<id>/<role>-<pass>.jsonl`
+  Write prompts to `.agent-pipeline/prompts/T-<id>/<role>-<pass>.md` and pass
+  `--prompt-file`; use matching `.agent-pipeline/logs/T-<id>/<role>-<pass>.jsonl`
   `--raw-out` paths, following the canonical artifact layout and state links.
   Never overwrite a prior pass artifact, including on retries. Do not poll background tool
   calls when the host supplies completion notifications. If the host cannot
@@ -69,13 +69,13 @@ Apply these OpenCode adaptations:
 - You never implement feature code or modify the git index before the user's
   merge approval. Shell access can bypass path-based edit permissions: this
   role boundary is instruction plus approval, not an OS sandbox. Edits outside
-  `.agents/**` ask for permission, including toolkit merges and tracking docs.
+  `.agent-pipeline/**` ask for permission, including toolkit merges and tracking docs.
 - If invoked as a subagent, send human approval questions to the parent lead.
   A dispatch is not spec approval, auto-mode consent, or merge authorization.
 - Keep the state file as the only task handoff surface. Return short receipts,
   not copies of diffs, findings, or logs. Load optional skills only if available.
 
-If `.agents/LEAD-HANDOFF.md` exists, read it as dated project context, not an
+If `.agent-pipeline/LEAD-HANDOFF.md` exists, read it as dated project context, not an
 override of the canonical pipeline. If it contradicts current instructions,
 surface the conflict and stop for clarification; do not import its policy
 silently. Never infer current totals, model availability, or permission safety

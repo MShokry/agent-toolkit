@@ -72,11 +72,11 @@ class AdapterTests(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.base = Path(self.tmp.name).resolve()
         self.project = self.base / "project with 'quotes' and $spaces"
-        (self.project / ".agents").mkdir(parents=True)
+        (self.project / ".agent-pipeline").mkdir(parents=True)
         (self.project / ".claude/commands").mkdir(parents=True)
         (self.project / ".opencode/agents").mkdir(parents=True)
         (self.project / "src").mkdir()
-        (self.project / ".agents/TEMPLATE.md").write_text("template\n")
+        (self.project / ".agent-pipeline/TEMPLATE.md").write_text("template\n")
         (self.project / ".claude/commands/feature.md").write_text("canonical flow\n")
         (self.project / ".opencode/agents/leader.md").write_text("adapter\n")
         self.fake = FakeHerdr(self.project)
@@ -126,16 +126,16 @@ class AdapterTests(unittest.TestCase):
         self.assertFalse(self.path.exists())
 
     def test_unscaffolded_project_is_not_initialized(self):
-        (self.project / ".agents/TEMPLATE.md").unlink()
+        (self.project / ".agent-pipeline/TEMPLATE.md").unlink()
         with self.assertRaisesRegex(plugin.PluginError, "never scaffolds"):
             self.run_action("adopt")
         self.assertFalse(self.path.exists())
 
     def test_explicit_wrong_project_is_rejected(self):
         other = self.base / "other"
-        (other / ".agents").mkdir(parents=True)
+        (other / ".agent-pipeline").mkdir(parents=True)
         (other / ".claude/commands").mkdir(parents=True)
-        (other / ".agents/TEMPLATE.md").write_text("template")
+        (other / ".agent-pipeline/TEMPLATE.md").write_text("template")
         (other / ".claude/commands/feature.md").write_text("flow")
         with self.assertRaisesRegex(plugin.PluginError, "different project"):
             self.run_action("adopt", "--project", str(other))
@@ -285,7 +285,7 @@ class AdapterTests(unittest.TestCase):
         self.assertEqual(call[call.index("--target-pane") + 1], "w1:p1")
 
     def test_board_counts_only_ledger_rows_and_never_executes_verifiers(self):
-        task = self.project / ".agents/T-001.md"
+        task = self.project / ".agent-pipeline/T-001.md"
         task.write_text("""**Status:** blocked:question
 **Latest handoff:** tester → needs human → next: lead
 **Blocked since:** 2026-10-06 — missing environment
@@ -304,10 +304,10 @@ class AdapterTests(unittest.TestCase):
         self.assertEqual(self.fake.calls, [])
 
     def test_board_does_not_render_terminal_controls_or_external_task_links(self):
-        (self.project / ".agents/T-001.md").write_text("**Status:** done\x1b]52;c;payload\x07\n")
+        (self.project / ".agent-pipeline/T-001.md").write_text("**Status:** done\x1b]52;c;payload\x07\n")
         external = self.base / "secret.txt"
         external.write_text("do not expose this")
-        (self.project / ".agents/T-999.md").symlink_to(external)
+        (self.project / ".agent-pipeline/T-999.md").symlink_to(external)
         output = plugin.board_text(self.project)
         self.assertNotIn("\x1b", output)
         self.assertNotIn("\x07", output)
@@ -321,7 +321,7 @@ class AdapterTests(unittest.TestCase):
 
     def test_dashboard_summary_and_graph_are_model_independent(self):
         for number, status in enumerate(("draft", "testing", "done", "blocked:spec", "invented")):
-            (self.project / (".agents/T-{}.md".format(number))).write_text(
+            (self.project / (".agent-pipeline/T-{}.md".format(number))).write_text(
                 "# Task {}\n**Status:** {}\n**Latest handoff:** needs decision\n".format(number, status))
         output = plugin.board_text(self.project)
         self.assertIn("tasks: 5 | active: 2 | blocked: 1 | done: 1 | unknown: 1", output)
@@ -340,10 +340,10 @@ class AdapterTests(unittest.TestCase):
         self.assertIn("[APPROVAL]", plugin.stage_graph("spec-approved"))
 
     def test_dashboard_lists_task_state_only_not_artifacts(self):
-        (self.project / ".agents/T-023.md").write_text("**Status:** testing\n")
+        (self.project / ".agent-pipeline/T-023.md").write_text("**Status:** testing\n")
         for relative in ("prompts/T-023/reviewer-1.md", "logs/T-023/T-fake.md",
                          "T-023.review-request.md", "TEAM.md", "TEMPLATE.md"):
-            artifact = self.project / ".agents" / relative
+            artifact = self.project / ".agent-pipeline" / relative
             artifact.parent.mkdir(parents=True, exist_ok=True)
             artifact.write_text("**Status:** done\n")
         output = plugin.board_text(self.project)
@@ -355,7 +355,7 @@ class AdapterTests(unittest.TestCase):
         self.assertEqual(self.fake.calls, [])
 
     def test_dashboard_updates_from_files_and_wraps_for_narrow_panes(self):
-        task = self.project / ".agents/T-live.md"
+        task = self.project / ".agent-pipeline/T-live.md"
         task.write_text("**Status:** in-review\n")
         self.assertIn("[REVIEW]", plugin.board_text(self.project))
         task.write_text("**Status:** testing\n")
@@ -365,7 +365,7 @@ class AdapterTests(unittest.TestCase):
         self.assertEqual(self.fake.calls, [])
 
     def test_visual_cards_have_stage_boxes_progress_and_semantic_colors(self):
-        (self.project / ".agents/T-visual.md").write_text(
+        (self.project / ".agent-pipeline/T-visual.md").write_text(
             "# T-visual — Example\n**Status:** testing\n**Owner right now:** tester\n"
             "### Acceptance criteria ledger\n| AC1 | [x] | evidence | evidence |\n| AC2 | [ ] | | |\n")
         rows = plugin.visual_lines(self.project, 100)
@@ -380,7 +380,7 @@ class AdapterTests(unittest.TestCase):
 
     def test_visual_view_filters_blockers_and_fits_narrow_panes(self):
         for name, status in (("blocked", "blocked:question"), ("finished", "done")):
-            (self.project / (".agents/T-" + name + ".md")).write_text(
+            (self.project / (".agent-pipeline/T-" + name + ".md")).write_text(
                 "**Status:** " + status + "\n**Latest handoff:** human decision needed\n")
         rows = plugin.visual_lines(self.project, 24, blocked_only=True)
         output = "\n".join(text for text, _ in rows)
@@ -391,7 +391,7 @@ class AdapterTests(unittest.TestCase):
         self.assertEqual(self.fake.calls, [])
 
     def test_visual_cards_show_recorded_evidence_and_budget_attention(self):
-        (self.project / ".agents/T-evidence.md").write_text(
+        (self.project / ".agent-pipeline/T-evidence.md").write_text(
             "# T-evidence — Useful title\n**Status:** testing\n"
             "**Review loop count:** 2 / 2\n**Test-fix loops:** 0 / 2\n**Spec bounces:** 0 / 1\n"
             "## Review verdicts\n### Pass 1 — date — verdict: CHANGES_REQUESTED\n"
@@ -411,7 +411,7 @@ class AdapterTests(unittest.TestCase):
     def test_visual_cards_prioritize_attention_and_do_not_invent_evidence(self):
         for name, status in (("a-done", "done"), ("b-active", "in-progress"),
                              ("z-blocked", "blocked:question")):
-            (self.project / (".agents/T-" + name + ".md")).write_text(
+            (self.project / (".agent-pipeline/T-" + name + ".md")).write_text(
                 "**Status:** " + status + "\n**Blocked since:** 2026-10-09 — needs scope\n"
                 "## Review verdicts\n### Pass 1 — <date> — verdict: <PASS | CHANGES_REQUESTED>\n"
                 "## Test results\n### Run 1 — <date>\n- Result:\n- Command: ignored\n")
@@ -436,7 +436,7 @@ class AdapterTests(unittest.TestCase):
         self.assertEqual(self.fake.calls, [])
 
     def test_unreadable_task_does_not_crash_the_entire_board(self):
-        (self.project / ".agents/T-001.md").mkdir()
+        (self.project / ".agent-pipeline/T-001.md").mkdir()
         self.assertIn("unavailable (refresh to retry)", plugin.board_text(self.project))
 
     def test_invalid_context_and_unknown_binding_version_fail_closed(self):
@@ -465,9 +465,9 @@ class TransportTests(unittest.TestCase):
             self.assertEqual(first.returncode, 0, first.stderr)
             dashboard = project / "scripts/dashboard"
             self.assertTrue(os.access(dashboard, os.X_OK))
-            stamp = (project / ".agents/.toolkit-version").read_bytes()
+            stamp = (project / ".agent-pipeline/.toolkit-version").read_bytes()
             original = dashboard.read_bytes()
-            (project / ".agents/T-001.md").write_text("**Status:** testing\n")
+            (project / ".agent-pipeline/T-001.md").write_text("**Status:** testing\n")
             # This copied artifact has no imports from the checkout or host.
             env = {"PATH": "/nonexistent", "TERM": "dumb"}
             view = subprocess.run([sys.executable, str(dashboard), "--once"], cwd=project,
@@ -483,7 +483,7 @@ class TransportTests(unittest.TestCase):
             bootstrap = subprocess.run(init, capture_output=True, text=True, timeout=30)
             self.assertEqual(bootstrap.returncode, 0, bootstrap.stderr)
             self.assertEqual(dashboard.read_bytes(), original)
-            self.assertEqual((project / ".agents/.toolkit-version").read_bytes(), stamp)
+            self.assertEqual((project / ".agent-pipeline/.toolkit-version").read_bytes(), stamp)
             dashboard.write_bytes(original + b"\n# project customization\n")
             customized = dashboard.read_bytes()
             rerun = subprocess.run(init, capture_output=True, text=True, timeout=30)
@@ -498,9 +498,9 @@ class TransportTests(unittest.TestCase):
     def test_standalone_command_discovers_nested_project_without_herdr(self):
         with tempfile.TemporaryDirectory(prefix="toolkit-dashboard-", dir=os.environ.get("TMPDIR")) as tmp:
             project = Path(tmp).resolve() / "project with spaces"
-            (project / ".agents").mkdir(parents=True)
+            (project / ".agent-pipeline").mkdir(parents=True)
             (project / "src/nested").mkdir(parents=True)
-            (project / ".agents/T-001.md").write_text("**Status:** testing\n")
+            (project / ".agent-pipeline/T-001.md").write_text("**Status:** testing\n")
             # No canonical prompts, scaffold template, or Herdr installation
             # is needed for a read-only standalone task viewer.
             env = {"PATH": "/nonexistent", "TERM": "dumb"}
@@ -521,13 +521,13 @@ class TransportTests(unittest.TestCase):
             result = subprocess.run([sys.executable, str(ROOT / "bin/dashboard"), "--project", tmp, "--once"],
                                     capture_output=True, text=True, timeout=10)
             self.assertEqual(result.returncode, 2)
-            self.assertIn("No .agents/ directory found", result.stderr)
+            self.assertIn("No .agent-pipeline/ directory found", result.stderr)
             self.assertEqual(list(Path(tmp).iterdir()), [])
 
     def test_standalone_command_works_through_a_symlink(self):
         with tempfile.TemporaryDirectory(prefix="toolkit-dashboard-link-", dir=os.environ.get("TMPDIR")) as tmp:
             root = Path(tmp)
-            (root / ".agents").mkdir()
+            (root / ".agent-pipeline").mkdir()
             link = root / "dashboard"
             link.symlink_to(ROOT / "bin/dashboard")
             result = subprocess.run([sys.executable, str(link), "--once"], cwd=root,
@@ -580,9 +580,9 @@ class TransportTests(unittest.TestCase):
         manifest = tomllib.loads((PLUGIN_ROOT / "herdr-plugin.toml").read_text())
         with tempfile.TemporaryDirectory(prefix="toolkit-herdr-pane-", dir=os.environ.get("TMPDIR")) as tmp:
             project = Path(tmp).resolve() / "project with spaces"
-            (project / ".agents").mkdir(parents=True)
+            (project / ".agent-pipeline").mkdir(parents=True)
             (project / ".claude/commands").mkdir(parents=True)
-            (project / ".agents/TEMPLATE.md").write_text("template")
+            (project / ".agent-pipeline/TEMPLATE.md").write_text("template")
             (project / ".claude/commands/feature.md").write_text("canonical flow")
             env = os.environ.copy()
             env.update(HERDR_PLUGIN_ROOT=str(PLUGIN_ROOT), AGENT_TOOLKIT_PROJECT=str(project))

@@ -75,7 +75,7 @@ def budget_tone(text):
 
 def task_records(root):
     records, warnings = [], []
-    for task in sorted((root / ".agents").glob("T-*.md")):
+    for task in sorted((root / ".agent-pipeline").glob("T-*.md")):
         # Task records only, not legacy T-001.review-request.md artifacts.
         # Prompts/logs in task subdirectories are deliberately never scanned.
         if not re.fullmatch(r"T-[A-Za-z0-9_-]+\.md", task.name):
@@ -301,9 +301,9 @@ def main(argv=None):
     parser.add_argument("--once", action="store_true", help="Print a plain-text snapshot")
     args = parser.parse_args(argv)
     start = Path(args.project).expanduser().resolve()
-    root = next((p for p in (start, *start.parents) if (p / ".agents").is_dir()), None)
+    root = next((p for p in (start, *start.parents) if (p / ".agent-pipeline").is_dir()), None)
     if root is None:
-        parser.error("No .agents/ directory found. Run inside a toolkit project or pass --project.")
+        parser.error("No .agent-pipeline/ directory found. Run inside a toolkit project or pass --project.")
     if args.once or not sys.stdout.isatty() or not sys.stdin.isatty() or os.environ.get("TERM") in (None, "dumb"):
         print(board_text(root))
     else:

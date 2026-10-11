@@ -72,14 +72,14 @@ anticipation of it): consider collapsing the now-duplicated prose into one
 shared file, so a future behavioral fix is one edit instead of N.
 
 1. Extract the actual instructions — not the frontmatter — into
-   `.agents/roles/<role>.md` (rendered from a new
+   `.agent-pipeline/roles/<role>.md` (rendered from a new
    `templates/agents-state/roles/<role>.md.tmpl`), written generically: no
    tool name in the prose itself, since two or more tools now read it.
 2. Shrink every existing tool-specific file for that role down to: its own
    real frontmatter/permission block (this can never be shared — it's the
    one thing that's genuinely different per tool), a short paragraph on
    what's tool-specific about running this role under this tool, and one
-   line: "Read `.agents/roles/<role>.md` now, in full, before doing
+   line: "Read `.agent-pipeline/roles/<role>.md` now, in full, before doing
    anything else."
 3. Add the new canonical file's `render` line to `bin/init.sh`.
 4. Update README to note the exception — this toolkit's default is one

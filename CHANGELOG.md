@@ -10,6 +10,19 @@ update workflow. Version bumps mean: **MAJOR** = state-file contract /
 role authority / script interface changed; **MINOR** = new template,
 script, flag, or role rule; **PATCH** = prose and docs.
 
+## v0.10.2 — 2026-10-11
+
+- `[contract]` Pipeline state/artifacts move from `.agents/` to
+  `.agent-pipeline/`, separate from native `.agents/skills/` discovery. Scripts,
+  roles, dashboard, integrations, and task links use the new directory. Update
+  triage reads the legacy stamp without writing; scaffold/stamp refresh refuse
+  old layouts to prevent split state. See migration 03 for approved lead-assisted
+  moves, collision checks, backups/rollback, and permission-path reconciliation.
+- `[safety]` Init ignores generated prompts as well as logs, credentials, and
+  local session state; Git worktrees receive ignore rules too. Task records,
+  shared guidance, and provenance remain trackable by default. Native skills
+  stay outside the pipeline ignore scope.
+
 ## v0.10.1 — 2026-10-09
 
 - `[contract]` Task state remains at `.agents/T-<id>.md`; prompts and transcripts

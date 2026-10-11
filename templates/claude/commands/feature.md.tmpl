@@ -14,7 +14,7 @@ the roles that produced it or to a deterministic script, not to you. You do
 **not** write feature code yourself — if you find yourself editing source
 directly, you have stepped out of your role.
 
-Between steps, read `**Latest handoff:**` at the top of `.agents/T-<id>.md`,
+Between steps, read `**Latest handoff:**` at the top of `.agent-pipeline/T-<id>.md`,
 not the whole file — it is the one line each role updates when it finishes,
 naming what happened and who's next. Open the full file only when that line,
 a `scripts/verify-state.sh` failure, or a real decision point tells you to.
@@ -29,7 +29,7 @@ only to code a role writes; dispatched roles already carry an inlined copy
 of the same behavioral defaults in their own role files (`senior-dev.md` /
 `builder.md`), so this is deliberately not re-taught to them here.
 
-Everything passes through `.agents/T-<id>.md`. Context is never carried
+Everything passes through `.agent-pipeline/T-<id>.md`. Context is never carried
 between roles by memory alone. If it is not written there, the next role
 does not know it.
 
@@ -53,7 +53,7 @@ does not know it.
 
 ## Preflight
 
-1. **First run only:** if `.agents/.needs-customization` exists, this
+1. **First run only:** if `.agent-pipeline/.needs-customization` exists, this
    project was just scaffolded — the role files under `.claude/agents/` and
    `.opencode/agent/` still carry generic pitfalls/hard-rules text, not this
    codebase's actual ones. Ask the user: read the real source tree and this
@@ -64,10 +64,10 @@ does not know it.
    the acceptance-criteria/scope rules, those are structural, not project
    content. Either answer, delete the marker file once asked — this only
    happens once.
-2. Pick the next free id: `ls .agents/T-*.md`.
+2. Pick the next free id: `ls .agent-pipeline/T-*.md`.
 3. Confirm the OpenCode server is up, resolving the port the same way
-   `scripts/oc.sh` does (`OC_SERVER`, then `.agents/.oc-port`, then 4096):
-   `curl -sS -m 5 "http://localhost:$(cat .agents/.oc-port 2>/dev/null || echo 4096)"`.
+   `scripts/oc.sh` does (`OC_SERVER`, then `.agent-pipeline/.oc-port`, then 4096):
+   `curl -sS -m 5 "http://localhost:$(cat .agent-pipeline/.oc-port 2>/dev/null || echo 4096)"`.
    If not up, tell the user to run `scripts/team.sh` (or `opencode serve`)
    and stop.
 4. Confirm the working tree is clean enough to produce a meaningful diff.
@@ -82,7 +82,7 @@ calls.
   one. The harness already auto-summarizes long conversations in the
   background; no manual step is needed.
 - Implementer, reviewer, and tester write their own outputs directly into
-  `.agents/T-<id>.md` / `.agents/logs/T-<id>/<implementer>-<pass>.patch` (see each role's write scope
+  `.agent-pipeline/T-<id>.md` / `.agent-pipeline/logs/T-<id>/<implementer>-<pass>.patch` (see each role's write scope
   in `.opencode/agent/*.md`). The lead's job is to **verify placement and
   content**, not to retype or re-paste what a role already wrote to disk.
 - Don't read a role's raw `--raw-out .jsonl` event stream as a matter of
@@ -117,7 +117,7 @@ calls.
 ## 1 — Spec
 
 Dispatch the `planner` subagent with the request and the task id. It writes
-`.agents/T-<id>.md` from `.agents/TEMPLATE.md`.
+`.agent-pipeline/T-<id>.md` from `.agent-pipeline/TEMPLATE.md`.
 
 **Assess whether this task actually needs the planner — completeness of an
 existing spec is the test, not size or triviality:**
@@ -125,10 +125,10 @@ existing spec is the test, not size or triviality:**
 - **Not yet planned, or genuinely ambiguous about scope/files/acceptance
   criteria** → dispatch the planner. This is the default.
 - **Already fully documented** — an existing `tasks/*/TASKS.md` entry, a
-  prior `.agents/T-<id>.md` covering the same ground, or a request specific
+  prior `.agent-pipeline/T-<id>.md` covering the same ground, or a request specific
   enough that you can state the Goal, acceptance criteria, and files in
   scope yourself with no invention — skip the planner. Write those fields
-  into `.agents/T-<id>.md` yourself before dispatching an implementer;
+  into `.agent-pipeline/T-<id>.md` yourself before dispatching an implementer;
   approval, review, and test below still apply unchanged. A large feature
   with a complete existing spec skips the planner exactly the same way a
   trivial one-liner does — completeness is what's being tested, not
@@ -201,11 +201,14 @@ permissions, or budgets mid-task.
 
 ### Artifact layout (every dispatch)
 
-Keep `.agents/` root for `T-<id>.md` task state, shared guidance/configuration,
-and toolkit metadata; installed skills remain in `.agents/skills/`. Generated
-prompts belong in `.agents/prompts/T-<id>/<role>-<pass>.md`; transcripts in
-`.agents/logs/T-<id>/<role>-<pass>.jsonl`; implementation patches in
-`.agents/logs/T-<id>/<implementer>-<pass>.patch`.
+Keep `.agent-pipeline/` root for `T-<id>.md` task state, shared guidance/configuration,
+and toolkit metadata; installed skills remain in `.agents/skills/`. Keep native
+discovery directories separate from pipeline state. Gitignore generated prompts,
+logs, credentials, and local sessions, not native skills. Directory migrations
+require an approved move plan at a task boundary, never during a task. Generated
+prompts belong in `.agent-pipeline/prompts/T-<id>/<role>-<pass>.md`; transcripts in
+`.agent-pipeline/logs/T-<id>/<role>-<pass>.jsonl`; implementation patches in
+`.agent-pipeline/logs/T-<id>/<implementer>-<pass>.patch`.
 
 Before every dispatch, create both task directories with `mkdir -p`, choose
 the next unused positive pass number for that role, and write the prompt with
@@ -234,13 +237,13 @@ Once approved, set Status to `spec-approved` and record who implements:
 
   ```bash
   scripts/oc.sh --agent builder --model __BUILDER_MODEL__ --text \
-    --raw-out .agents/logs/T-<id>/builder-1.jsonl \
-    --prompt-file .agents/prompts/T-<id>/builder-1.md
+    --raw-out .agent-pipeline/logs/T-<id>/builder-1.jsonl \
+    --prompt-file .agent-pipeline/prompts/T-<id>/builder-1.md
   ```
 
-  Write that prompt before dispatch: implement `.agents/T-<id>.md`, read the
+  Write that prompt before dispatch: implement `.agent-pipeline/T-<id>.md`, read the
   project's own guidance first, and save the patch to
-  `.agents/logs/T-<id>/builder-1.patch`. Examples show first attempts only;
+  `.agent-pipeline/logs/T-<id>/builder-1.patch`. Examples show first attempts only;
   allocate a new unused number on every subsequent attempt.
 
   Add `--auto` to that command only if *OpenCode auto mode* in the state
@@ -250,7 +253,7 @@ Once approved, set Status to `spec-approved` and record who implements:
 
   This is the task's first `oc.sh` call, so it starts a new session — read
   the `oc.sh: session=ses_...` line from stderr and record it in *OpenCode
-  session id* in `.agents/T-<id>.md`. Review and test below reuse it.
+  session id* in `.agent-pipeline/T-<id>.md`. Review and test below reuse it.
 
 - **`senior-dev`** (Claude subagent, `__CLAUDE_MODEL__`) — when the user
   explicitly asks for Claude to implement instead, for this task.
@@ -323,7 +326,7 @@ context the reuse exists to save.
   starts a new session.
 - Every `oc.sh` call, on any outcome, prints the session id it used to
   stderr: `oc.sh: session=ses_...`. After the first call, copy that id into
-  this task's *OpenCode session id* field in `.agents/T-<id>.md`.
+  this task's *OpenCode session id* field in `.agent-pipeline/T-<id>.md`.
 - Every **later** call for the same task (review, test, and any retry)
   passes `--session <id>` read from that field.
 - Do not pass `--fork`.
@@ -351,12 +354,12 @@ yourself before reusing it: `curl -X POST $OC_SERVER/session/<id>/abort`.)
 ```bash
 scripts/oc.sh --agent reviewer --model __REVIEWER_MODEL__ --text \
   --session "<id from OpenCode session id>" \
-  --raw-out .agents/logs/T-<id>/reviewer-1.jsonl \
-  --prompt-file .agents/prompts/T-<id>/reviewer-1.md
+  --raw-out .agent-pipeline/logs/T-<id>/reviewer-1.jsonl \
+  --prompt-file .agent-pipeline/prompts/T-<id>/reviewer-1.md
 ```
 
 Write the prompt to review the current patch linked in *Artifacts* against
-`.agents/T-<id>.md`, doing both review passes. Never guess the patch from a
+`.agent-pipeline/T-<id>.md`, doing both review passes. Never guess the patch from a
 filename or assume builder pass 1 is still current.
 
 Always pass `--text`. Without it the JSON event stream inlines the full
@@ -377,7 +380,7 @@ separate record from the Decisions-log substitution note above: that's a
 one-time entry explaining *why*, this field is the durable answer to
 *who*, for anyone reading the task later.
 
-If the reviewer's permission block allows writing `.agents/**`, it writes
+If the reviewer's permission block allows writing `.agent-pipeline/**`, it writes
 its own verdict into *Review verdicts*. Either way, **verify with the
 script, not by eye:** run `scripts/verify-state.sh T-<id>` — it fails
 loudly on a misplaced or duplicated `### Pass N` heading, an unfilled
@@ -436,11 +439,11 @@ before dispatching, same as the reviewer's field above.
 ```bash
 scripts/oc.sh --agent tester --model __TESTER_MODEL__ --text \
   --session "<id from OpenCode session id>" \
-  --raw-out .agents/logs/T-<id>/tester-1.jsonl \
-  --prompt-file .agents/prompts/T-<id>/tester-1.md
+  --raw-out .agent-pipeline/logs/T-<id>/tester-1.jsonl \
+  --prompt-file .agent-pipeline/prompts/T-<id>/tester-1.md
 ```
 
-Write the prompt to run the suites for `.agents/T-<id>.md` and triage failures,
+Write the prompt to run the suites for `.agent-pipeline/T-<id>.md` and triage failures,
 including any reviewer findings routed to verification.
 
 The tester reports; it never fixes. Real failures go back to the
@@ -508,8 +511,11 @@ any role in this pipeline performs.** Every implementer's permission block
 hard-denies `git commit`/`git push` for exactly this reason: one point of
 control, only after the human has said yes.
 
-- Stage the changed files from *Files in scope*, plus `.agents/T-<id>.md`
-  itself. Committing the state file alongside the code means `git show` on
+- Stage the changed files from *Files in scope*, plus `.agent-pipeline/T-<id>.md`
+  only if the project's gitignore policy allows it; do not force-add ignored
+  pipeline records or artifacts. A project choosing entirely local pipeline
+  state still keeps its task record on disk for role handoffs.
+  When tracked, committing the state file alongside the code means `git show` on
   this commit carries the spec, the Decisions log, the review findings, and
   the test results in one place — not scattered across a file nobody
   thought to open.
@@ -521,7 +527,7 @@ control, only after the human has said yes.
   `git log --oneline` and `git blame` show, and what makes
   `git log --all --grep '\[T-<id>\]'` find every commit for this task —
   the path back from "something about this commit needs investigating" to
-  the full record in `.agents/T-<id>.md`.
+  the full record in `.agent-pipeline/T-<id>.md`.
 
 **Then ask, once: is there anything about *how this ran* worth writing
 down?** Not about the code — that is the reviewer's job and *Findings for

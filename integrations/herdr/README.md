@@ -21,7 +21,7 @@ panes to task records without replacing either system.
 
 - Herdr **0.9.1+**, macOS or Linux.
 - Python **3.8+**, standard library only. No build, npm, jq, or plugin SDK.
-- A project already scaffolded by `bin/init.sh`, with `.agents/TEMPLATE.md`
+- A project already scaffolded by `bin/init.sh`, with `.agent-pipeline/TEMPLATE.md`
   and `.claude/commands/feature.md`. Adoption never scaffolds or updates files.
 
 From a local toolkit checkout:
@@ -130,7 +130,7 @@ same project/workspace can be found even if its terminal/pane id changed.
 
 Herdr's OpenCode V2 lifecycle integration runs in the **full TUI**, not
 headless/Mini clients. Headless workers therefore remain ordinary processes;
-their work is recorded in `.agents/T-<id>.md`, not inferred from agent badges.
+their work is recorded in `.agent-pipeline/T-<id>.md`, not inferred from agent badges.
 
 ### Live visual dashboard — no model required
 
@@ -165,7 +165,7 @@ T-001 — testing — ledger 2/3 ticked (recorded)
 ```
 
 Stage counts, highlighted per-task graphs, blocker summaries, handoffs, recorded
-acceptance bars, and loop counters are computed directly from `.agents/T-*.md`.
+acceptance bars, and loop counters are computed directly from `.agent-pipeline/T-*.md`.
 **No model, model API, Herdr status query, or paid call generates the dashboard.**
 It works without adopting a lead. Narrow panes wrap automatically. Blocked or
 unknown statuses do not get a guessed stage; graphs do not claim prior gates

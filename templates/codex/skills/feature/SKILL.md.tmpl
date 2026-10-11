@@ -15,7 +15,7 @@ Apply these Codex adaptations:
 - The feature request is the user's request that invoked this skill.
 - When the canonical flow says to dispatch `planner`, spawn the project-scoped
   Codex `planner` subagent. Wait for it and use its short reply as a receipt;
-  its full output belongs in `.agents/T-<id>.md`.
+  its full output belongs in `.agent-pipeline/T-<id>.md`.
 - Use OpenCode `builder` as the implementer. The Claude `senior-dev` option is
   unavailable in a Codex-led fallback run. All review-independence rules still
   apply.

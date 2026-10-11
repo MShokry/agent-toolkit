@@ -48,14 +48,14 @@ It writes `.claude/agents/`, `.opencode/agent/`, `.opencode/agents/`,
 `.opencode/commands/`, `.claude/commands/{feature.md,
 toolkit-update.md}`, Codex project instructions/skills/planner under `AGENTS.md`,
 `.agents/skills/`, and `.codex/agents/`,
-`.agents/{TEMPLATE.md,.toolkit-version}`, and
+`.agent-pipeline/{TEMPLATE.md,.toolkit-version}`, and
 `scripts/{oc.sh,team.sh,verify-state.sh,verify-spec.sh,promote-findings.sh}`
 into the target. It does **not** overwrite a file that already exists — it
 prints what it skipped so you can diff and merge by hand.
 
 When the toolkit itself has moved on since this project was scaffolded,
 run the same command with `--update` instead (flags default from
-`.agents/.toolkit-version`, so `--update --target .` is usually enough).
+`.agent-pipeline/.toolkit-version`, so `--update --target .` is usually enough).
 It writes nothing — it prints a drift summary and exits 1 when files
 differ; add `--diff`/`--only <path>` for hunks. Triage against the
 toolkit's impact-tagged `CHANGELOG.md`, merge deliberately, then refresh

@@ -2,7 +2,7 @@
 
 The single handoff surface. Every role reads this file and appends to it —
 nothing is passed between roles by prose alone. Copy this shape to
-`.agents/T-<id>.md` (or wherever this project keeps per-task state) and
+`.agent-pipeline/T-<id>.md` (or wherever this project keeps per-task state) and
 fill it in per task.
 
 ```markdown

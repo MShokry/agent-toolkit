@@ -3,7 +3,7 @@
 A tmux layout for running the pipeline: pane 0 is the lead (`claude` when
 installed, otherwise `codex`, then `opencode`), pane
 1 is `opencode serve` (what `scripts/oc.sh` attaches to), pane 2 tails
-`.agents/` for activity, pane 3 is free.
+`.agent-pipeline/` for activity, pane 3 is free.
 
 ## Usage
 
@@ -41,7 +41,7 @@ the password file, without putting its contents in the pane command.
 ## Resuming is the default
 
 Pane 0 resumes the lead's own conversation — not a fresh one — but it does
-so by pinning to a stored UUID (`.agents/.claude-session-id.<session-name>`,
+so by pinning to a stored UUID (`.agent-pipeline/.claude-session-id.<session-name>`,
 written the first time that session name runs) rather than
 `claude --continue`. `--continue` only means "the most recent conversation
 in this directory," with no notion of *which* tmux session started it, so
@@ -83,12 +83,12 @@ the second project its own port:
 scripts/team.sh --port 4097
 ```
 
-That port gets written to `.agents/.oc-port` in this repo. `scripts/oc.sh`
+That port gets written to `.agent-pipeline/.oc-port` in this repo. `scripts/oc.sh`
 reads it automatically (when `OC_SERVER` isn't already set), so every
 `oc.sh` call in this project just uses the right port — you don't export
 `OC_SERVER` by hand for every call.
 
-**`.agents/.oc-port` is gitignored automatically by `bin/init.sh`** when
+**`.agent-pipeline/.oc-port` is gitignored automatically by `bin/init.sh`** when
 the target is a git repo — it's local machine state (which port happened
 to be free on your laptop today), not something to commit. If your project
 predates that, or ignores it differently, add it by hand.
@@ -101,7 +101,7 @@ From the project root, open the read-only visual dashboard:
 ./scripts/dashboard
 ```
 
-It refreshes `.agents/T-*.md` every two seconds, showing stage graphs, task
+It refreshes `.agent-pipeline/T-*.md` every two seconds, showing stage graphs, task
 cards, acceptance ticks, blockers, and latest handoffs. Use arrows or `j/k` to
 scroll, `b` to filter blocked tasks, `r` to refresh, and `q` to close.
 

@@ -40,7 +40,7 @@ actually enforce, rather than pasting a file in and hoping.
   Never fixes anything, never edits source.
 
 **The state file is the only handoff surface.** One file per task/feature —
-`.agents/T-<id>.md`, shape at `templates/agents-state/TEMPLATE.md.tmpl` —
+`.agent-pipeline/T-<id>.md`, shape at `templates/agents-state/TEMPLATE.md.tmpl` —
 holding Status, Goal, Acceptance criteria, Files in scope, a Decisions log,
 Review verdicts, Test results, Findings for docs, and Open questions.
 Nothing is passed between roles by prose alone: if a fact isn't written in
@@ -58,9 +58,17 @@ run — see `templates/claude/commands/feature.md.tmpl`'s "Token discipline"
 section for the reasoning in full, even though that file's own format is
 Claude-Code-specific.
 
-**Artifact layout:** keep `.agents/` root for task state (`T-<id>.md`), shared
+Keep native discovery directories separate from pipeline state. Gitignore
+generated prompts, logs, credentials, and local sessions, not native skills.
+Do not force-add ignored pipeline records or artifacts; an entirely local state
+directory still supplies on-disk role handoffs.
+Directory migrations require an approved move plan at a task boundary, never
+during a task; preserve user data, refuse collisions, and reconcile references
+and permissions before resuming dispatch.
+
+**Artifact layout:** keep `.agent-pipeline/` root for task state (`T-<id>.md`), shared
 guidance/configuration, and toolkit metadata; installed skills stay in their
-own subdirectory. Create `.agents/prompts/T-<id>/` and `.agents/logs/T-<id>/`
+own subdirectory. Create `.agent-pipeline/prompts/T-<id>/` and `.agent-pipeline/logs/T-<id>/`
 before dispatch. Save prompts as `<role>-<pass>.md`, exported transcripts as
 `<role>-<pass>.jsonl`, and patches as `<implementer>-<pass>.patch`. Every
 `oc.sh` call uses matching `--prompt-file` / `--raw-out` task/role/pass paths.
@@ -257,13 +265,13 @@ mechanism. You need three things:
 
 0. **First, check whether this project was just scaffolded.** If a
    first-run customization marker exists (this toolkit writes
-   `.agents/.needs-customization`), the role files still carry generic
+   `.agent-pipeline/.needs-customization`), the role files still carry generic
    pitfalls/hard-rules text rather than this codebase's real ones — do that
    customization pass with the human before running anything, then delete
    the marker. It is written once, on a fresh scaffold only, and the check
    otherwise lives in a Claude-Code-specific command file that you, as a
    different lead, will never execute.
-1. **A way to read and write `.agents/T-<id>.md`** — any tool with file
+1. **A way to read and write `.agent-pipeline/T-<id>.md`** — any tool with file
    access can do this.
 2. **A way to run each worker role** — either do the work yourself inline
    (weaker: no cross-vendor independence for review), or shell out to a

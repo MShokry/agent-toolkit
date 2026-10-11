@@ -3,7 +3,7 @@
 A reusable version of the planner → implement → review → test multi-agent
 pipeline: Claude, Codex, or OpenCode as the lead, matching-tool planning,
 OpenCode (any vendor) for cross-vendor implement/review/test, a state file
-(`.agents/T-<id>.md`) as the single handoff surface between roles, and a
+(`.agent-pipeline/T-<id>.md`) as the single handoff surface between roles, and a
 `delegate` skill so the lead's own context stays small across a long run. 
 
 It was distilled from real multi-agent pipeline runs and hardened there
@@ -25,7 +25,7 @@ handed to an AI ("recreate this system, with yourself as the lead").
 
 ### Standalone visual dashboard
 
-From any project with `.agents/` task records, run:
+From any project with `.agent-pipeline/` task records, run:
 
 ```bash
 ./scripts/dashboard
@@ -59,6 +59,10 @@ call Herdr. Displayed progress is recorded data, not independent verification.
 
 For an existing stamped scaffold, preview the addition and then install it:
 
+If task records still live in `.agents/`, first apply
+[migration 03](migrations/03-pipeline-directory.md); plain init refuses that
+legacy layout until the lead completes the approved relocation.
+
 ```bash
 bash /path/to/agent-toolkit/bin/init.sh --update --target . --only scripts/dashboard
 bash /path/to/agent-toolkit/bin/init.sh --target .
@@ -91,14 +95,14 @@ flowchart TD
 
 
 Every arrow into or out of a role is really a write to, or a read from,
-`.agents/T-<id>.md` — see below.
+`.agent-pipeline/T-<id>.md` — see below.
 
 ### Task files stay visible; artifacts stay grouped
 
 ```text
-.agents/
+.agent-pipeline/
 ├── T-023.md                     # task state, decisions, findings, results
-├── TEAM.md / TEMPLATE.md        # shared guidance (plus toolkit metadata/skills)
+├── TEAM.md / TEMPLATE.md        # shared guidance (plus toolkit metadata)
 ├── prompts/T-023/
 │   ├── builder-1.md
 │   ├── reviewer-1.md
@@ -123,13 +127,27 @@ files are not moved automatically, and active-run artifacts must never move.
 See [migration 02](migrations/02-artifact-layout.md) before upgrading a project
 with root-level prompts/logs or old `oc.sh` callers.
 
+`.agent-pipeline/` is toolkit-owned state, separate from native agent/skill
+discovery. Codex skills still live in `.agents/skills/`; OpenCode definitions
+stay in `.opencode/`. Init gitignores pipeline `prompts/`, `logs/`, local server
+credentials, and session IDs, while task records, shared guidance, and the
+provenance stamp remain trackable. A project may ignore the entire
+`/.agent-pipeline/` if it wants all pipeline state local; this also excludes
+shared guidance and the update baseline, so keep local backups.
+
+Existing `.agents/` pipeline layouts require
+[migration 03](migrations/03-pipeline-directory.md). `--update` reads the legacy
+stamp without writing anything; plain init and stamp refresh refuse the old
+layout to prevent split state. The updating lead can carry out the approved
+rename, keeping native skills in place and reconciling links and permissions.
+
 ### Context stays small, by construction
 
 ```mermaid
 sequenceDiagram
     participant Lead
     participant Role as Role (any)
-    participant File as .agents/T-id.md
+    participant File as .agent-pipeline/T-id.md
 
     Lead->>Role: dispatch (task id, short prompt)
     Role->>File: full detail - diff, Decisions log,<br/>verdict, test results
@@ -152,20 +170,20 @@ and test log it dispatched.
 | Role                                   | Reads                  | Writes                                      | Notes                                                   |
 | -------------------------------------- | ---------------------- | ------------------------------------------- | ------------------------------------------------------- |
 | Lead                                   | state file             | the acceptance-criteria ledger, Status      | the only role that records whether a criterion was met  |
-| Planner                                | whole repo             | `.agents/T-<id>.md` only                    | never touches source; owns criteria *text*, not outcome |
-| Implementer (`senior-dev` / `builder`) | whole repo             | source + `.agents/logs/T-<id>/<implementer>-<pass>.patch` + state file | the only roles that edit source                         |
+| Planner                                | whole repo             | `.agent-pipeline/T-<id>.md` only                    | never touches source; owns criteria *text*, not outcome |
+| Implementer (`senior-dev` / `builder`) | whole repo             | source + `.agent-pipeline/logs/T-<id>/<implementer>-<pass>.patch` + state file | the only roles that edit source                         |
 | Reviewer                               | whole repo (read-only) | state file only, or nothing — see below     | blanket `edit`/`write: deny` by default in this toolkit |
 | Tester                                 | whole repo (read-only) | `<test-dir>/**` + state file only           | never fixes, only reports                               |
 
 
 The reviewer template ships **safer than it has to be** — blanket deny, not
-scoped-allow on `.agents/**` — because a permission block that reads
+scoped-allow on `.agent-pipeline/**` — because a permission block that reads
 correctly in YAML isn't proof it's enforced by the runtime. Loosen it only
 after verifying that live against your own OpenCode server (see "Design
 decisions" below).
 
 Codex's planner uses a `workspace-write` sandbox because it must create the
-state file. Codex cannot scope that sandbox to `.agents/**` alone, so its
+state file. Codex cannot scope that sandbox to `.agent-pipeline/**` alone, so its
 source-read-only boundary is explicit role instruction rather than filesystem
 enforcement. This limitation is stated in the generated planner file rather
 than hidden.
@@ -298,7 +316,7 @@ templates into a temp file and compares each one against what's already in
 `--target`, printing a drift **summary** first (`exit 0` = clean, `exit 1`
 = something to merge; full hunks behind `--diff`, one file via
 `--only <path>`). On any scaffold after v0.3.0, flags default from
-`.agents/.toolkit-version` — the provenance stamp written at init — so
+`.agent-pipeline/.toolkit-version` — the provenance stamp written at init — so
 usually just `--update --target .` is needed. Merge deliberately (or run
 the generated `/toolkit-update` command and let your lead reconcile,
 triaging against the impact-tagged `CHANGELOG.md`), then refresh the
@@ -346,7 +364,10 @@ the four missing OpenCode files without overwriting existing files. Use
 
 ### Updating a project scaffolded before v0.3.0
 
-Older scaffolds have no `.agents/.toolkit-version` stamp. One-time
+Older scaffolds have no provenance stamp and use `.agents/` for pipeline state.
+Apply [migration 03](migrations/03-pipeline-directory.md) after the read-only
+preview and before the plain bootstrap in step 3; the paths below describe the
+resulting `.agent-pipeline/` layout. One-time
 migration — in the *target* project:
 
 `/toolkit-update` doesn't exist in the target yet at this point (step 3
@@ -365,7 +386,7 @@ against the *toolkit checkout*, not the target's own commands:
    selection past the standard single-model-plus-fallback shape will need
    `--reviewer-fallback-model` by hand). This prints the drift summary and
    **doesn't write anything yet**. Before merging, check
-   `.agents/T-*.md` for any `Status:` that isn't `done` — merge at a task
+   `.agent-pipeline/T-*.md` for any `Status:` that isn't `done` — merge at a task
    boundary, not mid-flight.
 3. Run the **same command again with the same flags, minus `--update`**
    (i.e. plain `bin/init.sh --target <path> --project-name ... [...]`) —
@@ -375,8 +396,8 @@ against the *toolkit checkout*, not the target's own commands:
    against an already-current project is — you still need the values from
    step 2, because this run doesn't attempt recovery itself.
 4. Merge in `CHANGELOG.md` impact order. Coming from ≤ v0.2.x also apply
-   `migrations/01-delivery-contract.md` to `.agents/TEMPLATE.md` and any
-   in-flight `.agents/T-*.md` (bare `blocked` still validates; nothing
+   `migrations/01-delivery-contract.md` to `.agent-pipeline/TEMPLATE.md` and any
+   in-flight `.agent-pipeline/T-*.md` (bare `blocked` still validates; nothing
    breaks if you skip it — you just don't get the new guarantees).
 5. Create the baseline: `bin/init.sh --refresh-stamp --target <path>`
    (same flags again).
@@ -400,7 +421,7 @@ that skill cannot bootstrap itself. After pulling the toolkit checkout, run:
 ```
 
 For a stamped project the second command loads all original values from
-`.agents/.toolkit-version`. It installs the Codex skill and planner without
+`.agent-pipeline/.toolkit-version`. It installs the Codex skill and planner without
 touching customized files; then open Codex and run `$toolkit-update` to
 reconcile any reported changes to files that already existed. For a pre-v0.3.0
 project with no stamp, follow the flag-recovery procedure above and pass those
@@ -454,7 +475,7 @@ not just correct-looking YAML.
 The first `/feature` run on a freshly-scaffolded project also asks, once,
 whether to fill the generated role files' generic "what this codebase will
 punish you for" sections with real specifics from your actual codebase —
-gated by a `.agents/.needs-customization` marker that `init.sh` drops only
+gated by a `.agent-pipeline/.needs-customization` marker that `init.sh` drops only
 on a genuinely fresh scaffold, deleted the moment it's asked either way.
 See `feature.md.tmpl`'s Preflight step 1; the Codex feature skill executes the
 same check.

@@ -70,6 +70,23 @@ rule() {
 }
 
 # --- the three hand-synced copies of the lead's flow ------------------------
+rule "pipeline state separate from native discovery" \
+  'native discovery directories separate from pipeline' \
+  "$FEATURE" "$SYSTEM" "$FLOW"
+
+rule "directory migrations need an approved move plan at a task boundary" \
+  'directory migrations require an approved move plan at a task boundary' \
+  "$FEATURE" "$SYSTEM" "$FLOW"
+
+rule "honor pipeline gitignore when staging" \
+  'do not force-add ignored pipeline records or artifacts' \
+  "$FEATURE" "$SYSTEM" "$FLOW"
+
+rule "update adapters preserve native skills during migration" \
+  'preserve.*\.agents/skills/|never rename.*\.agents/skills/' \
+  "templates/claude/commands/toolkit-update.md.tmpl" \
+  "templates/codex/skills/toolkit-update/SKILL.md.tmpl" "$OC_UPDATE"
+
 rule "standing duties: ask once, unblock, never widen mid-task" \
   'removing blockers, not implementing' \
   "$FEATURE" "$SYSTEM" "$FLOW"
@@ -112,7 +129,7 @@ rule "check the spec with a script before approval" \
 
 # --- Codex lead adapter -----------------------------------------------------
 rule "task-scoped prompt and log directories" \
-  '\.agents/prompts/T-<id>.*\.agents/logs/T-<id>' \
+  '\.agent-pipeline/prompts/T-<id>.*\.agent-pipeline/logs/T-<id>' \
   "$FEATURE" "$SYSTEM" "$FLOW" "$OC_LEADER"
 rule "prior pass artifacts survive retries" \
   'never overwrite a prior( >)? pass artifact' \

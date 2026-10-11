@@ -7,6 +7,21 @@ When you port one of these into a generated file, port the *mechanism and
 the reason*, not any tool-specific flag name that happens to appear here as
 the worked example.
 
+## Keep pipeline state separate from native discovery directories
+
+Use a toolkit-owned directory for task records, generated artifacts, and local
+runtime metadata. Tool-native agent/skill discovery directories have a different
+contract: ignoring or renaming a shared root can hide skills or break discovery.
+Ignore generated prompts/logs and secrets separately from shared configuration
+and provenance; an entirely local state directory is an explicit project choice.
+During updates the lead may carry out an approved directory migration, but only
+at a task boundary with paused readers/dispatch, inventory including ignored
+files, collision refusal, verified staged copies, coordinated reference/ignore
+changes, and rollback limited to its own work. Preserve original evidence and
+native discovery paths. Read old provenance without overwriting it, and refuse
+missing-file bootstrap or stamp refresh until relocation is complete: otherwise
+an apparently safe update creates two competing sources of task truth.
+
 ## Artifact evidence must survive retries without cluttering task discovery
 
 Mixing prompts/transcripts with task records makes the task list noisy and can

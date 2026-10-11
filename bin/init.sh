@@ -24,7 +24,7 @@
 #   guarantee those exact ids still exist. --project-name has no default
 #   and is still required.
 #
-# On a fresh scaffold this also writes .agents/.toolkit-version — a stamp
+# On a fresh scaffold this also writes .agent-pipeline/.toolkit-version — a stamp
 # recording the toolkit SHA/tag and every flag used. It is committed (it
 # describes the project, not the laptop); never written again by --update.
 #
@@ -41,8 +41,12 @@
 #                then refresh the stamp:
 #
 #   bin/init.sh --refresh-stamp [--target <path>] [flags]
-#     Rewrites .agents/.toolkit-version after you have accepted a merge.
+#     Rewrites .agent-pipeline/.toolkit-version after you have accepted a merge.
 #     This is the ONLY thing that updates the stamp besides a fresh scaffold.
+#
+# Legacy .agents/ pipeline layouts: --update reads the old baseline without
+# writes. Apply migrations/03-pipeline-directory.md with the lead before any
+# plain scaffold or stamp refresh. Native .agents/skills/ must stay in place.
 #
 # See docs/UPGRADING.md for the full workflow, CHANGELOG.md for what changed
 # per release (impact-tagged: contract > safety > process > docs).
@@ -168,7 +172,20 @@ check_opencode_version() {
 }
 check_opencode_version
 
-STAMP="$TARGET/.agents/.toolkit-version"
+STAMP="$TARGET/.agent-pipeline/.toolkit-version"
+LEGACY_LAYOUT=0
+for legacy_file in "$TARGET/.agents/.toolkit-version" "$TARGET/.agents/TEMPLATE.md" "$TARGET"/.agents/T-*.md; do
+  if [ -f "$legacy_file" ]; then LEGACY_LAYOUT=1; break; fi
+done
+if [ "$LEGACY_LAYOUT" -eq 1 ]; then
+  [ "$REFRESH_STAMP" -eq 0 ] || die "migrate .agents/ pipeline files first; refusing to refresh the legacy baseline (see migrations/03-pipeline-directory.md)"
+  [ "$UPDATE" -eq 1 ] || die "legacy pipeline layout at .agents/: run --update and apply migrations/03-pipeline-directory.md before scaffolding; no files were written"
+  if [ -f "$TARGET/.agents/.toolkit-version" ]; then
+    [ ! -f "$STAMP" ] || die "both pipeline provenance stamps exist; reconcile the collision before updating"
+    STAMP="$TARGET/.agents/.toolkit-version"
+  fi
+  printf 'init.sh: directory migration required: .agents/ pipeline files -> .agent-pipeline/ (keep .agents/skills/). See migrations/03-pipeline-directory.md.\n'
+fi
 
 # Keep in sync with the number of check_pair/render lines below.
 RENDER_TOTAL=23
@@ -358,15 +375,20 @@ if [ "$UPDATE" -eq 1 ]; then
     fi
     tmp="$(mktemp)"
     sed "${SED_ARGS[@]}" "$1" > "$tmp"
-    if [ ! -f "$2" ]; then
+    local live
+    live="$2"
+    if [ "$LEGACY_LAYOUT" -eq 1 ] && [ "$2" = "$TARGET/.agent-pipeline/TEMPLATE.md" ] && [ ! -f "$2" ]; then
+      live="$TARGET/.agents/TEMPLATE.md"
+    fi
+    if [ ! -f "$live" ]; then
       note_result new "$2"
-    elif diff -u "$2" "$tmp" > /dev/null 2>&1; then
+    elif diff -u "$live" "$tmp" > /dev/null 2>&1; then
       note_result same "$2"
     else
       note_result differ "$2"
       if [ "$SHOW_DIFF" -eq 1 ]; then
         printf 'init.sh: upstream changes for %s\n' "$2"
-        diff -u "$2" "$tmp" || true
+        diff -u "$live" "$tmp" || true
         printf '\n'
       fi
     fi
@@ -388,7 +410,7 @@ if [ "$UPDATE" -eq 1 ]; then
   check_pair "$TEMPLATES/opencode/agents/leader.md.tmpl"   "$TARGET/.opencode/agents/leader.md"
   check_pair "$TEMPLATES/opencode/commands/feature.md.tmpl" "$TARGET/.opencode/commands/feature.md"
   check_pair "$TEMPLATES/opencode/commands/toolkit-update.md.tmpl" "$TARGET/.opencode/commands/toolkit-update.md"
-  check_pair "$TEMPLATES/agents-state/TEMPLATE.md.tmpl"    "$TARGET/.agents/TEMPLATE.md"
+  check_pair "$TEMPLATES/agents-state/TEMPLATE.md.tmpl"    "$TARGET/.agent-pipeline/TEMPLATE.md"
   check_pair "$TEMPLATES/scripts/oc.sh.tmpl"               "$TARGET/scripts/oc.sh"
   check_pair "$TOOLKIT_ROOT/integrations/herdr/dashboard.py" "$TARGET/scripts/dashboard"
   check_pair "$TEMPLATES/scripts/team.sh.tmpl"             "$TARGET/scripts/team.sh"
@@ -407,10 +429,14 @@ if [ "$UPDATE" -eq 1 ]; then
     printf 'init.sh: this project scaffolded from %s (%s)\n' "${STAMPED_SHA:-unknown}" "${REPLY:-unknown date}"
   fi
 
-  DRIFT=0
+  DRIFT="$LEGACY_LAYOUT"
   if [ "${#NEW_UPSTREAM[@]}" -gt 0 ]; then
     DRIFT=1
-    printf 'init.sh: %s new upstream file(s) — re-run without --update to add:\n' "${#NEW_UPSTREAM[@]}"
+    if [ "$LEGACY_LAYOUT" -eq 1 ]; then
+      printf 'init.sh: %s new upstream file(s) — complete the directory migration before re-running without --update:\n' "${#NEW_UPSTREAM[@]}"
+    else
+      printf 'init.sh: %s new upstream file(s) — re-run without --update to add:\n' "${#NEW_UPSTREAM[@]}"
+    fi
     for f in "${NEW_UPSTREAM[@]}"; do printf '  new      %s\n' "$f"; done
   fi
   if [ "${#DIFFS[@]}" -gt 0 ]; then
@@ -454,7 +480,7 @@ render "$TEMPLATES/opencode/agents/planner.md.tmpl"  "$TARGET/.opencode/agents/p
 render "$TEMPLATES/opencode/agents/leader.md.tmpl"   "$TARGET/.opencode/agents/leader.md"
 render "$TEMPLATES/opencode/commands/feature.md.tmpl" "$TARGET/.opencode/commands/feature.md"
 render "$TEMPLATES/opencode/commands/toolkit-update.md.tmpl" "$TARGET/.opencode/commands/toolkit-update.md"
-render "$TEMPLATES/agents-state/TEMPLATE.md.tmpl"    "$TARGET/.agents/TEMPLATE.md"
+render "$TEMPLATES/agents-state/TEMPLATE.md.tmpl"    "$TARGET/.agent-pipeline/TEMPLATE.md"
 render "$TEMPLATES/scripts/oc.sh.tmpl"               "$TARGET/scripts/oc.sh"
 render "$TOOLKIT_ROOT/integrations/herdr/dashboard.py" "$TARGET/scripts/dashboard"
 render "$TEMPLATES/scripts/team.sh.tmpl"             "$TARGET/scripts/team.sh"
@@ -467,9 +493,9 @@ chmod +x "$TARGET/scripts/oc.sh" "$TARGET/scripts/team.sh" "$TARGET/scripts/dash
          "$TARGET/scripts/verify-state.sh" "$TARGET/scripts/verify-spec.sh" \
          "$TARGET/scripts/promote-findings.sh" 2>/dev/null || true
 
-mkdir -p "$TARGET/.agents"
+mkdir -p "$TARGET/.agent-pipeline"
 if [ "$FRESH_SCAFFOLD" -eq 1 ]; then
-  touch "$TARGET/.agents/.needs-customization"
+  touch "$TARGET/.agent-pipeline/.needs-customization"
 fi
 
 # Provenance stamp — written exactly once, on a genuine fresh scaffold,
@@ -481,7 +507,7 @@ if [ "$FRESH_SCAFFOLD" -eq 1 ] && [ ! -f "$STAMP" ]; then
   printf 'init.sh: wrote %s\n' "$STAMP"
 fi
 
-# .agents/.oc-port and .agents/.claude-session-id.* are local machine state
+# .agent-pipeline/.oc-port and .agent-pipeline/.claude-session-id.* are local machine state
 # (which port scripts/team.sh last bound; which Claude conversation each
 # tmux session name is pinned to), never something to commit. Codex resumes
 # its most recent conversation scoped to the current project and needs no
@@ -489,37 +515,44 @@ fi
 # Append-if-missing when the target is a git repo — additive only, in
 # keeping with this script's never-overwrite stance; a project that ignores
 # these differently is left alone.
-if [ -d "$TARGET/.git" ]; then
+if [ -e "$TARGET/.git" ]; then
   GITIGNORE="$TARGET/.gitignore"
-  if ! grep -qxF '.agents/.oc-port' "$GITIGNORE" 2>/dev/null; then
+  if ! grep -qxF '.agent-pipeline/.oc-port' "$GITIGNORE" 2>/dev/null; then
     {
       printf '\n# local opencode server port written by scripts/team.sh\n'
-      printf '.agents/.oc-port\n'
+      printf '.agent-pipeline/.oc-port\n'
     } >> "$GITIGNORE"
-    printf 'init.sh: added .agents/.oc-port to %s\n' "$GITIGNORE"
+    printf 'init.sh: added .agent-pipeline/.oc-port to %s\n' "$GITIGNORE"
   fi
   # opencode v2's `serve` always requires a password (v1 had none); this is
   # the secret scripts/team.sh generates for it — never commit it.
-  if ! grep -qxF '.agents/.oc-password' "$GITIGNORE" 2>/dev/null; then
+  if ! grep -qxF '.agent-pipeline/.oc-password' "$GITIGNORE" 2>/dev/null; then
     {
       printf '\n# local opencode server password written by scripts/team.sh\n'
-      printf '.agents/.oc-password\n'
+      printf '.agent-pipeline/.oc-password\n'
     } >> "$GITIGNORE"
-    printf 'init.sh: added .agents/.oc-password to %s\n' "$GITIGNORE"
+    printf 'init.sh: added .agent-pipeline/.oc-password to %s\n' "$GITIGNORE"
   fi
-  if ! grep -qxF '.agents/.claude-session-id.*' "$GITIGNORE" 2>/dev/null; then
+  if ! grep -qxF '.agent-pipeline/.claude-session-id.*' "$GITIGNORE" 2>/dev/null; then
     {
       printf '\n# local Claude session ids pinned per tmux session name by scripts/team.sh\n'
-      printf '.agents/.claude-session-id.*\n'
+      printf '.agent-pipeline/.claude-session-id.*\n'
     } >> "$GITIGNORE"
-    printf 'init.sh: added .agents/.claude-session-id.* to %s\n' "$GITIGNORE"
+    printf 'init.sh: added .agent-pipeline/.claude-session-id.* to %s\n' "$GITIGNORE"
   fi
-  if ! grep -qxF '.agents/logs/' "$GITIGNORE" 2>/dev/null; then
+  if ! grep -qxF '.agent-pipeline/logs/' "$GITIGNORE" 2>/dev/null; then
     {
       printf '\n# per-call pipeline telemetry written by scripts/oc.sh\n'
-      printf '.agents/logs/\n'
+      printf '.agent-pipeline/logs/\n'
     } >> "$GITIGNORE"
-    printf 'init.sh: added .agents/logs/ to %s\n' "$GITIGNORE"
+    printf 'init.sh: added .agent-pipeline/logs/ to %s\n' "$GITIGNORE"
+  fi
+  if ! grep -qxF '.agent-pipeline/prompts/' "$GITIGNORE" 2>/dev/null; then
+    {
+      printf '\n# generated pipeline dispatch prompts\n'
+      printf '.agent-pipeline/prompts/\n'
+    } >> "$GITIGNORE"
+    printf 'init.sh: added .agent-pipeline/prompts/ to %s\n' "$GITIGNORE"
   fi
 fi
 
@@ -546,7 +579,7 @@ Next steps:
      AGENTS.md is lead integration plus an explicitly unpopulated guidance
      section; fill it when no project CLAUDE.md already supplies constraints.
   5. On the first feature run, the selected lead will notice
-     .agents/.needs-customization and ask whether to fill the role files'
+     .agent-pipeline/.needs-customization and ask whether to fill the role files'
       generic pitfalls/hard-rules sections with this project's real ones.
       View task progress anytime: $TARGET/scripts/dashboard
       (Python 3.8+; no Herdr or model calls; --once prints a snapshot).
