@@ -10,6 +10,12 @@ update workflow. Version bumps mean: **MAJOR** = state-file contract /
 role authority / script interface changed; **MINOR** = new template,
 script, flag, or role rule; **PATCH** = prose and docs.
 
+## v1.0.1 — 2026-10-13
+
+- `[safety]` Fix CI ShellCheck compatibility for the manifest's indirect callbacks
+  and express the traversal-test assertion explicitly. No runtime behavior,
+  permissions, models, or task contract changes.
+
 ## v1.0.0 — 2026-10-13
 
 - `[safety]` Planner adapters no longer load historical lead handoffs; relevant
