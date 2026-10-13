@@ -15,6 +15,7 @@ script, flag, or role rule; **PATCH** = prose and docs.
 - `[safety]` Fix CI ShellCheck compatibility for the manifest's indirect callbacks
   and express the traversal-test assertion explicitly. No runtime behavior,
   permissions, models, or task contract changes.
+  Rewrite equivalent template guards as explicit `if` checks for older analyzers.
 
 ## v1.0.0 — 2026-10-13
 

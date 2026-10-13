@@ -6,13 +6,17 @@ set -eu
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd -P)"
 cd "$REPO_ROOT"
 die() { printf 'codex-lead.sh: %s\n' "$*" >&2; exit 1; }
-[ $# -ge 1 ] && [ $# -le 2 ] || die "usage: <team-name> [--fresh]"
+if [ $# -lt 1 ] || [ $# -gt 2 ]; then
+  die "usage: <team-name> [--fresh]"
+fi
 TEAM="$1" FRESH="${2:-}"
 [[ "$TEAM" =~ ^[a-zA-Z0-9_-]+$ ]] || die "invalid team name"
 [ -z "$FRESH" ] || [ "$FRESH" = --fresh ] || die "expected --fresh"
 command -v codex >/dev/null 2>&1 || die "codex not installed"
 command -v python3 >/dev/null 2>&1 || die "python3 required for session capture"
-[ -f .codex/hooks.json ] && [ -f .agent-pipeline/bin/codex-session.py ] || die "session hooks missing; finish scaffold/update"
+if [ ! -f .codex/hooks.json ] || [ ! -f .agent-pipeline/bin/codex-session.py ]; then
+  die "session hooks missing; finish scaffold/update"
+fi
 codex resume --help | grep -q -- '--no-daemon' || die "Codex lacks --no-daemon; exact launch environment isolation is unavailable"
 [ ! -L .agent-pipeline ] || die "pipeline directory must not be a symlink"
 mkdir -p .agent-pipeline

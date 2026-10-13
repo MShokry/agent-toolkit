@@ -40,7 +40,9 @@ case "$ACTION" in
   actions) exec "$HERDR_BIN" plugin action list ;;
   logs) exec "$HERDR_BIN" plugin log list --plugin agent-toolkit ;;
 esac
-[ -n "${HERDR_PANE_ID:-}" ] && [ -n "${HERDR_WORKSPACE_ID:-}" ] || die "run in the intended Herdr project pane; no arbitrary focused workspace fallback"
+if [ -z "${HERDR_PANE_ID:-}" ] || [ -z "${HERDR_WORKSPACE_ID:-}" ]; then
+  die "run in the intended Herdr project pane; no arbitrary focused workspace fallback"
+fi
 command -v python3 >/dev/null 2>&1 || die "python3 required for Herdr context validation"
 python3 - "$ROOT" "$HERDR_BIN" "$HERDR_PANE_ID" "$HERDR_WORKSPACE_ID" <<'PY'
 import json

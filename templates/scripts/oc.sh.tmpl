@@ -201,7 +201,9 @@ mkdir -p "$REPO_ROOT/.agent-pipeline/logs/$TASK_ID"
 [ -d "$(dirname "$RAW_OUT")" ] || die "transcript directory does not exist"
 RAW_OUT="$(cd "$(dirname "$RAW_OUT")" && pwd -P)/$(basename "$RAW_OUT")"
 [ "$RAW_OUT" = "$EXPECTED_RAW" ] || die "transcript must match prompt: $EXPECTED_RAW"
-[ ! -e "$RAW_OUT" ] && [ ! -L "$RAW_OUT" ] || die "artifact already exists: $RAW_OUT; use a new pass"
+if [ -e "$RAW_OUT" ] || [ -L "$RAW_OUT" ]; then
+  die "artifact already exists: $RAW_OUT; use a new pass"
+fi
 PROMPT="$(cat "$PROMPT_FILE")"
 [ -n "$PROMPT" ] || die "prompt file is empty"
 

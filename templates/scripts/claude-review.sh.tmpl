@@ -38,7 +38,9 @@ fi
 [[ "$PROMPT_FILE" =~ ^\.agent-pipeline/prompts/(T-[a-zA-Z0-9_-]+)/reviewer-([1-9][0-9]*)\.md$ ]] || die "prompt must use canonical task/reviewer/pass path"
 TASK="${BASH_REMATCH[1]}" PASS="${BASH_REMATCH[2]}"
 [ "$RAW_OUT" = ".agent-pipeline/logs/$TASK/reviewer-$PASS.jsonl" ] || die "transcript must match prompt task/pass"
-[ -s "$PROMPT_FILE" ] && [ ! -L "$PROMPT_FILE" ] || die "prompt is missing, empty, or a symlink"
+if [ ! -s "$PROMPT_FILE" ] || [ -L "$PROMPT_FILE" ]; then
+  die "prompt is missing, empty, or a symlink"
+fi
 [ -f ".agent-pipeline/tasks/$TASK.md" ] || die "task state is missing"
 [ "$(grep -c '^\*\*Claude review approved:\*\*' ".agent-pipeline/tasks/$TASK.md" || true)" -eq 1 ] || die "task must have exactly one Claude review approval field"
 grep -qxF '**Claude review approved:** on' ".agent-pipeline/tasks/$TASK.md" || die "external Claude review requires recorded task approval"
@@ -60,7 +62,9 @@ if [ -n "$SESSION" ]; then
   STORED="$(python3 .agent-pipeline/bin/task-record.py session ".agent-pipeline/tasks/$TASK.md" reviewer claude "$MODEL")" || die "invalid reviewer assignment"
   [ "$SESSION" = "$STORED" ] || die "resume id is not this task's recorded Claude reviewer session"
   MODEL_RECORD=".agent-pipeline/logs/$TASK/claude-review-session.$SESSION.model"
-  [ -f "$MODEL_RECORD" ] && [ ! -L "$MODEL_RECORD" ] || die "reviewer model record missing; do not resume an unverified thread"
+  if [ ! -f "$MODEL_RECORD" ] || [ -L "$MODEL_RECORD" ]; then
+    die "reviewer model record missing; do not resume an unverified thread"
+  fi
   [ "$(cat "$MODEL_RECORD")" = "$MODEL" ] || die "reviewer model changed; start a fresh session"
 else
   SESSION="$(python3 -c 'import uuid; print(uuid.uuid4())')"

@@ -47,7 +47,9 @@ case "$OP" in
     [ "$PROMPT" = ".agent-pipeline/prompts/$TASK/$LABEL.md" ] || die "prompt must match task/label"
     [ "$RAW" = ".agent-pipeline/logs/$TASK/$LABEL.jsonl" ] || die "transcript must match task/label"
     [ -s "$PROMPT" ] || die "missing or empty prompt"
-    [ ! -e "$RAW" ] && [ ! -L "$RAW" ] || die "transcript already exists; use a new pass"
+    if [ -e "$RAW" ] || [ -L "$RAW" ]; then
+      die "transcript already exists; use a new pass"
+    fi
     mkdir -p ".agent-pipeline/logs/$TASK"
     mkdir "$DIR" 2>/dev/null || die "attempt already reserved; use a new pass"
     # _run owns the completion record; stderr receipts never determine success.
@@ -76,7 +78,9 @@ case "$OP" in
   wait)
     MAX="${1:-30}"
     [ $# -le 1 ] || die "wait takes only max-seconds"
-    [[ "$MAX" =~ ^[0-9]+$ ]] && [ "$MAX" -le 540 ] || die "max-seconds must be 0..540"
+    if ! [[ "$MAX" =~ ^[0-9]+$ ]] || [ "$MAX" -gt 540 ]; then
+      die "max-seconds must be 0..540"
+    fi
     MAX=$((10#$MAX))
     [ -d "$DIR" ] || die "no attempt recorded"
     END=$(( $(date +%s) + MAX ))
