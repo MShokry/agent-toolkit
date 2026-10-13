@@ -9,22 +9,15 @@ findings and incident timelines remain available in Git history.
   written rules provide safe routes, not live enforcement proof. OpenCode planner
   model dispatch wiring still needs a fresh approved runtime check against the
   stamped assignment. Herdr setup from a shell failed adoption; submission/hosting
-  is not a role briefing. Real-project cleanup remains deferred while lead works.
+    is not a role briefing.
 
 - Major layout: verify moved permission resources against the exact generated
   artifacts live. Tester writes must reach task records but not bin/ or roles/;
   lead automatic edits must not include executable tooling. Confirm per-role
   model bindings and actual reviewer identity in fresh native/runtime sessions.
-- Disposable DesignSystem layout/bootstrap check migrated 31 task files without
-  modifying the original project/provenance. Eight records produce pre-existing
-  v0.10.2 structural warnings (class text, review/test pass counts, missing review
-  or ledger evidence); triage these before a real upgrade, never rewrite history
-  or infer acceptance just to make the validator green. No live model calls ran.
-- Approved real DesignSystem upgrade applied 2026-10-12: 58 installed-contract/
-  mocked-runtime/schema/mover tests passed; 31 historical records retained the
-  same eight validator warnings. Four intentional project customizations remain.
-  Git index unchanged; two concurrent Maestro edits preserved. Exact runtime
-  permission/identity/native-session checks still pending; no live workers ran.
+- Triage existing validator warnings without deleting historical evidence or
+  inferring acceptance just to make migration checks green. Keep migration tests
+  project-neutral and confined to disposable fixtures.
 
 - Verify lean starting context live in all three harnesses: native role discovery,
   actual first-turn instructions, global/project/nested guidance inheritance,

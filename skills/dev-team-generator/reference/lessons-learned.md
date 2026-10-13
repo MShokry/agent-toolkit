@@ -764,9 +764,9 @@ under test.
 - A shared role contract avoids N copies of behavioral rules; native adapters
   retain real model/permission/sandbox differences. New provider assignments
   should not grow every role's starting prompt.
-- Automatically loaded project guidance must distinguish explicitly assigned
-  workers from unassigned feature requests. Otherwise a worker may recursively
-  load the leader workflow even though its own contract never asks for it.
+- Automatically loaded project guidance must stay neutral, not route ordinary
+  feature requests into a team. Opt-in entrypoints must exclude explicitly assigned
+  workers, avoiding recursive leader loading without adding startup instructions.
 - Keep approval/independence/artifact gates in the compact lead contract. Load
   transport/host details only for selected backends; test links and context budgets
   as well as syntax. Fewer installed files alone do not prove fewer prompt tokens.
@@ -788,6 +788,11 @@ under test.
   as working integration. Treat its configuration as a snapshot, not live evidence.
 
 ## 38. A major layout upgrade needs one coherent transaction, not split state
+
+- Installing a workflow is not consent to activate it. Keep automatically loaded
+  project guidance neutral and skill discovery descriptions explicitly opt-in;
+  expose commands and a copyable prompt outside startup files. This saves normal
+  agents' context and avoids turning an explicitly assigned worker into a leader.
 
 - A worker must not load a lead's historical handoff just because that file
   exists. Pass relevant verified facts in the scoped brief; static word budgets

@@ -1,8 +1,9 @@
 ---
 name: feature
-description: Lead feature or bug-fix work through planning, approval, independent review, and testing. Not for agents explicitly assigned a worker role.
+description: Use only when the user explicitly invokes feature or asks to use the team pipeline. Never auto-select for ordinary feature/bug-fix requests or agents assigned a worker role.
 ---
 
+This workflow requires explicit user selection. If not selected, do not load leader rules.
 Read project guidance, then `.agent-pipeline/roles/leader.md`.
 Spawn the project Codex `planner` subagent when planning is needed.
 OpenCode builder remains the default implementer; native codex-dev requires

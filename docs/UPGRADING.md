@@ -3,6 +3,14 @@
 Generated files are project-owned copies, not a package to overwrite. Update
 at a task boundary and preserve local customizations.
 
+## v1.0.2 opt-in activation update
+
+[Migration 05](../migrations/05-manual-team-activation.md) removes automatic team
+routing from generated startup guidance. Fresh AGENTS.md is only a project-guidance
+bridge to CLAUDE.md; commands and a copyable prompt are documented in README.md.
+Existing guidance is never overwritten. Merge out old routing paragraphs explicitly,
+preserve project constraints, and start a fresh conversation to drop loaded rules.
+
 ## v1.0.0 upgrade: one migration
 
 Projects on **v0.10.2** use [migration 04](../migrations/04-team-upgrade.md)
@@ -51,7 +59,7 @@ bash "$TOOLKIT/bin/init.sh" --update --target .
 For an all-tools installation, an additional read-only/project-copy check is:
 `python3 "$TOOLKIT/test/project.py" --project .`. It checks installed contracts
 and runs installed runtime scripts with mocked CLIs in disposable fixtures,
-including the project's hardened findings promotion. It is not a live permission,
+including findings promotion in a disposable fixture. It is not a live permission,
 model-identity, native-discovery, or application/device test.
 
 Choose claude/opencode/all instead if desired. Keep existing model assignments

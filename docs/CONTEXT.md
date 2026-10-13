@@ -5,6 +5,13 @@ normally changes an assignment, not the workflow or role contracts.
 
 ## What each conversation reads
 
+Team activation is opt-in. Ordinary startup reads only project guidance; generated
+AGENTS.md links to CLAUDE.md when present without mentioning the team or routing
+feature/bug-fix work. Use `/feature` (Claude/OpenCode), explicitly invoke `$feature`
+(Codex), or the [copyable leader prompt](../README.md#start-the-team-explicitly-command-or-prompt).
+The feature skill's discovery description also requires explicit user selection.
+Init never injects these activation instructions into existing startup files.
+
 | Conversation | Toolkit instructions | Task/source inputs |
 | --- | --- | --- |
 | Leader | Small native entrypoint + roles/leader.md + selected backend adapters | Header/handoff between gates; approval/evidence at decisions |
@@ -15,7 +22,7 @@ normally changes an assignment, not the workflow or role contracts.
 
 Every role also receives harness system/tool instructions and applicable global,
 project, and nested guidance. Those costs are not controlled by this toolkit.
-An explicit worker assignment must NOT activate generic feature/lead routing.
+An explicit worker assignment must NOT activate the leader workflow.
 Workers do not load leader rules or backend dispatch manuals; leaders do not
 load all worker contracts. Tool adapters retain their own actual permissions.
 

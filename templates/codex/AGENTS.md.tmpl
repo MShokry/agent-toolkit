@@ -1,19 +1,5 @@
-# __PROJECT_NAME__ — project entrypoint
+# __PROJECT_NAME__ — project guidance
 
 Read `CLAUDE.md` when present for project constraints.
-**Explicit worker assignment takes precedence over generic lead routing.**
-Workers read only their assigned role contract and task evidence; do not invoke
-the `feature` skill, read leader rules, or dispatch another team.
-
-For unassigned feature/bug-fix work: Claude uses `/feature`, Codex invokes the
-`feature` skill, OpenCode uses `/feature` with its leader agent. Each loads
-`.agent-pipeline/roles/leader.md` and only needed backend adapters.
-Toolkit updates use `toolkit-update`, at an idle task boundary.
-The task record is the handoff surface; replies are short receipts except
-read-only reviewers returning findings for the lead to persist unchanged.
-
-## Project-specific guidance
-
-Not populated by agent-toolkit. If CLAUDE.md is absent and this section has not
-been customized with actual architecture, constraints, style, and test commands,
-stop before feature work and ask the user. Pipeline rules are not project guidance.
+Follow the project's applicable architecture, style, and test guidance.
+If required project constraints are missing, ask before making assumptions.

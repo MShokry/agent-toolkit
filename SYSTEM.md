@@ -44,6 +44,9 @@ Every profile also supplies `.agent-pipeline/README.md` as an opt-in portable
 leader orientation. It embeds the canonical leader body plus team details;
 workers do not load it and native leads need not read both copies. Sharing the
 guide grants no project access, dispatch capability, or approval.
+Team activation is opt-in: only an explicit user command or prompt selects the
+leader workflow. Generated root AGENTS.md contains project guidance only, with
+a CLAUDE.md link when needed; it never routes ordinary work into the pipeline.
 
 **Herdr hosting is optional, not worker dispatch.** `.agent-pipeline/bin/herdr-team.sh`
 can discover installed host actions/sessions and preserve the existing lead in

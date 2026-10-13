@@ -10,6 +10,16 @@ update workflow. Version bumps mean: **MAJOR** = state-file contract /
 role authority / script interface changed; **MINOR** = new template,
 script, flag, or role rule; **PATCH** = prose and docs.
 
+## v1.0.2 — 2026-10-14
+
+- `[contract]` Make team activation explicitly opt-in. Fresh root AGENTS.md only
+  links to project guidance/CLAUDE.md; it does not mention the team or load leader
+  rules. Feature skill discovery requires an explicit command or team request.
+  Document manual commands and a copyable prompt; preserve existing startup files
+  and project constraints through migration 05. No permission/model changes.
+- `[docs]` Remove named downstream-project examples from toolkit documentation;
+  keep verification fixtures and instructions project-neutral.
+
 ## v1.0.1 — 2026-10-13
 
 - `[safety]` Fix CI ShellCheck compatibility for the manifest's indirect callbacks

@@ -362,7 +362,8 @@ recover_from_target() { # $1 = key
         REPLY="$(sed -n 's/^SESSION="\(.*\)"/\1/p' "$TARGET/scripts/team.sh" 2>/dev/null | head -1)"
       fi
       if [ -z "$REPLY" ] && [ -f "$TARGET/AGENTS.md" ]; then
-        REPLY="$(sed -n 's/^# \(.*\) — project entrypoint$/\1/p' "$TARGET/AGENTS.md" | head -1)"
+        REPLY="$(sed -n -e 's/^# \(.*\) — project guidance$/\1/p' \
+          -e 's/^# \(.*\) — project entrypoint$/\1/p' "$TARGET/AGENTS.md" | head -1)"
       fi ;;
     test_dir)
       # tester.md: "__TEST_DIR__/**": allow

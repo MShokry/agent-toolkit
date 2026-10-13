@@ -65,6 +65,46 @@ class ContextTests(unittest.TestCase):
                 self.assertFalse((target / ".agent-pipeline/.needs-customization").exists())
                 self.assertEqual(stamp.read_bytes(), before[".agent-pipeline/.toolkit-version"])
 
+    def test_fresh_startup_guidance_is_neutral_and_commands_remain_opt_in(self):
+        for profile in ("claude", "codex", "opencode", "all"):
+            with self.subTest(profile=profile):
+                target = self.project(profile)
+                guidance = (target / "AGENTS.md").read_text()
+                self.assertIn("Read `CLAUDE.md` when present", guidance)
+                self.assertNotRegex(guidance.lower(), r"team|leader|feature|agent-pipeline|skills/")
+                self.assertFalse((target / "CLAUDE.md").exists())
+                self.assertTrue((target / ".agent-pipeline/README.md").is_file())
+                if profile in ("codex", "all"):
+                    skill = (target / ".agents/skills/feature/SKILL.md").read_text()
+                    self.assertIn("Never auto-select for ordinary", skill)
+                    self.assertIn(".agent-pipeline/roles/leader.md", skill)
+
+    def test_existing_startup_guidance_is_never_rewritten(self):
+        target = self.base / "existing-guidance"
+        target.mkdir()
+        agents = target / "AGENTS.md"
+        claude = target / "CLAUDE.md"
+        agents.write_text("# Existing rules\nUse this project's current workflow.\n")
+        claude.write_text("# Project rules\nDo not introduce dependencies.\n")
+        before = {path: path.read_bytes() for path in (agents, claude)}
+        result = self.init(target, "--project-name", "existing", "--leader", "all")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual({path: path.read_bytes() for path in (agents, claude)}, before)
+
+        self.init(target, "--update")
+        self.assertEqual({path: path.read_bytes() for path in (agents, claude)}, before)
+
+    def test_old_project_entrypoint_title_remains_recoverable(self):
+        target = self.project("opencode")
+        (target / ".agent-pipeline/.toolkit-version").unlink()
+        agents = target / "AGENTS.md"
+        agents.write_text(agents.read_text().replace("— project guidance", "— project entrypoint"))
+        before = self.snapshot(target)
+        preview = self.init(target, "--update")
+        self.assertNotIn("--project-name is unset", preview.stderr)
+        self.assertIn("PROJECT_NAME: context", preview.stdout)
+        self.assertEqual(before, self.snapshot(target))
+
     def test_optional_extras_and_native_workers_only_add_needed_dependencies(self):
         target = self.project("opencode", "--extras", "herdr", "--reviewer-model", "claude/sonnet",
                               "--reviewer-fallback-model", "codex/review", "--tester-model", "codex/test")
@@ -201,8 +241,9 @@ class ContextTests(unittest.TestCase):
         for backend in ("opencode", "claude", "codex"):
             self.assertLessEqual(len((ROOT / f"templates/pipeline/adapters/{backend}.md.tmpl").read_text().split()), 400)
         guidance = (ROOT / "templates/codex/AGENTS.md.tmpl").read_text()
-        self.assertIn("Explicit worker assignment takes precedence", guidance)
-        self.assertLessEqual(len(guidance.split()), 180)
+        self.assertIn("Read `CLAUDE.md` when present", guidance)
+        self.assertLessEqual(len(guidance.split()), 60)
+        self.assertNotRegex(guidance.lower(), r"team|leader|feature|agent-pipeline|skills/")
         for role in ("builder", "reviewer", "tester"):
             text = (ROOT / f"templates/opencode/agent/{role}.md.tmpl").read_text().split("---", 2)[2]
             self.assertLessEqual(len(text.split()), 100)
@@ -246,7 +287,7 @@ class ContextTests(unittest.TestCase):
 
     def test_migration_links_resolve_after_unreleased_consolidation(self):
         expected = {"01-delivery-contract.md", "02-artifact-layout.md",
-                    "03-pipeline-directory.md", "04-team-upgrade.md"}
+                    "03-pipeline-directory.md", "04-team-upgrade.md", "05-manual-team-activation.md"}
         self.assertEqual({p.name for p in (ROOT / "migrations").glob("*.md")}, expected)
         obsolete = ("04-role-sessions.md", "05-codex-workers.md",
                     "06-lead-resume-claude-review.md", "07-lean-context.md")

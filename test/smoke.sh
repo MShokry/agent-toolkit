@@ -73,8 +73,11 @@ for codex_file in \
 done
 grep -q '\.agent-pipeline/roles/leader.md' "$TMP/.agents/skills/feature/SKILL.md" \
   || fail "Codex feature skill does not point at the canonical lead flow"
-grep -q 'Not populated by agent-toolkit' "$TMP/AGENTS.md" \
-  || fail "generated AGENTS.md masks its missing project-specific guidance"
+grep -q 'If required project constraints are missing, ask' "$TMP/AGENTS.md" \
+  || fail "generated AGENTS.md masks missing project-specific guidance"
+if grep -qiE 'team|leader|feature|agent-pipeline|skills/' "$TMP/AGENTS.md"; then
+  fail "generated startup guidance activates or mentions the team"
+fi
 grep -q 'Codex `planner` subagent' "$TMP/.agents/skills/feature/SKILL.md" \
   || fail "Codex feature skill does not select the Codex planner"
 grep -q 'sandbox_mode = "workspace-write"' "$TMP/.codex/agents/planner.toml" \

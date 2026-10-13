@@ -21,6 +21,11 @@ jobs:
         run: python3 test/context.py
       - name: Major layout and task schema migration
         run: python3 test/layout.py
+      - name: Installed team contracts in a disposable scaffold
+        run: |
+          project="$(mktemp -d)"
+          bash bin/init.sh --target "$project" --project-name fixture --leader all
+          python3 test/project.py --project "$project"
       - name: ShellCheck
         run: |
           shellcheck --version >/dev/null 2>&1 || { echo "shellcheck not installed; skipping"; exit 0; }

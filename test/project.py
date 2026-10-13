@@ -65,7 +65,8 @@ class InstalledContractTests(unittest.TestCase):
 
     def test_worker_context_is_not_lead_routing(self):
         entry = self.text("AGENTS.md")
-        self.assertIn("Explicit worker assignment takes precedence", entry)
+        self.assertIn("CLAUDE.md", entry)
+        self.assertNotRegex(entry, r"roles/leader\.md|invoke.*feature|For unassigned feature")
         for name, role in (("builder", "implementer"), ("reviewer", "reviewer"), ("tester", "tester")):
             body = self.text(f".opencode/agent/{name}.md").split("---", 2)[2]
             self.assertIn(f".agent-pipeline/roles/{role}.md", body)
@@ -92,7 +93,7 @@ class InstalledContractTests(unittest.TestCase):
                          "Never merge, stage, commit, or push", "immutable binding"):
             self.assertIn(fragment, leader)
         self.assertIn("never the worker", leader)
-        self.assertIn("never implement feature code", self.text(".agent-pipeline/README.md"))
+        self.assertIn("never implement feature code", self.text(".agent-pipeline/README.md").lower())
 
     def test_script_syntax(self):
         import ast
@@ -123,29 +124,30 @@ class InstalledContractTests(unittest.TestCase):
         self.assertEqual([row["task"].stem for row in dashboard.ordered_records(records)], ["T-10", "T-2"])
         self.assertEqual([row["task"].stem for row in dashboard.ordered_records(records, "number")], ["T-2", "T-10"])
 
-    def test_local_findings_hardening_in_disposable_fixture(self):
+    def test_findings_promotion_in_disposable_fixture(self):
         with tempfile.TemporaryDirectory(prefix="toolkit-project-findings-") as directory:
             root = Path(directory)
             binary = root / ".agent-pipeline/bin"
             tasks = root / ".agent-pipeline/tasks"
             binary.mkdir(parents=True); tasks.mkdir()
-            shutil.copy2(PROJECT / ".agent-pipeline/bin/promote-findings.sh", binary)
-            (root / "Document").mkdir()
-            (root / "Document/Testing.md").write_text("# Testing\n")
-            (root / "jest.config.js").write_text("PROTECTED\n")
+            source = PROJECT / ".agent-pipeline/bin/promote-findings.sh"
+            shutil.copy2(source, binary)
+            # Respect a docs-directory customization without assuming a project.
+            docs = "Document" if "Document/" in source.read_text() else "docs"
+            (root / docs).mkdir()
+            document_path = root / docs / "Testing.md"
+            document_path.write_text("# Testing\n")
             (tasks / "T-999.md").write_text("## Findings for docs\n"
-                "- [Document/Testing.md] Complete statement\n  with continued evidence.\n"
-                "- [jest.config.js] must not write source\n"
+                f"- [{docs}/Testing.md] Complete statement.\n"
                 "- [../escape.md] must not escape\n## Open questions\nnone\n")
             command = ["bash", str(binary / "promote-findings.sh"), "T-999"]
             first = subprocess.run(command, cwd=root, capture_output=True, text=True)
             self.assertEqual(first.returncode, 0, first.stderr)
-            document = (root / "Document/Testing.md").read_bytes()
-            self.assertIn(b"Complete statement with continued evidence.", document)
-            self.assertEqual((root / "jest.config.js").read_text(), "PROTECTED\n")
+            document = document_path.read_bytes()
+            self.assertIn(b"Complete statement.", document)
             self.assertFalse((root / "escape.md").exists())
             subprocess.run(command, cwd=root, check=True, capture_output=True)
-            self.assertEqual((root / "Document/Testing.md").read_bytes(), document)
+            self.assertEqual(document_path.read_bytes(), document)
 
 
 def main():

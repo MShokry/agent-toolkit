@@ -227,8 +227,8 @@ rule "Codex feature skill delegates to the canonical lead flow" \
   '\.agent-pipeline/roles/leader\.md' \
   "$CODEX_FEATURE"
 
-rule "Codex project instructions route feature work through the skill" \
-  'invoke the `feature` skill' \
+rule "startup project guidance links only to project constraints" \
+  'Read `CLAUDE.md` when present' \
   "$CODEX_AGENTS"
 
 rule "Codex planner discloses its non-enforced source-write boundary" \
@@ -315,8 +315,10 @@ rule "reviewer/tester recorded per task" \
   'reviewer for this task|Role assignments' \
   "$STATE" "$STATE_EX"
 
-rule "worker routing excludes the leader workflow" \
-  'Explicit worker assignment takes precedence' "$CODEX_AGENTS"
+rule "team activation requires explicit opt-in" \
+  'Team activation is opt-in' "$FEATURE" "$SYSTEM" "$FLOW"
+rule "feature skill is not selected for ordinary work" \
+  'Never auto-select for ordinary' "$CODEX_FEATURE"
 rule "lead alone owns counters" \
   'lead.*owns.*(loop )?counters|lead alone owns.*counters' "$SENIOR" "$SYSTEM" "$FLOW"
 rule "lead increments spec bounces at routing" \

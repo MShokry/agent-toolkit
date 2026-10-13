@@ -52,6 +52,34 @@ not the leader workflow. Default selected profiles install **25–26 files**;
 or overwritten. See [context/loading and profiles](docs/CONTEXT.md) and
 [migration 04](migrations/04-team-upgrade.md).
 
+### Start the team explicitly: command or prompt
+
+Installing the toolkit does **not** activate the team. Fresh `AGENTS.md` contains
+only project guidance and a link to `CLAUDE.md` when present—not team references,
+automatic feature routing, or leader instructions. Existing startup files are
+never overwritten, and init does not inject team routing into `CLAUDE.md` or
+other automatically loaded guidance.
+
+Choose one entrypoint when you want the team:
+
+| App | Explicit invocation |
+| --- | --- |
+| Claude Code | `/feature <request>` |
+| Codex | Invoke `$feature` with your request |
+| OpenCode | `/feature <request>` with the leader agent |
+| Any app with project access | Use the prompt below |
+
+Copyable prompt:
+
+> For this request, use the agent team. Read `.agent-pipeline/README.md` and act
+> as its leader. Confirm project access, configured models, and worker dispatch
+> capabilities first. Preserve project rules and all approval gates; do not
+> implement feature code in the leader conversation. Request: <your request>.
+
+This is an explicit opt-in, not approval of a spec, auto-mode, or a merge.
+Workers receive their assigned role and task evidence, never this leader prompt.
+For existing installations, see [migration 05](migrations/05-manual-team-activation.md).
+
 ### One file to introduce the team to any app
 
 Every profile installs **`.agent-pipeline/README.md`**: configured team/model

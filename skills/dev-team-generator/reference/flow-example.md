@@ -39,9 +39,11 @@ exceeded budget as an escalation, never one more lap.
 
 Keep runtime instructions role-scoped: a small lead entrypoint loads the neutral
 leader contract and only selected backend dispatch adapters. Workers load only
-their role plus project guidance and required task evidence; explicit worker
-assignment must suppress generic feature/lead routing. Expand history when needed.
+their role plus project guidance and required task evidence; assigned workers
+must never select the leader workflow. Expand history when needed.
 Do not put every role/provider's manual into an automatically loaded root file.
+Team activation is opt-in: require an explicit user command or prompt. Generated
+root guidance only points to project constraints, never a team or leader workflow.
 The lead alone owns loop counters; workers never increment them a second time.
 Install only selected harnesses/extras, keeping an explicit all-tools option.
 Keep toolkit runtime in `.agent-pipeline/bin/`, and task records/template in
