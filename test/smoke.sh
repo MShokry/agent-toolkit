@@ -539,7 +539,9 @@ grep -q 'appended to docs/GOTCHAS.md' <<< "$out" || fail "legit finding not prom
 grep -q 'escaping the repo root' <<< "$out" || fail "../.. path was not refused"
 grep -q 'unsafe/invalid doc path' <<< "$out" || fail "absolute path was not refused"
 [ -f "$TMP/docs/GOTCHAS.md" ] || fail "docs/GOTCHAS.md not created"
-[ ! -e "$TMP/../escaped.md" ] && [ ! -f "/tmp/escaped.md" ] || fail "a traversal write landed somewhere"
+if [ -e "$TMP/../escaped.md" ] || [ -f "/tmp/escaped.md" ]; then
+  fail "a traversal write landed somewhere"
+fi
 [ ! -f "$(cd "$TMP/.." && pwd)/escaped.md" ] || fail "traversal escaped above target"
 out="$("$PF" T-02 2>&1)"
 grep -q 'already present, skipped' <<< "$out" || fail "promotion not idempotent"

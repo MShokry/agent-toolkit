@@ -640,7 +640,7 @@ if [ "$UPDATE" -eq 1 ]; then
   MATCHED=0
   TOTAL=0
 
-  # shellcheck disable=SC2329 # Used through the shared manifest callback.
+  # shellcheck disable=SC2317,SC2329 # Used through the shared manifest callback.
   note_result() { # $1 = status (same|differ|new), $2 = dest
     TOTAL=$((TOTAL + 1))
     case "$1" in
@@ -650,7 +650,7 @@ if [ "$UPDATE" -eq 1 ]; then
     esac
   }
 
-  # shellcheck disable=SC2329 # Invoked indirectly by manifest.
+  # shellcheck disable=SC2317,SC2329 # Invoked indirectly by manifest.
   check_pair() { # $1 = template, $2 = destination
     selected_file "$2" || return 0
     if [ -n "$ONLY" ]; then
