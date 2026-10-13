@@ -10,6 +10,127 @@ update workflow. Version bumps mean: **MAJOR** = state-file contract /
 role authority / script interface changed; **MINOR** = new template,
 script, flag, or role rule; **PATCH** = prose and docs.
 
+## v1.0.0 — 2026-10-13
+
+- `[safety]` Planner adapters no longer load historical lead handoffs; relevant
+  verified facts belong in the scoped brief, not additional worker context.
+  Live context loading remains unverified. Limit CI ShellCheck to shell templates.
+  Fix completion-array splitting and express the Herdr scaffold gate explicitly;
+  document literal-text and indirect-callback lint exceptions.
+
+- `[safety]` Upgrade provenance refresh preserves custom fields/notes, including
+  planner and builder fallback assignments. Missing legacy reviewer fallback
+  stays disabled; ambiguous unstamped recovery requires an explicit choice.
+- `[process]` Layout plans report retained legacy artifacts/custom scripts and
+  unsupported relative link syntax for review. Only actually moved task records
+  gain task-relative links; unmoved root guidance keeps its relative paths.
+  Preserve explicit legacy-discovery paths instead of rewriting detection gates.
+
+- `[process]` Dashboard `s` toggles the existing priority order (default) and
+  ascending numeric task order; active sort appears in the footer, with no state writes.
+
+- `[process]` Herdr adoption reports an actionable shell-pane error before
+  calling agent-get; it still never guesses a lead or launches a replacement.
+
+- `[process]` Add `test/project.py --project <path>` for installed all-tools
+  contracts, structural-script parity and mocked installed runtime/schema/mover
+  regressions; local findings hardening is checked in a disposable fixture.
+
+- `[safety]` Model preflight accepts explicit `reviewer_fallback_model: none`;
+  disabled fallbacks must not become unapproved provider assignments on upgrade.
+
+- `[safety]` Preserve native skill-directory symlink aliases without traversing
+  them during layout planning; migration inputs and destinations still refuse
+  symlinks. This keeps existing cross-client discovery aliases intact.
+  Exclude installed dependencies and cache/VCS directories from config rewrites.
+
+- `[contract]` **Major/breaking layout change:** consolidate toolkit runtime in
+  `.agent-pipeline/bin/` and task records/template in `.agent-pipeline/tasks/`;
+  native discovery directories remain in place. New tasks use one typed role
+  table (backend, model, resolved family, session/thread), pending attribution,
+  and immutable resume bindings. Legacy headers remain readable; mixed schemas,
+  wrong-backend/shared ids, unresolved review families and missing consent fail.
+- `[process]` Add reviewed-digest bulk layout plan/apply with collision/symlink/
+  unknown-dispatch checks, private backups and owned-change rollback. Update
+  callers/hooks/host readers/tests together in migration 04; old-layout bootstrap
+  and stamp refresh refuse split state. Major release publication remains explicit.
+- `[safety]` Narrow tester core writes to task records and lead automatic edits
+  to tasks/prompts/logs, so relocated executable bin/ files do not inherit state
+  write grants. Other action/effect values and reviewer denies remain unchanged;
+  permission-resource changes need explicit upgrade review and live verification.
+
+- `[process]` Scaffold a shareable `.agent-pipeline/README.md` in every profile:
+  configured team details and role boundaries, capability checks for any lead app,
+  and the full leader rules composed from the canonical source. Normal worker/
+  native-lead loading stays lean; preview uses the same composition and existing
+  customized guides are never overwritten. Default lean profiles now install
+   25–26 files (including this opt-in guide and centralized helpers).
+
+- `[docs]` Consolidate unreleased migration drafts 04–07 into one
+  `migrations/04-team-upgrade.md` with the final upgrade order. Published migrations
+  01–03 are unchanged. Clarify additive bootstrap versus reviewed existing-file
+  merges, consistent profile/model flags, provenance acceptance, and fresh context.
+- `[process]` Update reconciliation instructions to preserve the approved
+  profile/model selection, bootstrap shared dependencies before switching
+  entrypoints, and block dispatch during partial upgrades. Profile retirement
+  and native-file removal remain separately approved, never automatic.
+
+- `[contract]` Extract compact, provider-neutral leader/planner/implementer/
+  reviewer/tester contracts; feature entrypoints and native agents load only
+  their role. Backend dispatch instructions are selected lazily. Root guidance
+  excludes assigned workers from leader routing; task templates retain field
+  compatibility without repeated instructional prose. The lead alone owns all
+  counters; quota retries require explicit authorization. See migration 04.
+- `[process]` Add stamped `--leader` and `--extras` scaffold profiles and one
+   shared manifest for count/render/preview. Lean profiles install 25–26 default
+  files; legacy/all-tool baselines remain supported. Smaller selections never
+  delete existing files or overwrite local customizations. Add context/profile
+  regressions and permission-preservation fingerprints; live loading remains pending.
+
+- `[process]` Scaffold `.agent-pipeline/bin/herdr-team.sh` and add optional Herdr two-tab
+  setup/focus actions: preserve the existing lead, start the live dashboard in a
+  separate tools tab, and add reusable empty support shells. Discover installed
+  actions and workspace sessions without changing worker dispatch or permissions.
+  Save partial layout progress and reject mismatched caller projects; plugin
+  installation remains explicit. Live host verification is pending.
+
+- `[contract]` Pin Codex team leads to hook-captured exact ids with additive
+  trusted hooks, launch locks, and no latest-session/failed-resume fallback.
+  Add configured, consent-gated headless Claude reviewer/fallback dispatch for
+  all three leaders, immutable transcripts, strict verdict checks, and separate
+  reviewer state. No OpenCode permissions or broad execution rules change;
+  live enforcement is pending. See migration 04.
+
+- `[contract]` Add optional native Codex implementation, read-only review
+  (including configured fallback), and test workers, with distinct role thread
+  fields and capability-gated dispatch. OpenCode remains the default worker
+  runtime for all three leaders. Check explicit Codex ids against a bounded
+  runtime catalog; preserve model-family independence, per-task consent, and
+  existing sandbox/merge gates. See migration 04. No execution allowlists or
+  hooks are installed by this change.
+
+- `[process]` Add authenticated, bounded worker-model catalog preflight and a
+  detached OpenCode dispatch fallback usable by Claude, Codex, and OpenCode
+  leads. Reserve immutable attempts atomically and record actual exit status;
+  session receipts no longer stand in for completion. No automatic retry,
+  outside-sandbox allowlist, or permission widening is introduced.
+
+- `[contract]` Isolate worker sessions by task and role instead of sharing the
+  implementer's conversation with review/test. Add separate session fields,
+  reject duplicate role ids, and keep legacy task files readable. All three
+  leaders use the same policy; see migration 04. Adapted from the abdoharb fork,
+  without standing auto-approval or permission changes.
+
+- `[safety]` Timeout guidance no longer recommends widening permissions or
+  enabling auto-approval mid-task, or claims that best-effort interruption proves
+  a turn stopped. Existing dispatch logic and permission rules are unchanged.
+- `[docs]` Replace obsolete upgrade proposals, model tables, and repeated
+  permission incident narratives with current guides. Consolidate maintainer
+  guidance in AGENTS.md, retaining CLAUDE.md as its native entry point. Claude,
+  Codex, and OpenCode remain supported leaders. Extract open review work into
+  docs/BACKLOG.md and remove the resolved historical review files; preserve
+  changelog history, migrations, active templates, and compatibility handling.
+
 ## v0.10.2 — 2026-10-11
 
 - `[contract]` Pipeline state/artifacts move from `.agents/` to
