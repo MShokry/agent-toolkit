@@ -1,0 +1,147 @@
+#!/usr/bin/env bash
+# Check configured worker model ids before planning, without model calls.
+# Catalog resolution is not proof of credentials, quota, or the served model.
+# Exit 0 = configured ids resolve; 1 = invalid/unreachable; 2 = native ids unchecked.
+set -eu
+REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd -P)"
+cd "$REPO_ROOT"
+die() { printf 'verify-models.sh: %s\n' "$*" >&2; exit 1; }
+[ $# -eq 0 ] || die "usage: .agent-pipeline/bin/verify-models.sh"
+MANIFEST=".agent-pipeline/.toolkit-version"
+[ -f "$MANIFEST" ] || die "missing $MANIFEST; finish scaffold/update first"
+command -v python3 >/dev/null 2>&1 || die "python3 is required for runtime JSON checks"
+command -v opencode >/dev/null 2>&1 || die "opencode is not installed"
+if command -v timeout >/dev/null 2>&1; then
+  TIMEOUT_BIN=timeout
+elif command -v gtimeout >/dev/null 2>&1; then
+  TIMEOUT_BIN=gtimeout
+else
+  die "timeout or gtimeout is required (coreutils)"
+fi
+SERVER="${OC_SERVER:-http://localhost:$(cat .agent-pipeline/.oc-port 2>/dev/null || echo 4096)}"
+OPENCODE_PASSWORD="${OC_PASSWORD:-${OPENCODE_PASSWORD:-}}"
+if [ -z "${OC_PASSWORD:-}" ] && [ -f .agent-pipeline/.oc-password ]; then
+  OPENCODE_PASSWORD="$(cat .agent-pipeline/.oc-password)"
+fi
+export OPENCODE_PASSWORD
+CATALOG="$(mktemp)"
+NATIVE_CATALOG=""
+trap 'rm -f "$CATALOG"; [ -z "$NATIVE_CATALOG" ] || rm -f "$NATIVE_CATALOG"' EXIT
+if grep -qE '^(reviewer_model|reviewer_fallback_model|tester_model):[[:space:]]*codex/' "$MANIFEST"; then
+  if command -v codex >/dev/null 2>&1; then
+    NATIVE_CATALOG="$(mktemp)"
+    # Do not use --bundled: it is not the configured runtime's refreshed catalog.
+    # CLI availability/schema is version-dependent; failure stays unchecked.
+    if ! "$TIMEOUT_BIN" 10 codex debug models > "$NATIVE_CATALOG" 2>/dev/null; then
+      rm -f "$NATIVE_CATALOG"
+      NATIVE_CATALOG=""
+    fi
+  fi
+fi
+ATTEMPT=1
+while :; do
+  # File redirection avoids CLI output truncation observed with large catalogs.
+  "$TIMEOUT_BIN" 10 opencode api GET /api/model --server "$SERVER" \
+    --param directory="$REPO_ROOT" > "$CATALOG" 2>/dev/null \
+    || die "catalog unavailable at $SERVER (server/auth/timeout); no ids verified"
+  RC=0
+  python3 - "$MANIFEST" "$CATALOG" "$ATTEMPT" "$NATIVE_CATALOG" <<'PY' || RC=$?
+import json
+import sys
+
+def fail(message):
+    sys.exit("verify-models.sh: " + message)
+
+keys = {"builder_model", "reviewer_model", "reviewer_fallback_model", "tester_model"}
+wanted = {}
+for line in open(sys.argv[1], encoding="utf-8"):
+    key, sep, value = line.partition(":")
+    if sep and key in keys:
+        if key in wanted:
+            fail("duplicate model field: " + key)
+        wanted[key] = value.strip()
+if wanted.keys() != keys:
+    fail("incomplete worker model configuration")
+try:
+    doc = json.load(open(sys.argv[2], encoding="utf-8"))
+    rows = doc["data"]
+    if not isinstance(rows, list):
+        raise ValueError("data is not an array")
+    have = {}
+    for row in rows:
+        provider, model = row["providerID"], row["modelID"]
+        if not isinstance(provider, str) or not isinstance(model, str):
+            raise ValueError("invalid model id")
+        if not isinstance(row.get("enabled"), bool) or not isinstance(row.get("variants"), list):
+            raise ValueError("missing enabled/variants metadata")
+        have[provider, model] = row
+except (ValueError, KeyError, TypeError) as exc:
+    fail("malformed catalog; no ids verified: " + str(exc))
+
+native = None
+if sys.argv[4]:
+    try:
+        native_doc = json.load(open(sys.argv[4], encoding="utf-8"))
+        models = native_doc["models"]
+        if not isinstance(models, list):
+            raise ValueError("models is not an array")
+        native = set()
+        for model in models:
+            slug = model["slug"]
+            if not isinstance(slug, str) or not slug:
+                raise ValueError("invalid Codex model slug")
+            native.add(slug)
+    except (ValueError, KeyError, TypeError) as exc:
+        fail("malformed Codex catalog; native ids not verified: " + str(exc))
+
+bad, unchecked, checked, native_checked = [], [], 0, 0
+providers = {provider for provider, _ in have}
+cold = False
+for key in sorted(wanted):
+    ref = wanted[key]
+    if key == "reviewer_fallback_model" and ref == "none":
+        continue  # Explicitly disabled fallback is not a model assignment.
+    provider, sep, model_variant = ref.partition("/")
+    if not sep or not provider or not model_variant:
+        bad.append(key + " has no full provider/model id: " + ref)
+        continue
+    if provider == "codex":
+        if native is None:
+            unchecked.append(key + "=" + ref + " (Codex catalog unavailable)")
+        elif model_variant not in native:
+            bad.append(key + " does not resolve in the Codex catalog: " + ref)
+        else:
+            native_checked += 1
+        continue
+    if provider == "claude":
+        unchecked.append(key + "=" + ref)
+        continue
+    model, variant_sep, variant = model_variant.partition("#")
+    row = have.get((provider, model))
+    if row is None:
+        cold = cold or provider not in providers
+        bad.append(key + " does not resolve: " + ref)
+    elif row.get("enabled") is False:
+        bad.append(key + " is disabled: " + ref)
+    elif variant_sep and variant not in {v.get("id") for v in row.get("variants", []) if isinstance(v, dict)}:
+        bad.append(key + " has an unknown variant: " + ref)
+    else:
+        checked += 1
+# Retry only an absent provider during bounded cold-start discovery.
+if cold and int(sys.argv[3]) < 3:
+    sys.exit(3)
+if bad:
+    for message in bad:
+        print("verify-models.sh: " + message, file=sys.stderr)
+    sys.exit(1)
+if unchecked:
+    print("verify-models.sh: UNCHECKED native ids: " + ", ".join(unchecked), file=sys.stderr)
+    sys.exit(2)
+print(f"verify-models.sh: OK ({checked} OpenCode worker ids resolve; catalog only)")
+if native_checked:
+    print(f"verify-models.sh: OK ({native_checked} Codex worker ids resolve; catalog only)")
+PY
+  [ "$RC" -eq 3 ] || exit "$RC"
+  ATTEMPT=$((ATTEMPT + 1))
+  sleep 2
+done

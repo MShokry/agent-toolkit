@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2016 # Assertions match literal Markdown/command spellings.
 #
 # Automated version of the manual smoke run documented in CLAUDE.md's
 # "Commands" section. Asserts the scaffolder's core guarantees end to end:
@@ -58,8 +59,8 @@ files="$(find "$TMP" -type f -not -name run1.log \
 [ "$wrote" = "$((files + stamp_written))" ] || fail "claimed $wrote writes but $((files + stamp_written)) files exist"
 ok "every reported write produced exactly one file ($files rendered + stamp)"
 
-[ -x "$TMP/scripts/dashboard" ] || fail "project dashboard missing or not executable"
-cmp -s "$ROOT/integrations/herdr/dashboard.py" "$TMP/scripts/dashboard" \
+[ -x "$TMP/.agent-pipeline/bin/dashboard" ] || fail "project dashboard missing or not executable"
+cmp -s "$ROOT/integrations/herdr/dashboard.py" "$TMP/.agent-pipeline/bin/dashboard" \
   || fail "project dashboard differs from the shared standalone source"
 ok "self-contained executable dashboard was scaffolded"
 
@@ -70,7 +71,7 @@ for codex_file in \
   "$TMP/.agents/skills/toolkit-update/SKILL.md"; do
   [ -f "$codex_file" ] || fail "Codex scaffold file missing: $codex_file"
 done
-grep -q '\.claude/commands/feature.md' "$TMP/.agents/skills/feature/SKILL.md" \
+grep -q '\.agent-pipeline/roles/leader.md' "$TMP/.agents/skills/feature/SKILL.md" \
   || fail "Codex feature skill does not point at the canonical lead flow"
 grep -q 'Not populated by agent-toolkit' "$TMP/AGENTS.md" \
   || fail "generated AGENTS.md masks its missing project-specific guidance"
@@ -85,13 +86,13 @@ ok "Codex lead instructions, skills, and planner were scaffolded"
 for oc_file in agents/leader.md agents/planner.md commands/feature.md commands/toolkit-update.md; do
   [ -f "$TMP/.opencode/$oc_file" ] || fail "OpenCode lead file missing: $oc_file"
 done
-grep -q '\.claude/agents/planner.md' "$TMP/.opencode/agents/planner.md" \
+grep -q '\.agent-pipeline/roles/planner.md' "$TMP/.opencode/agents/planner.md" \
   || fail "OpenCode planner does not reference its canonical contract"
-grep -q '\.claude/commands/feature.md' "$TMP/.opencode/agents/leader.md" \
+grep -q '\.agent-pipeline/roles/leader.md' "$TMP/.opencode/agents/leader.md" \
   || fail "OpenCode leader does not reference the canonical flow"
 grep -q '^permissions:' "$TMP/.opencode/agents/planner.md" \
   || fail "OpenCode planner does not use native V2 permissions"
-grep -q 'resource: ".agent-pipeline/T-\*.md"' "$TMP/.opencode/agents/planner.md" \
+grep -q 'resource: ".agent-pipeline/tasks/T-\*.md"' "$TMP/.opencode/agents/planner.md" \
   || fail "OpenCode planner lacks its state-file-only edit rule"
 for oc_command in feature toolkit-update; do
   grep -q '^agent: leader$' "$TMP/.opencode/commands/$oc_command.md" \
@@ -187,9 +188,9 @@ exit 0
 EOF
 chmod +x "$FAKEBIN/codex" "$FAKEBIN/tmux"
 TEAM_LOG="$TMP/team.log" PATH="$FAKEBIN:/usr/bin:/bin" \
-  "$TMP/scripts/team.sh" --fresh codex-smoke >/dev/null 2>&1 \
+  "$TMP/.agent-pipeline/bin/team.sh" --fresh codex-smoke >/dev/null 2>&1 \
   || fail "team.sh failed its Codex fallback launch"
-grep -q 'send-keys .* codex C-m' "$TMP/team.log" \
+grep -q 'send-keys .* .agent-pipeline/bin/codex-lead.sh codex-smoke --fresh C-m' "$TMP/team.log" \
   || fail "team.sh did not put Codex in the lead pane when Claude was unavailable"
 ok "team.sh falls back to Codex when Claude is unavailable"
 
@@ -199,7 +200,7 @@ exit 0
 EOF
 chmod +x "$FAKEBIN/opencode"
 TEAM_LOG="$TMP/team-oc.log" PATH="$FAKEBIN:/usr/bin:/bin" \
-  "$TMP/scripts/team.sh" --lead opencode --port 4097 --fresh oc-smoke >/dev/null 2>&1 \
+  "$TMP/.agent-pipeline/bin/team.sh" --lead opencode --port 4097 --fresh oc-smoke >/dev/null 2>&1 \
   || fail "team.sh failed its explicit OpenCode launch"
 grep -q 'send-keys .*team.0 .*opencode --server http://localhost:4097 C-m' "$TMP/team-oc.log" \
   || fail "OpenCode lead did not connect to the selected server"
@@ -211,23 +212,23 @@ ok "team.sh launches an authenticated OpenCode-only lead on the selected port"
 
 rm -f "$FAKEBIN/codex"
 TEAM_LOG="$TMP/team-oc-auto.log" PATH="$FAKEBIN:/usr/bin:/bin" \
-  "$TMP/scripts/team.sh" --fresh oc-auto >/dev/null 2>&1 \
+  "$TMP/.agent-pipeline/bin/team.sh" --fresh oc-auto >/dev/null 2>&1 \
   || fail "team.sh failed OpenCode auto fallback"
 grep -q 'team.0 .*opencode --server' "$TMP/team-oc-auto.log" \
   || fail "team.sh did not select OpenCode when Claude/Codex were absent"
 ok "team.sh falls back to OpenCode without Claude or Codex"
 
 TEAM_LOG="$TMP/team-oc-resume.log" TEAM_OPENCODE_SESSION=ses_AbC123 \
-  PATH="$FAKEBIN:/usr/bin:/bin" "$TMP/scripts/team.sh" --lead opencode oc-resume \
+  PATH="$FAKEBIN:/usr/bin:/bin" "$TMP/.agent-pipeline/bin/team.sh" --lead opencode oc-resume \
   >/dev/null 2>&1 || fail "team.sh failed explicit OpenCode lead resume"
 grep -q -- '--session ses_AbC123 C-m' "$TMP/team-oc-resume.log" \
   || fail "team.sh did not preserve the exact mixed-case lead session id"
 TEAM_LOG="$TMP/team-oc-fresh.log" TEAM_OPENCODE_SESSION=ses_AbC123 \
-  PATH="$FAKEBIN:/usr/bin:/bin" "$TMP/scripts/team.sh" --lead opencode --fresh oc-fresh \
+  PATH="$FAKEBIN:/usr/bin:/bin" "$TMP/.agent-pipeline/bin/team.sh" --lead opencode --fresh oc-fresh \
   >/dev/null 2>&1 || fail "team.sh failed fresh OpenCode lead launch"
 ! grep -q -- '--session' "$TMP/team-oc-fresh.log" || fail "--fresh reused the lead session"
 if TEAM_LOG="$TMP/team-oc-invalid.log" TEAM_OPENCODE_SESSION='ses_abc;bad' \
-  PATH="$FAKEBIN:/usr/bin:/bin" "$TMP/scripts/team.sh" --lead opencode oc-invalid \
+  PATH="$FAKEBIN:/usr/bin:/bin" "$TMP/.agent-pipeline/bin/team.sh" --lead opencode oc-invalid \
   >/dev/null 2>&1; then
   fail "team.sh accepted shell text in TEAM_OPENCODE_SESSION"
 fi
@@ -235,7 +236,7 @@ fi
 ok "OpenCode resume uses only an explicit lead id; --fresh and input validation are enforced"
 
 TEAM_LOG="$TMP/team-existing.log" TEAM_HAS_SESSION=1 TEAM_LEAD=invalid \
-  PATH="$FAKEBIN:/usr/bin:/bin" "$TMP/scripts/team.sh" existing \
+  PATH="$FAKEBIN:/usr/bin:/bin" "$TMP/.agent-pipeline/bin/team.sh" existing \
   >/dev/null 2>&1 || fail "team.sh refused to attach an existing session before lead selection"
 grep -q '^attach -t existing$' "$TMP/team-existing.log" \
   || fail "team.sh did not attach the existing session"
@@ -251,7 +252,7 @@ grep -q "all $files checked files match" "$TMP/upd1.log" || fail "--update summa
 ok "--update: flag-free run defaults from the stamp; clean target exits 0"
 
 # --- 5. --update: drift is summarized, exit 1, hunks only behind --diff -------
-printf '\n' >> "$TMP/.agent-pipeline/TEMPLATE.md"
+printf '\n' >> "$TMP/.agent-pipeline/tasks/TEMPLATE.md"
 rc=0
 bash "$ROOT/bin/init.sh" --update --target "$TMP" > "$TMP/upd2.log" 2>&1 || rc=$?
 [ "$rc" = "1" ] || fail "--update exited $rc on a drifted target, expected 1"
@@ -269,12 +270,15 @@ ok "--update: drift → exit 1, summary-only by default, hunks behind --diff/--o
 
 # --- 5b. --refresh-stamp rewrites the baseline --------------------------------
 printf '\n# touched\n' >> "$STAMP"
+sed 's/^toolkit_sha:.*/toolkit_sha: stale-test-baseline/' "$STAMP" > "$TMP/stamp-stale"
+mv "$TMP/stamp-stale" "$STAMP"
 rc=0
 bash "$ROOT/bin/init.sh" --refresh-stamp --target "$TMP" > /dev/null 2>&1 || rc=$?
 [ "$rc" = "0" ] || fail "--refresh-stamp failed"
-! grep -q '^# touched' "$STAMP" || fail "--refresh-stamp did not rewrite the stamp"
+! grep -q 'stale-test-baseline' "$STAMP" || fail "--refresh-stamp did not refresh its owned baseline"
+grep -q '^# touched' "$STAMP" || fail "--refresh-stamp erased project notes"
 grep -q '^toolkit_sha:' "$STAMP" || fail "rewritten stamp lost its fields"
-ok "--refresh-stamp rewrites the provenance stamp (the only post-scaffold writer)"
+ok "--refresh-stamp updates owned provenance fields and preserves project notes"
 
 # --- 5c. --update without a stamp recovers init values from the target --------
 mv "$STAMP" "$TMP/stamp.hold"
@@ -298,8 +302,8 @@ fi
 ok "init.sh refuses --target pointing at the toolkit itself"
 
 # --- 6. verify-state.sh ------------------------------------------------------
-VS="$TMP/scripts/verify-state.sh"
-cat > "$TMP/.agent-pipeline/T-01.md" <<'EOF'
+VS="$TMP/.agent-pipeline/bin/verify-state.sh"
+cat > "$TMP/.agent-pipeline/tasks/T-01.md" <<'EOF'
 **Status:** blocked
 
 ## Review verdicts
@@ -311,18 +315,39 @@ EOF
 "$VS" T-01 > /dev/null 2>&1 || fail "verify-state rejected a valid blocked-state file"
 ok "verify-state accepts valid state file incl. blocked Status"
 
+cp "$TMP/.agent-pipeline/tasks/T-01.md" "$TMP/.agent-pipeline/tasks/T-08.md"
+printf '**OpenCode session id:** ses_legacy\n' >> "$TMP/.agent-pipeline/tasks/T-08.md"
+"$VS" T-08 > /dev/null 2>&1 || fail "legacy shared-session task became unreadable"
+for role in builder reviewer tester; do
+  printf '**OpenCode %s session id:** ses_%s\n' "$role" "$role" >> "$TMP/.agent-pipeline/tasks/T-08.md"
+done
+"$VS" T-08 > /dev/null 2>&1 || fail "distinct role sessions were refused"
+sed 's/ses_tester/ses_builder/' "$TMP/.agent-pipeline/tasks/T-08.md" > "$TMP/shared.md"
+cp "$TMP/shared.md" "$TMP/.agent-pipeline/tasks/T-08.md"
+"$VS" T-08 > /dev/null 2>&1 && fail "shared builder/tester session was accepted"
+grep -v 'OpenCode tester session id' "$TMP/shared.md" > "$TMP/.agent-pipeline/tasks/T-08.md"
+"$VS" T-08 > /dev/null 2>&1 && fail "incomplete role session migration was accepted"
+grep -v 'OpenCode .* session id' "$TMP/shared.md" > "$TMP/.agent-pipeline/tasks/T-08.md"
+for role in builder reviewer tester; do
+  printf '**OpenCode %s session id:** none yet — first call starts fresh\n' "$role" >> "$TMP/.agent-pipeline/tasks/T-08.md"
+done
+"$VS" T-08 > /dev/null 2>&1 || fail "empty role session fields were refused"
+printf '**OpenCode builder session id:** ses_extra\n' >> "$TMP/.agent-pipeline/tasks/T-08.md"
+"$VS" T-08 > /dev/null 2>&1 && fail "duplicate session field was accepted"
+ok "role sessions stay separate; legacy tasks remain readable and partial migrations fail"
+
 # 6a. Task class + decision source: absent = fine, junk = fails
-cat > "$TMP/.agent-pipeline/T-01.md" <<'EOF'
+cat > "$TMP/.agent-pipeline/tasks/T-01.md" <<'EOF'
 **Status:** blocked
 **Task class:** TBD
 **Class decided by:** maybe
 EOF
 "$VS" T-01 > /dev/null 2>&1 && fail "verify-state accepted bogus Task class / decision source"
-printf '**Status:** blocked\n**Task class:** sensitive\n**Class decided by:** human\n' > "$TMP/.agent-pipeline/T-01.md"
+printf '**Status:** blocked\n**Task class:** sensitive\n**Class decided by:** human\n' > "$TMP/.agent-pipeline/tasks/T-01.md"
 "$VS" T-01 > /dev/null 2>&1 || fail "verify-state rejected a valid class + decision source"
 ok "verify-state validates Task class + Class decided by (absent ok, junk fails)"
 
-printf '\n### Pass 3 — 2026-08-26 — verdict: PASS\n\nnone\n' >> "$TMP/.agent-pipeline/T-01.md"
+printf '\n### Pass 3 — 2026-08-26 — verdict: PASS\n\nnone\n' >> "$TMP/.agent-pipeline/tasks/T-01.md"
 if "$VS" T-01 > /dev/null 2>&1; then
   fail "verify-state accepted a Pass 3 (two-loop cap breached)"
 fi
@@ -333,7 +358,7 @@ ok "verify-state fails loudly on a third review pass"
 # anti-thrash and delivery-contract rules; if they are advisory only, they
 # are not rules. Each is checked on a file that is otherwise valid, so a
 # failure here names exactly one cause.
-cat > "$TMP/.agent-pipeline/T-03.md" <<'EOF'
+cat > "$TMP/.agent-pipeline/tasks/T-03.md" <<'EOF'
 **Status:** in-review
 **Review loop count:** 1 / 2
 **Test-fix loops:** 5 / 2
@@ -346,11 +371,11 @@ cat > "$TMP/.agent-pipeline/T-03.md" <<'EOF'
 1. [high] a.js:1 — finding
 EOF
 "$VS" T-03 2>&1 | grep -q 'test-fix loop budget exceeded'   || fail "verify-state did not catch a blown test-fix budget"
-sed -i.bak 's|^\*\*Test-fix loops:\*\* 5 / 2|**Test-fix loops:** 1 / 2|' "$TMP/.agent-pipeline/T-03.md"
+sed -i.bak 's|^\*\*Test-fix loops:\*\* 5 / 2|**Test-fix loops:** 1 / 2|' "$TMP/.agent-pipeline/tasks/T-03.md"
 "$VS" T-03 > /dev/null 2>&1 || fail "verify-state rejected a file with in-budget counters"
 ok "verify-state enforces the loop budgets and passes when they are in range"
 
-cat > "$TMP/.agent-pipeline/T-04.md" <<'EOF'
+cat > "$TMP/.agent-pipeline/tasks/T-04.md" <<'EOF'
 **Status:** done
 **Review loop count:** 1 / 2
 **Test-fix loops:** 0 / 2
@@ -378,7 +403,7 @@ if "$VS" T-04 > /dev/null 2>&1; then
   fail "verify-state accepted 'done' with an unticked, unwaived criterion"
 fi
 "$VS" T-04 2>&1 | grep -q "acceptance criteria are unticked"   || fail "verify-state's done-gate failed for the wrong reason"
-python3 - "$TMP/.agent-pipeline/T-04.md" <<'PY'
+python3 - "$TMP/.agent-pipeline/tasks/T-04.md" <<'PY'
 import sys
 p=sys.argv[1]; s=open(p).read()
 s=s.replace('| AC2 | [ ] | Pass 1 — unverifiable from diff | no covering test |',
@@ -390,7 +415,7 @@ ok "verify-state refuses 'done' on an open criterion, accepts an explicit waiver
 
 # 6c. done-gate also rejects a ticked ledger row with an empty evidence cell —
 # a tick TEMPLATE.md already forbids, now enforced instead of self-policed.
-cat > "$TMP/.agent-pipeline/T-06.md" <<'EOF'
+cat > "$TMP/.agent-pipeline/tasks/T-06.md" <<'EOF'
 **Status:** done
 **Review loop count:** 1 / 2
 **Test-fix loops:** 0 / 2
@@ -414,7 +439,7 @@ none
 EOF
 "$VS" T-06 > /dev/null 2>&1 && fail "verify-state accepted 'done' with a ticked ledger row citing no test evidence"
 "$VS" T-06 2>&1 | grep -q 'cite no evidence' || fail "done-gate ledger-evidence check failed for the wrong reason"
-python3 - "$TMP/.agent-pipeline/T-06.md" <<'PY'
+python3 - "$TMP/.agent-pipeline/tasks/T-06.md" <<'PY'
 import sys
 p = sys.argv[1]; s = open(p).read()
 s = s.replace('| AC1 | [x] | Pass 1 — a.js:42 | |',
@@ -426,7 +451,7 @@ ok "verify-state's done-gate rejects a ticked ledger row with a blank evidence c
 
 # 6d. once review has run, a missing/placeholder verdict fails from the file
 # side too — the mirror of the unfilled-placeholder check.
-cat > "$TMP/.agent-pipeline/T-07.md" <<'EOF'
+cat > "$TMP/.agent-pipeline/tasks/T-07.md" <<'EOF'
 **Status:** testing
 **Review loop count:** 1 / 2
 **Test-fix loops:** 0 / 2
@@ -438,21 +463,21 @@ cat > "$TMP/.agent-pipeline/T-07.md" <<'EOF'
 EOF
 "$VS" T-07 > /dev/null 2>&1 && fail "verify-state accepted Status 'testing' with no filled review verdict"
 "$VS" T-07 2>&1 | grep -q 'no Review verdicts pass records a filled' || fail "missing-verdict check failed for the wrong reason"
-sed -i.bak 's/verdict: TBD/verdict: PASS/' "$TMP/.agent-pipeline/T-07.md"
+sed -i.bak 's/verdict: TBD/verdict: PASS/' "$TMP/.agent-pipeline/tasks/T-07.md"
 "$VS" T-07 > /dev/null 2>&1 || fail "verify-state rejected 'testing' once a filled PASS verdict was present"
 ok "verify-state requires a filled review verdict once a task has reached review"
 
 # --- 7. verify-spec.sh -------------------------------------------------------
 # The spec-side equivalent: structure only, run before the human sees a spec.
-VSPEC="$TMP/scripts/verify-spec.sh"
-cp "$TMP/.agent-pipeline/TEMPLATE.md" "$TMP/.agent-pipeline/T-05.md"
+VSPEC="$TMP/.agent-pipeline/bin/verify-spec.sh"
+cp "$TMP/.agent-pipeline/tasks/TEMPLATE.md" "$TMP/.agent-pipeline/tasks/T-05.md"
 if "$VSPEC" T-05 > /dev/null 2>&1; then
   fail "verify-spec passed the raw template, which is entirely boilerplate"
 fi
 "$VSPEC" T-05 2>&1 | grep -q 'still the template placeholder'   || fail "verify-spec did not identify template boilerplate"
 ok "verify-spec rejects an unfilled spec"
 
-python3 - "$TMP/.agent-pipeline/T-05.md" <<'PY'
+python3 - "$TMP/.agent-pipeline/tasks/T-05.md" <<'PY'
 import sys
 NL = chr(10)
 p = sys.argv[1]
@@ -488,7 +513,7 @@ PY
 "$VSPEC" T-05 > /dev/null 2>&1 || { "$VSPEC" T-05; fail "verify-spec rejected a properly filled spec"; }
 ok "verify-spec accepts a filled spec"
 
-python3 - "$TMP/.agent-pipeline/T-05.md" <<'PY'
+python3 - "$TMP/.agent-pipeline/tasks/T-05.md" <<'PY'
 import sys
 p=sys.argv[1]; s=open(p).read()
 s=s.replace('resolves identically to "https://x.test/a"','works well')
@@ -500,9 +525,9 @@ fi
 ok "verify-spec catches an unmeasurable acceptance criterion"
 
 # --- 8. promote-findings.sh --------------------------------------------------
-PF="$TMP/scripts/promote-findings.sh"
+PF="$TMP/.agent-pipeline/bin/promote-findings.sh"
 mkdir -p "$TMP/docs"
-cat > "$TMP/.agent-pipeline/T-02.md" <<'EOF'
+cat > "$TMP/.agent-pipeline/tasks/T-02.md" <<'EOF'
 ## Findings for docs
 
 - [docs/GOTCHAS.md] real finding worth keeping
@@ -545,7 +570,7 @@ EOF
 chmod +x "$MOCK_OC/timeout" "$MOCK_OC/opencode"
 mock_oc() {
   (cd "$TMP" && PATH="$MOCK_OC:$PATH" OC_POLL=0.01 OC_TEST_CALLS="$TMP/mock-calls" \
-    scripts/oc.sh --agent builder --model fake/model --session ses_mock "$@")
+    .agent-pipeline/bin/oc.sh --agent builder --model fake/model --session ses_mock "$@")
 }
 for attempt in 1 2 3 4; do
   printf 'Implement the test task.\n' > "$TMP/.agent-pipeline/prompts/T-artifacts/builder-$attempt.md"
@@ -610,7 +635,7 @@ ok "oc.sh saves task transcript and refuses duplicate passes without changing ev
 
 # Absolute paths work even when the caller is in a nested project directory.
 (cd "$TMP/docs" && PATH="$MOCK_OC:$PATH" OC_POLL=0.01 OC_TEST_CALLS="$TMP/mock-calls" \
-  "$TMP/scripts/oc.sh" --agent builder --model fake/model --session ses_mock \
+  "$TMP/.agent-pipeline/bin/oc.sh" --agent builder --model fake/model --session ses_mock \
   --prompt-file "$TMP/.agent-pipeline/prompts/T-artifacts/builder-2.md" \
   --raw-out "$TMP/.agent-pipeline/logs/T-artifacts/builder-2.jsonl") > "$TMP/oc-check.log" 2>&1 \
   || fail "nested caller with absolute artifact paths failed"
@@ -651,7 +676,7 @@ for ignored in logs/T-001/builder-1.jsonl prompts/T-001/builder-1.md .oc-port .o
   git -C "$IGNORE_PROJECT" check-ignore -q ".agent-pipeline/$ignored" \
     || fail "runtime artifact is not ignored: $ignored"
 done
-for tracked in .agent-pipeline/T-001.md .agent-pipeline/TEMPLATE.md .agent-pipeline/.toolkit-version .agents/skills/feature/SKILL.md; do
+for tracked in .agent-pipeline/tasks/T-001.md .agent-pipeline/tasks/TEMPLATE.md .agent-pipeline/.toolkit-version .agents/skills/feature/SKILL.md; do
   if git -C "$IGNORE_PROJECT" check-ignore -q "$tracked"; then
     fail "shared state/native skill unexpectedly ignored: $tracked"
   fi
@@ -674,7 +699,7 @@ grep -qxF 'custom-output/' "$IGNORE_PROJECT/.gitignore" || fail "custom ignore r
 ok "gitdir-file checkouts receive additive ignore rules"
 
 printf '\n/.agent-pipeline/\n' >> "$IGNORE_PROJECT/.gitignore"
-git -C "$IGNORE_PROJECT" check-ignore -q .agent-pipeline/T-001.md \
+git -C "$IGNORE_PROJECT" check-ignore -q .agent-pipeline/tasks/T-001.md \
   || fail "whole-pipeline ignore policy did not cover task records"
 if git -C "$IGNORE_PROJECT" check-ignore -q .agents/skills/feature/SKILL.md; then
   fail "whole-pipeline ignore policy hid native skills"
@@ -692,6 +717,16 @@ bash "$ROOT/bin/init.sh" --target "$LEGACY_PROJECT" --project-name legacy \
 python3 - "$LEGACY_PROJECT" <<'PY'
 import pathlib, shutil, sys
 root = pathlib.Path(sys.argv[1])
+# Recreate an actual old release, not a split old/new tasks layout.
+(root / '.agent-pipeline/tasks/TEMPLATE.md').unlink()
+(root / '.agent-pipeline/tasks').rmdir()
+(root / 'scripts').mkdir()
+for script in (root / '.agent-pipeline/bin').iterdir():
+    if script.name in ('task-record.py', 'migrate-layout.py'):
+        script.unlink()  # These did not exist in the old release fixture.
+    else:
+        shutil.move(str(script), str(root / 'scripts' / script.name))
+(root / '.agent-pipeline/bin').rmdir()
 for entry in (root / '.agent-pipeline').iterdir():
     shutil.move(str(entry), str(root / '.agents' / entry.name))
 (root / '.agent-pipeline').rmdir()
@@ -715,12 +750,12 @@ bash "$ROOT/bin/init.sh" --update --target "$LEGACY_PROJECT" > "$TMP/legacy.log"
 [ "$rc" = 1 ] || fail "legacy layout did not report migration drift"
 grep -q 'directory migration required' "$TMP/legacy.log" || fail "legacy migration not surfaced"
 grep -q 'this project scaffolded from' "$TMP/legacy.log" || fail "legacy stamp not read"
-grep -q 'differs .*\.agent-pipeline/TEMPLATE.md' "$TMP/legacy.log" || fail "legacy template customization not compared"
-if grep -q 'new .*\.agent-pipeline/TEMPLATE.md' "$TMP/legacy.log"; then
+grep -q 'differs .*\.agent-pipeline/tasks/TEMPLATE.md' "$TMP/legacy.log" || fail "legacy template customization not compared"
+if grep -q 'new .*\.agent-pipeline/tasks/TEMPLATE.md' "$TMP/legacy.log"; then
   fail "legacy template reported as missing instead of compared"
 fi
 rc=0
-bash "$ROOT/bin/init.sh" --update --target "$LEGACY_PROJECT" --only scripts/dashboard > "$TMP/legacy.log" 2>&1 || rc=$?
+bash "$ROOT/bin/init.sh" --update --target "$LEGACY_PROJECT" --only .agent-pipeline/bin/dashboard > "$TMP/legacy.log" 2>&1 || rc=$?
 [ "$rc" = 1 ] || fail "filtered update hid required directory migration"
 for mode in scaffold refresh; do
   rc=0
@@ -741,6 +776,7 @@ rc=0
 bash "$ROOT/bin/init.sh" --update --target "$LEGACY_PROJECT" > "$TMP/legacy.log" 2>&1 || rc=$?
 [ "$rc" = 1 ] || fail "unstamped legacy layout did not report migration drift"
 grep -q 'inferred init values' "$TMP/legacy.log" || fail "unstamped legacy flags not recovered"
+grep -q 'REVIEWER_FALLBACK_MODEL: d/e' "$TMP/legacy.log" || fail "legacy reviewer fallback replaced by a default"
 cp "$TMP/legacy-stamp" "$LEGACY_PROJECT/.agents/.toolkit-version"
 mkdir "$LEGACY_PROJECT/.agent-pipeline"
 cp "$TMP/legacy-stamp" "$LEGACY_PROJECT/.agent-pipeline/.toolkit-version"
@@ -763,8 +799,14 @@ for entry in (root / '.agents').iterdir():
     if entry.name != 'skills':
         shutil.move(str(entry), str(root / '.agent-pipeline' / entry.name))
 PY
+python3 - "$ROOT" "$LEGACY_PROJECT" <<'PY'
+import json, subprocess, sys
+command = [sys.executable, sys.argv[1] + '/bin/migrate-layout.py']
+plan = json.loads(subprocess.check_output(command + ['plan', '--project', sys.argv[2]], text=True))
+subprocess.run(command + ['apply', '--project', sys.argv[2], '--approve', plan['approval'], '--workers-inactive'], check=True, stdout=subprocess.DEVNULL)
+PY
 bash "$ROOT/bin/init.sh" --target "$LEGACY_PROJECT" > "$TMP/legacy.log" 2>&1 || fail "bootstrap refused migrated layout"
-grep -q 'LOCAL TEMPLATE CUSTOMIZATION' "$LEGACY_PROJECT/.agent-pipeline/TEMPLATE.md" || fail "migration bootstrap clobbered template"
+grep -q 'LOCAL TEMPLATE CUSTOMIZATION' "$LEGACY_PROJECT/.agent-pipeline/tasks/TEMPLATE.md" || fail "migration bootstrap clobbered template"
 [ -f "$LEGACY_PROJECT/.agents/skills/feature/SKILL.md" ] || fail "migration moved native skills"
 cmp -s "$TMP/legacy-stamp" "$LEGACY_PROJECT/.agent-pipeline/.toolkit-version" || fail "migration bootstrap replaced baseline"
 python3 - "$LEGACY_PROJECT/.agent-pipeline/.oc-password" <<'PY'
@@ -774,7 +816,7 @@ assert path.read_text() == 'fixture-secret'
 assert stat.S_IMODE(path.stat().st_mode) == 0o600
 PY
 rc=0
-bash "$ROOT/bin/init.sh" --update --target "$LEGACY_PROJECT" --only scripts/dashboard > "$TMP/legacy.log" 2>&1 || rc=$?
+bash "$ROOT/bin/init.sh" --update --target "$LEGACY_PROJECT" --only .agent-pipeline/bin/dashboard > "$TMP/legacy.log" 2>&1 || rc=$?
 [ "$rc" = 0 ] || fail "migrated layout still reported directory drift"
 ok "post-migration bootstrap preserves customization, credential modes, baseline, and native skills"
 

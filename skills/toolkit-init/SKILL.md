@@ -21,13 +21,16 @@ Ask these up front rather than guessing — they shape every generated file:
    configured. You need three: builder, reviewer, and a reviewer-fallback
    in a *different* model family (used when builder implements, so review
    stays independent of the implementer). If they have not chosen yet,
-   offer `docs/MODELS.md` as a starting recommendation (Kimi builder,
-   GLM reviewer, DeepSeek Flash tester, Sonnet fallback; one OpenCode
-   aggregator plus Claude — not a new toolkit tool per lab) and let them
+    offer `docs/MODELS.md` and the current `bin/init.sh` defaults as starting
+    choices. Claude, Codex, and OpenCode are supported leaders; model families
+    are provider choices, not new toolkit tools. Let them
    confirm or override. Never accept `auto` for the reviewer.
 4. **Source directories** the implementer is allowed to touch, and any
    this project considers off-limits without an Open Question first.
 5. **Test command** and, if applicable, a test directory (default `e2e`).
+6. **Lead harness and extras** — recommend one of claude/codex/opencode with
+   extras none for a lean team. Add dashboard/herdr/launcher only when requested;
+   all-tools remains an explicit compatibility option. Providers are model choices.
 
 ## Run it
 
@@ -36,6 +39,7 @@ Ask these up front rather than guessing — they shape every generated file:
 /path/to/agent-toolkit/bin/init.sh \
   --target . \
   --project-name "<name>" \
+  --leader "<claude|codex|opencode|all>" --extras "<none|dashboard|herdr|launcher|all>" \
   --claude-model sonnet \
   --builder-model "<vendor/model>" \
   --reviewer-model "<vendor/model, different family than builder>" \
@@ -44,12 +48,13 @@ Ask these up front rather than guessing — they shape every generated file:
   --test-dir "<e2e or similar>"
 ```
 
-It writes `.claude/agents/`, `.opencode/agent/`, `.opencode/agents/`,
+It writes selected native adapters plus neutral `.agent-pipeline/roles/` and
+backend instructions. The all-tools profile writes `.claude/agents/`, `.opencode/agent/`, `.opencode/agents/`,
 `.opencode/commands/`, `.claude/commands/{feature.md,
 toolkit-update.md}`, Codex project instructions/skills/planner under `AGENTS.md`,
 `.agents/skills/`, and `.codex/agents/`,
 `.agent-pipeline/{TEMPLATE.md,.toolkit-version}`, and
-`scripts/{oc.sh,team.sh,verify-state.sh,verify-spec.sh,promote-findings.sh}`
+`.agent-pipeline/bin/{oc.sh,team.sh,verify-state.sh,verify-spec.sh,promote-findings.sh}`
 into the target. It does **not** overwrite a file that already exists — it
 prints what it skipped so you can diff and merge by hand.
 
@@ -103,9 +108,9 @@ user at `SYSTEM.md` at the toolkit root.
    config still let a reviewer write outside its intended scope.
 2. Confirm `opencode serve` is reachable, per the printed next step.
 3. Tell the user Claude and OpenCode use `/feature`; Codex uses `$feature`.
-   `scripts/team.sh --lead opencode` selects an OpenCode-only team; auto selection
-   prefers Claude, then Codex, then OpenCode. Tell the
-   user to load the `delegate` skill at the start of the lead's own session —
+   When the launcher extra is installed, team.sh honors a selected single-leader
+   profile; all-tools auto selection prefers Claude, then Codex, then OpenCode.
+   The `delegate` skill is optional at the start of the lead's own session —
    it's the context-discipline half of this, not the workflow half.
 4. The generated `.claude/commands/feature.md` and agent files reference
    "this project's own guidance file" for constraints — make sure the

@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# Launch/resume the exact Codex lead for one team name, never --last.
+# Review/trust .codex/hooks.json with /hooks; existing hooks must be hand-merged.
+# Hook capture failure and failed resume do not silently start another chat.
+set -eu
+REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd -P)"
+cd "$REPO_ROOT"
+die() { printf 'codex-lead.sh: %s\n' "$*" >&2; exit 1; }
+[ $# -ge 1 ] && [ $# -le 2 ] || die "usage: <team-name> [--fresh]"
+TEAM="$1" FRESH="${2:-}"
+[[ "$TEAM" =~ ^[a-zA-Z0-9_-]+$ ]] || die "invalid team name"
+[ -z "$FRESH" ] || [ "$FRESH" = --fresh ] || die "expected --fresh"
+command -v codex >/dev/null 2>&1 || die "codex not installed"
+command -v python3 >/dev/null 2>&1 || die "python3 required for session capture"
+[ -f .codex/hooks.json ] && [ -f .agent-pipeline/bin/codex-session.py ] || die "session hooks missing; finish scaffold/update"
+codex resume --help | grep -q -- '--no-daemon' || die "Codex lacks --no-daemon; exact launch environment isolation is unavailable"
+[ ! -L .agent-pipeline ] || die "pipeline directory must not be a symlink"
+mkdir -p .agent-pipeline
+PIN=".agent-pipeline/.codex-session-id.$TEAM"
+STARTED=".agent-pipeline/.codex-started.$TEAM"
+LOCK=".agent-pipeline/.codex-lead-lock.$TEAM"
+for path in "$PIN" "$STARTED" "$LOCK"; do
+  [ ! -L "$path" ] || die "runtime path must not be a symlink: $path"
+done
+mkdir "$LOCK" 2>/dev/null || die "lead already running or stale lock ($LOCK); verify inactivity before removing it"
+trap 'rmdir "$LOCK"' EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+if [ "$FRESH" = --fresh ]; then
+  rm -f "$PIN" "$STARTED"
+fi
+export TEAM_CODEX_SESSION="$TEAM" TEAM_CODEX_ROOT="$REPO_ROOT"
+if [ -f "$PIN" ]; then
+  ID="$(cat "$PIN")"
+  [[ "$ID" =~ ^[a-zA-Z0-9_-]+$ ]] || die "invalid stored session id"
+  codex resume --no-daemon "$ID"
+else
+  [ ! -f "$STARTED" ] || die "prior launch has no captured id; recover its exact /status id into $PIN or use explicit --fresh"
+  (umask 077; touch "$STARTED")
+  printf 'codex-lead.sh: trust the session capture hooks with /hooks before relying on resume.\n' >&2
+  codex --no-daemon
+  [ -s "$PIN" ] || die "lead id not captured; trust/merge hooks and recover /status before restarting"
+fi

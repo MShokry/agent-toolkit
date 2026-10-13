@@ -15,7 +15,7 @@
 # Review verdicts), not correctness of the content. Content is still the
 # reviewer's and the lead's job.
 #
-# Usage: scripts/verify-state.sh T-01
+# Usage: .agent-pipeline/bin/verify-state.sh T-01
 # Exit 0 = structurally sound, prints one OK line.
 # Exit 1 = specific problems printed to stderr, one per line.
 
@@ -23,11 +23,11 @@ set -eu
 
 # Anchor to the repo root like oc.sh/team.sh do, so `.agent-pipeline/` resolves the
 # same way no matter where the lead runs this from.
-REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$REPO_ROOT"
 
 ID="${1:?usage: verify-state.sh <task-id, e.g. T-01>}"
-FILE=".agent-pipeline/${ID}.md"
+FILE=".agent-pipeline/tasks/${ID}.md"
 
 [ -f "$FILE" ] || { echo "verify-state.sh: no such file: $FILE" >&2; exit 1; }
 
@@ -60,10 +60,93 @@ if grep -q '^\*\*Class decided by:\*\*' "$FILE"; then
   BY="$(grep -m1 '^\*\*Class decided by:\*\*' "$FILE" | sed 's/.*Class decided by:\*\* *//' | sed 's/ *$//')"
   case "$BY" in
     agent|human) : ;;
+    pending) [ "$STATUS" = draft ] || fail "Class decided by is pending after spec approval" ;;
     "<"*) : ;;
     *) fail "Class decided by is '$BY' — expected agent or human" ;;
   esac
 fi
+
+# Typed role table is the new contract. Old headers below remain grandfathered.
+if grep -qE '^## Role assignments|<!-- task-schema:' "$FILE"; then
+  python3 .agent-pipeline/bin/task-record.py validate "$FILE" || fail "invalid role assignments"
+fi
+
+# New role session fields are optional for historical tasks. If any are present,
+# require the complete set and reject a shared populated id or duplicate header.
+SESSION_FIELDS=0
+SESSION_IDS=""
+for role in builder reviewer tester; do
+  label="OpenCode $role session id"
+  count="$(grep -c "^\*\*$label:\*\*" "$FILE" || true)"
+  [ "$count" -le 1 ] || fail "duplicate $label field"
+  if [ "$count" -gt 0 ]; then
+    SESSION_FIELDS=$((SESSION_FIELDS + 1))
+    value="$(grep -m1 "^\*\*$label:\*\*" "$FILE" | sed 's/.*:\*\* *//')"
+    case "$value" in
+      "none yet"*|"<"*) : ;;
+      *)
+        if ! printf '%s\n' "$value" | grep -qE '^ses_[a-zA-Z0-9_-]+$'; then
+          fail "$label must be a session id or 'none yet'"
+        else
+          SESSION_IDS="$SESSION_IDS$value
+"
+        fi
+        ;;
+    esac
+  fi
+done
+if [ "$SESSION_FIELDS" -gt 0 ]; then
+  [ "$SESSION_FIELDS" -eq 3 ] || fail "role session fields are incomplete; migrate all three at an idle boundary"
+  duplicates="$(printf '%s' "$SESSION_IDS" | sort | uniq -d)"
+  [ -z "$duplicates" ] || fail "worker roles must not share session ids: $duplicates"
+fi
+
+# Native thread ids are opaque, not OpenCode ses_* ids. Optional for old tasks;
+# populated threads must be distinct across all four native roles.
+THREAD_FIELDS=0
+THREAD_IDS=""
+for role in planner implementer reviewer tester; do
+  label="Codex $role thread id"
+  count="$(grep -c "^\*\*$label:\*\*" "$FILE" || true)"
+  [ "$count" -le 1 ] || fail "duplicate $label field"
+  if [ "$count" -gt 0 ]; then
+    THREAD_FIELDS=$((THREAD_FIELDS + 1))
+    value="$(grep -m1 "^\*\*$label:\*\*" "$FILE" | sed 's/.*:\*\* *//')"
+    case "$value" in
+      "none yet"*|"<"*) : ;;
+      ses_*) fail "$label is a native thread, not an OpenCode session" ;;
+      *)
+        if ! printf '%s\n' "$value" | grep -qE '^[a-zA-Z0-9_-]+$'; then
+          fail "$label must be a thread id or 'none yet'"
+        else
+          THREAD_IDS="$THREAD_IDS$value
+"
+        fi
+        ;;
+    esac
+  fi
+done
+if [ "$THREAD_FIELDS" -gt 0 ]; then
+  [ "$THREAD_FIELDS" -eq 4 ] || fail "native thread fields are incomplete; migrate all four at an idle boundary"
+  duplicates="$(printf '%s' "$THREAD_IDS" | sort | uniq -d)"
+  [ -z "$duplicates" ] || fail "native roles must not share thread ids: $duplicates"
+fi
+
+for label in "Claude reviewer session id" "Claude review approved"; do
+  count="$(grep -c "^\*\*$label:\*\*" "$FILE" || true)"
+  [ "$count" -le 1 ] || fail "duplicate $label field"
+  if [ "$count" -eq 1 ]; then
+    value="$(grep -m1 "^\*\*$label:\*\*" "$FILE" | sed 's/.*:\*\* *//')"
+    if [ "$label" = "Claude review approved" ]; then
+      case "$value" in on|off) : ;; *) fail "$label must be on or off" ;; esac
+    else
+      case "$value" in
+        "none yet"*|"<"*) : ;;
+        *) printf '%s\n' "$value" | grep -qE '^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$' || fail "$label must be a UUID or none yet" ;;
+      esac
+    fi
+  fi
+done
 
 # Statuses that mean "nothing has been reviewed or run yet". Used below to
 # decide when an unfilled placeholder is still fine.

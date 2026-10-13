@@ -24,7 +24,7 @@ file — it's the one line each role updates when it finishes, naming what
 happened and who's next. Open the full file only when that line, a
 verification-script failure, or a real decision point tells you to.
 
-Everything passes through the state file (`.agent-pipeline/T-<id>.md` or
+Everything passes through the state file (`.agent-pipeline/tasks/T-<id>.md` or
 equivalent). Context is never carried between roles by memory alone — if
 it isn't written there, the next role doesn't know it.
 
@@ -37,12 +37,36 @@ exceeded budget as an escalation, never one more lap.
 
 ## Preflight
 
+Keep runtime instructions role-scoped: a small lead entrypoint loads the neutral
+leader contract and only selected backend dispatch adapters. Workers load only
+their role plus project guidance and required task evidence; explicit worker
+assignment must suppress generic feature/lead routing. Expand history when needed.
+Do not put every role/provider's manual into an automatically loaded root file.
+The lead alone owns loop counters; workers never increment them a second time.
+Install only selected harnesses/extras, keeping an explicit all-tools option.
+Keep toolkit runtime in `.agent-pipeline/bin/`, and task records/template in
+tasks/. Use one typed Role assignments table per task (Backend, Model, resolved
+Family, Session / thread), with consent/budgets separate. Bind first receipts
+immutably; changed reviewer models require fresh conversations. Legacy headers
+remain readable but mixed schemas block. Bulk moves need an approved plan,
+paused workers, collision checks, retained backups, and no native-directory moves.
+Reviewer fallback `none` is disabled, never a dispatchable model.
+If a portable single-file leader guide is needed, compose its rules from the
+same canonical leader source. Make it opt-in, not extra worker context; sharing
+a guide never grants project access, dispatch capability, or approval.
+
 1. Pick the next free task id.
 2. If any role is dispatched (not inline), confirm that tool's
    server/runtime is actually reachable — fail fast with a clear message
    rather than letting a dispatch silently fall back to a slow cold-start
    path or hang.
-3. Confirm the working tree is clean enough to produce a meaningful diff.
+3. **Verify configured worker model ids before planning.** Use authenticated
+   runtime catalogs and bounded calls, not only agreement between files. The
+   toolkit adapter is `.agent-pipeline/bin/verify-models.sh`; unreachable, invalid, or
+   unchecked ids block dispatch. Catalog presence does not prove credentials,
+   quota, or the served model. Reconcile flow/role-file drift before validating
+   one id and dispatching another.
+4. Confirm the working tree is clean enough to produce a meaningful diff.
 
 ## Artifact layout (every dispatch)
 
@@ -139,6 +163,13 @@ which implementer is actually chosen.
 
 ## 2 — Implement
 
+**Herdr hosting is optional, not worker dispatch.** `.agent-pipeline/bin/herdr-team.sh`
+can discover installed host actions/sessions and preserve the existing lead in
+one tab while starting a dashboard and empty support shells in a separate tools
+tab. Require explicit server/project/session targets for native read/focus/prompt
+controls, never approval keystrokes or broad execution grants. Host idle/done is
+not task acceptance; file-based handoffs and all pipeline gates remain unchanged.
+
 Once approved, set status to reflect approval and record who implements.
 Never run two implementers on one task — write the choice into the state
 file so the reviewer knows whether cross-vendor independence holds.
@@ -166,28 +197,64 @@ parked on silently dies.
 If a dispatch fails on a usage cap, rate limit, or quota error (not a real
 bug, not a timeout): stop and tell the user immediately, naming the step
 and the command that hit it. Do not silently retry, and do not switch
-model/vendor on your own judgement. After that one notification, retry the
-same command automatically on an interval until it succeeds, or until the
-user says to stop or switch. On success, resume from exactly where it
-stopped and say so.
+model/vendor on your own judgement. Retry requires explicit authorization;
+scheduled retry also requires an actual scheduler. Confirm inactivity and
+allocate unused artifacts before retrying. On success resume at the recorded
+step and report recovery; a notification alone is not standing retry consent.
 
 ### Dispatch-tool session policy
 
-If the dispatched tool supports continuing a session, scope a session to
-one task, not one call — **same task → same session, new task → new
-session, for all sub-agents alike**: implement, review, and test for the
-same task continue a single session instead of each starting cold. A fresh
-session per reviewer/tester would mean re-reading every file from scratch
-on every dispatch — that burns the context the reuse exists to save.
-Record whatever session identifier the tool's dispatch prints, and pass it
-on subsequent calls for the same task.
+If the dispatched tool supports continuing a session, **session scope is one
+task per role**: same task and same role → same session; another role or new task
+→ new session. Never share the implementer's conversation with the reviewer or
+tester. Record separate role session ids; each reads the task record and current
+patch. Reuse within a role saves reload cost on reruns. A reviewer model change
+starts a fresh reviewer session. A session receipt is not success evidence.
 
-On a timeout your own wrapper caused, it should already have cancelled the
-server-side turn before exiting (see `lessons-learned.md` entry 2) —
-retrying the same session is then safe. On a dispatch killed some other
-way, verify or cancel the session before reusing it; don't assume.
+On a timeout or killed wrapper, cancellation is best-effort. Confirm server-side
+inactivity before reuse; unknown state is a blocker, not permission to launch a
+competing turn or widen permissions. Migrate legacy shared sessions only at an
+idle task boundary; never copy one id into all role fields.
+
+### Long dispatches
+
+Prefer host background execution with completion notifications; do not poll
+those calls. Otherwise use detached start/wait (the toolkit's
+`.agent-pipeline/bin/bg-dispatch.sh` for OpenCode workers) with bounded wait slices. Reserve
+each task/role/pass atomically and record the actual wrapper exit status, not a
+session receipt. Keep output, stderr, and completion records under task logs and
+link them from Artifacts. Unknown/failed state blocks a replacement until
+server-side inactivity is confirmed. Retries allocate unused passes; no implicit
+retry or permission change. Wrapper success is not task acceptance.
 
 ## 3 — Review
+
+**Cross-tool Claude review is explicit and consent-gated.** Configured
+`claude/<id>` reviewers use a read/search-only headless wrapper, not OpenCode.
+Ask at spec approval and record task consent, account/billing implications, and
+manual model/runtime verification when catalog checks report unchecked.
+Audit project hooks/settings: tool restrictions do not disable hook commands.
+Save immutable prompt/transcript passes and a separate Claude reviewer session id;
+reuse only for this task/model, never a lead or implementer session. The lead
+records full findings unchanged and verifies state. Errors or missing verdicts
+are failed dispatches, not PASS. Model-maker independence still applies.
+Only unchecked Claude reviewer assignments may proceed after explicit human
+confirmation of the exact runtime/model; other unchecked or invalid ids block.
+
+**Native workers require verified dispatch capability.** Native Codex
+implementer/reviewer/tester agents are optional, not replacements for the default
+OpenCode workers. Choosing Codex implementation belongs at the spec gate; record
+the actual model family. A `codex/<id>` assignment is not an OpenCode provider id.
+Other leaders must report unavailable dispatch and obtain an approved alternative,
+not silently substitute a model/tool or implement in their own thread.
+Record native thread ids separately by role, never in OpenCode session fields.
+Use file-based prompts with unused artifact passes; if export is unavailable,
+record that and the thread id rather than fabricate a transcript. Read-only native
+reviewers return full findings for the lead to record unchanged. A native tester's
+workspace-write sandbox does not enforce narrow source-read-only scope; the lead
+checks the diff. OpenCode auto-mode never grants native escalation.
+Two OpenAI-family models are not independent review even in different harnesses;
+use the approved different-family reviewer or stop if identity is unknown.
 
 Always request a summary-only reply, not the raw event stream — see the
 worker role's own report-format instructions.

@@ -2,22 +2,39 @@
 
 The single handoff surface. Every role reads this file and appends to it —
 nothing is passed between roles by prose alone. Copy this shape to
-`.agent-pipeline/T-<id>.md` (or wherever this project keeps per-task state) and
+`.agent-pipeline/tasks/T-<id>.md` (or wherever this project keeps per-task state) and
 fill it in per task.
+
+Keep operational prose in compact role contracts, not repeated in every task.
+Each role reads its required sections and expands history when needed. Retain
+all evidence/fields below; the lead alone owns every loop/bounce counter.
 
 ```markdown
 # T-<id> — <short title>
 
+<!-- task-schema: 2 -->
+
 **Status:** draft | spec-approved | in-progress | blocked:question | blocked:spec | in-review | changes-requested | testing | done
 **Owner right now:** planner | implementer | reviewer | tester | lead
-**Implementer for this task:** <role/tool/model — e.g. "senior-dev (claude/sonnet)" or "builder (opencode/kimi-k2.7-code)">
-**Reviewer for this task:** none yet — set by the lead before dispatching review; a model/vendor independent from the implementer
-**Tester for this task:** none yet — set by the lead before dispatching test
-**Dispatch session id:** none yet — set after the first dispatch call, reused for every later call on this task
+**Class decided by:** pending
+**Claude review approved:** off
 **Wide-auto-approve mode:** off — only meaningful if the implementer's tool has one (see lessons-learned.md entry 1). On means it's used for this task's implement call, per the user's answer at spec approval. Off is the default; never turn this on without asking.
 **Review loop count:** 0 / 2
 **Test-fix loops:** 0 / 2
 **Spec bounces:** 0 / 1
+
+## Role assignments
+
+| Role | Backend | Model | Family | Session / thread |
+| --- | --- | --- | --- | --- |
+| planner | pending | pending | pending | pending |
+| implementer | pending | pending | pending | pending |
+| reviewer | pending | pending | pending | pending |
+| tester | pending | pending | pending | pending |
+
+Only the lead fills verified assignments and binds model/session pairs. Pending
+is not an identity or review-independence claim. New backend/model means fresh
+inactive role conversation; preserve prior assignments in Decisions log.
 **Blocked since:** — <date + one line, set whenever Status becomes `blocked:*`, cleared when it isn't>
 **Latest handoff:** <one line, overwritten by whichever role finishes last —
 `<role> → <outcome in a few words> → next: <role>`. This is what the lead

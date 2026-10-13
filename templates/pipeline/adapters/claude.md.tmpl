@@ -1,0 +1,30 @@
+# Claude dispatch
+
+Claude leaders use separate planner/senior-dev subagents; senior-dev only on
+explicit per-task choice. Send task/role/pass/baseline/patch, not parent history.
+Preserve transcripts only if exported. Other harnesses require a verified,
+approved mechanism before claiming native Claude planning/implementation.
+
+Cross-tool Claude review is explicit and consent-gated. Configured claude/<id>
+primary/fallback review uses this bounded wrapper, never oc.sh:
+
+```bash
+.agent-pipeline/bin/claude-review.sh --model claude/<id> \
+  --prompt-file .agent-pipeline/prompts/T-<id>/reviewer-<pass>.md \
+  --raw-out .agent-pipeline/logs/T-<id>/reviewer-<pass>.jsonl
+```
+
+At spec approval explain external account/billing/project guidance/hooks; record
+Claude review approved: on only after consent. If only these catalog ids are
+unchecked, obtain explicit human confirmation of exact model/runtime assignment
+and record manual verification; invalid/unreachable other ids still block.
+Audit existing hooks/settings first: Read/Grep/Glob restrictions do not disable
+hook commands or provide OS isolation. Never bypass normal trust/permissions.
+
+Use host background notifications or bounded foreground wrapper; bg-dispatch
+is OpenCode-only. Wrapper retains transcript and validates session/model/verdict.
+Record backend/model/session in the reviewer row; resume with --session only for
+matching task/model and confirmed inactivity. Changed model means fresh review.
+Never use lead/implementer session. Lead persists full findings unchanged, sets
+Latest handoff, verifies state, branches on exact VERDICT line. Claude-authored
+work needs a different-family reviewer; another harness is not independent weights.

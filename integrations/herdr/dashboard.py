@@ -75,7 +75,13 @@ def budget_tone(text):
 
 def task_records(root):
     records, warnings = [], []
-    for task in sorted((root / ".agent-pipeline").glob("T-*.md")):
+    pipeline = root / ".agent-pipeline"
+    tasks = sorted(list((pipeline / "tasks").glob("T-*.md")) + list(pipeline.glob("T-*.md")))
+    conflicts = {task.name for task in tasks if sum(other.name == task.name for other in tasks) > 1}
+    warnings.extend(name + " — duplicate old/new task paths; reconcile migration" for name in sorted(conflicts))
+    for task in tasks:
+        if task.name in conflicts:
+            continue
         # Task records only, not legacy T-001.review-request.md artifacts.
         # Prompts/logs in task subdirectories are deliberately never scanned.
         if not re.fullmatch(r"T-[A-Za-z0-9_-]+\.md", task.name):
@@ -139,7 +145,19 @@ def board_text(root, width=None):
     return "\n".join(lines)
 
 
-def visual_lines(root, width, blocked_only=False):
+def ordered_records(records, sort_mode="priority"):
+    priority = {"changes-requested": 1, "spec-approved": 2, "in-review": 3,
+                "testing": 3, "in-progress": 4, "draft": 5, "done": 6}
+    if sort_mode == "number":
+        def task_number(record):
+            name = record["task"].stem
+            match = re.match(r"^T-(\d+)(.*)$", name)
+            return (0, int(match[1]), match[2], name) if match else (1, 0, name, name)
+        return sorted(records, key=task_number)
+    return sorted(records, key=lambda r: (priority.get(r["status"], 0), r["task"].name))
+
+
+def visual_lines(root, width, blocked_only=False, sort_mode="priority"):
     width = max(16, width)
     records, warnings = task_records(root)
     blocked = [r for r in records if r["status"].startswith("blocked:")]
@@ -192,12 +210,11 @@ def visual_lines(root, width, blocked_only=False):
         line("  Since " + header(record["text"], "Blocked since"), "warning")
     line("")
     line("TASK CARDS" + (" / BLOCKED ONLY" if blocked_only else ""), "heading")
+    line("Sort: " + ("task number" if sort_mode == "number" else "priority (default)") + " / s toggles sort", "muted")
     visible = blocked if blocked_only else records
     if not visible:
         line("No blocked tasks." if blocked_only else "No task records yet. Ask the lead for a task/spec.", "muted")
-    priority = {"changes-requested": 1, "spec-approved": 2, "in-review": 3,
-                "testing": 3, "in-progress": 4, "draft": 5, "done": 6}
-    for record in sorted(visible, key=lambda r: (priority.get(r["status"], 0), r["task"].name)):
+    for record in ordered_records(visible, sort_mode):
         text, status = record["text"], record["status"]
         bar_width = min(24, width - 6)
         ticks = record["met"] * bar_width // record["total"] if record["total"] else 0
@@ -250,10 +267,11 @@ def visual_board(root):
                     curses.init_pair(index, color, background)
                     colors[name] = curses.color_pair(index)
         offset, blocked_only, updated, rows, last_width = 0, False, 0, [], None
+        sort_mode = "priority"
         while True:
             height, width = screen.getmaxyx()
             if time.monotonic() - updated >= 2 or width != last_width:
-                rows = visual_lines(root, max(16, width - 1), blocked_only)
+                rows = visual_lines(root, max(16, width - 1), blocked_only, sort_mode)
                 updated, last_width = time.monotonic(), width
             available = max(1, height - 2)
             offset = max(0, min(offset, max(0, len(rows) - available)))
@@ -266,7 +284,8 @@ def visual_board(root):
                     screen.addnstr(y, 0, text, max(0, width - 1), attr)
                 except curses.error:
                     pass
-            footer = "Up/Down j/k scroll | PgUp/PgDn | b blockers | r refresh | q close | {}/{}".format(offset + 1, len(rows))
+            footer = "s sort:{} | b blockers | j/k scroll | PgUp/PgDn | r refresh | q close | {}/{}".format(
+                "number" if sort_mode == "number" else "priority", offset + 1, len(rows))
             try:
                 screen.addnstr(max(0, height - 1), 0, footer, max(0, width - 1), curses.A_REVERSE)
             except curses.error:
@@ -289,6 +308,9 @@ def visual_board(root):
                 offset = len(rows)
             elif key == ord("b"):
                 blocked_only, offset, updated = not blocked_only, 0, 0
+            elif key == ord("s"):
+                sort_mode = "number" if sort_mode == "priority" else "priority"
+                offset, updated = 0, 0
             elif key in (ord("r"), curses.KEY_RESIZE):
                 updated = 0
 

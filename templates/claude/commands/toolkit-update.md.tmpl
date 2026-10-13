@@ -12,7 +12,8 @@ project's own copies.
 
 ## Hard gates
 
-- **Task boundary only.** Check both `.agent-pipeline/T-*.md` and legacy
+- **Task boundary only.** Check `.agent-pipeline/tasks/T-*.md`, old root
+  `.agent-pipeline/T-*.md`, and legacy
   `.agents/T-*.md`. If any is in flight (Status not
   `done`), stop and tell the user to finish or park it first — changing
   the state-file contract under a running task is how an in-flight task
@@ -24,6 +25,20 @@ project's own copies.
 - **Never overwrite a local customization silently.** Where upstream and
   local both changed, present three options: take upstream, keep local, or
   hand-merge. The user picks.
+- **Preserve the approved selection.** Default to the stamped leader/extras/model
+  assignments (legacy stamps mean all tools/extras), not whichever harness is
+  leading this update. Ask before changing that selection. Repeat approved
+  profile/model override flags in every preview, missing-file bootstrap, and
+  stamp refresh. Smaller profiles never delete existing native discovery files;
+  retirement/removal needs a separate, explicitly approved file-by-file plan.
+- **Dependencies before entrypoint switches.** If old task/script paths exist,
+  complete migration 04's approved bulk layout plan/apply first. Plain init
+  refuses old layouts to prevent split state. Then add missing neutral contracts
+  and selected adapters before switching existing entrypoints to reference them.
+  Then merge entrypoints, worker adapters, and structural scripts together under
+  the current migration. No dispatch while reconciliation is incomplete. Existing
+  task evidence stays intact; old loaded instructions require a fresh lead at the
+  next approved boundary, not a silent conversation switch.
 - **Directory migrations are part of updating.** The lead may rename toolkit
   folders when a numbered migration requires it, after showing the move plan
   and getting user approval. Follow `migrations/03-pipeline-directory.md` for
@@ -38,7 +53,7 @@ project's own copies.
   warning if it's missing, v1, unparseable, or newer than the v2 these
   templates are written and verified against — templates assume v2's
   password-gated `serve`, the `shell` permission action name, and the
-  `opencode api` CLI subcommand `scripts/oc.sh` polls with (see that
+  `opencode api` CLI subcommand `.agent-pipeline/bin/oc.sh` polls with (see that
   script's own --auto comment). Don't let this warning scroll past
   unmentioned, including when step 3 below exits 0 (no template drift):
   mention it to the user before proceeding, since a v1 opencode makes the
@@ -64,6 +79,9 @@ project's own copies.
    they look right before merging, and expect to create the stamp at
    step 7.
 3. Run `bin/init.sh --update --target .` (from the toolkit checkout path).
+   Append any approved profile/model override flags, and retain them for all
+   later commands. If the current migration specifies a different bootstrap
+   order, follow it before using the older installed updater's assumptions.
    Exit 0 means nothing to do — report that and stop. Exit 1 lists the
    differing/new files.
 4. Read `CHANGELOG.md` in the toolkit checkout for every entry after the
@@ -80,21 +98,27 @@ project's own copies.
    parallel empty pipeline folder or treat legacy files as missing new files.
 6. For each file: run
    `bin/init.sh --update --target . --only <path-substring> --diff`
-   to see exactly that file's hunks. Show the user what changed upstream,
+   with the same approved selection flags to see exactly that file's hunks.
+   Show the user what changed upstream,
    what this project customized locally (git diff/log on the file helps),
    and propose the merge. Apply with their chosen option. New upstream
-   files (ones this project doesn't have at all) are added by one plain,
-   flag-free `bin/init.sh --target .` run — it loads the original values from
+   files (ones this project doesn't have at all) are added by one plain
+   `bin/init.sh --target .` run with any approved selection flags — otherwise it
+   loads the original values from
    the provenance stamp, and skip-if-exists makes it safe: it writes only the
    missing files and touches nothing else.
 7. **After all merges are applied**, create or refresh the baseline:
    `bin/init.sh --refresh-stamp --target .` (on a pre-v0.3.0 project this
    writes the stamp for the first time — future updates then need no
-   flags).
+   flags). Repeat approved profile/model override flags here; refresh records
+   acceptance, not proof that existing files were merged.
 8. Re-run `bin/init.sh --update --target .` — expect exit 0 unless explicitly
    retained local customizations still differ; report those rather than treating
    stamp refresh as proof that they disappeared. Then run
-   `scripts/verify-state.sh` on the most recent task's state file as a
+   `.agent-pipeline/bin/verify-state.sh` on the most recent task's state file as a
    smoke check that the contract still parses.
+   If installed, inspect `.agent-pipeline/bin/dashboard --once`; verify model resolution
+   against the accepted stamp before new planning. Runtime loading/discovery/
+   permission enforcement remains a separate live check, not a structural pass.
 9. Report: merged / kept-local / deferred (with reasons), and record one
    line in the project's tracking doc noting the new toolkit version.

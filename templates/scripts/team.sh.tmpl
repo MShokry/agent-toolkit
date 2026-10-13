@@ -9,27 +9,30 @@
 #   pane 3 (bottom right) free pane
 #
 # Usage:
-#   scripts/team.sh [session-name]        start (or attach to) the team
-#   scripts/team.sh --fresh                start a NEW lead conversation
+#   .agent-pipeline/bin/team.sh [session-name]        start (or attach to) the team
+#   .agent-pipeline/bin/team.sh --fresh                start a NEW lead conversation
 #                                          instead of resuming (see below)
-#   scripts/team.sh --port <N>             opencode server port (default 4096)
-#   scripts/team.sh --lead <auto|claude|codex|opencode>
+#   .agent-pipeline/bin/team.sh --port <N>             opencode server port (default 4096)
+#   .agent-pipeline/bin/team.sh --lead <auto|claude|codex|opencode>
 #                                          lead selection (default auto:
 #                                          Claude, then Codex, then OpenCode)
-#   scripts/team.sh --kill [session-name]
+#   .agent-pipeline/bin/team.sh --kill [session-name]
 #
-# For Claude and Codex, resuming is the default, not an opt-in. Claude resumes the
+# For Claude and Codex, exact pinned resume is the default, not an opt-in.
+# Codex uses .agent-pipeline/bin/codex-lead.sh and trusted additive capture hooks; missing
+# capture or failed resume blocks restart, never falls back to a latest worker.
+# Claude resumes the
 # lead's conversation pinned to this session name via a stored UUID (see
 # .agent-pipeline/.claude-session-id.<session-name>) rather than `claude --continue`
 # (which just means "the most recent conversation in this directory" — with
 # no notion of *which* tmux session started it, so a second team.sh session
 # name in the same repo, or even a one-off `claude` run there, could steal
 # the next --continue). That matters because killing this tmux session (the
-# usual way to free up a port so a second project can use scripts/team.sh at
+# usual way to free up a port so a second project can use .agent-pipeline/bin/team.sh at
 # the same time) used to also throw away the lead's context — there was no
 # way back into the same conversation short of scrolling terminal history.
 # The pinned session id fixes that: kill the session, come back later, run
-# scripts/team.sh again, the lead picks up its own thread — never someone
+# .agent-pipeline/bin/team.sh again, the lead picks up its own thread — never someone
 # else's. Pass --fresh on the rare run where you actually want a clean
 # slate (this also mints a new pinned id, so future resumes follow it). Codex
 # has no create-with-id equivalent, so it resumes the latest conversation
@@ -41,9 +44,9 @@
 #
 # Running two projects at once: opencode's server binds one port per
 # process, so two projects both defaulting to --port 4096 collide — the
-# second scripts/team.sh's `opencode serve` fails to bind. Give the second
-# project its own port: `scripts/team.sh --port 4097`. That port is written
-# to .agent-pipeline/.oc-port in this repo, and scripts/oc.sh reads it automatically
+# second .agent-pipeline/bin/team.sh's `opencode serve` fails to bind. Give the second
+# project its own port: `.agent-pipeline/bin/team.sh --port 4097`. That port is written
+# to .agent-pipeline/.oc-port in this repo, and .agent-pipeline/bin/oc.sh reads it automatically
 # (when OC_SERVER isn't set) — so oc.sh calls in this project just work
 # without you having to export OC_SERVER by hand every time. bin/init.sh
 # adds .agent-pipeline/.oc-port to this project's .gitignore; it's local machine
@@ -53,7 +56,7 @@
 # OPENCODE_PASSWORD/OPENCODE_SERVER_PASSWORD is set, it mints a random one
 # and only prints it once to the pane. This script generates one instead and
 # writes it to .agent-pipeline/.oc-password (same gitignore treatment as
-# .oc-port) so scripts/oc.sh can read it on every call without you copying
+# .oc-port) so .agent-pipeline/bin/oc.sh can read it on every call without you copying
 # it out of pane 1 by hand. The server is launched with a command that reads
 # the file at runtime (`$(cat .agent-pipeline/.oc-password)`) rather than the literal
 # secret, so the password itself never appears in the pane's typed-command
@@ -71,7 +74,7 @@
 
 set -eu
 
-REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 PORT="${OC_PORT:-4096}"
 SESSION="__PROJECT_NAME__"
 LEAD="${TEAM_LEAD:-auto}"
@@ -105,6 +108,12 @@ if tmux has-session -t "$SESSION" 2>/dev/null; then
   exec tmux attach -t "$SESSION"
 fi
 
+PROFILE="$(sed -n 's/^leader_tools: *//p' "$REPO_ROOT/.agent-pipeline/.toolkit-version" 2>/dev/null | head -1)"
+case "$PROFILE" in
+  claude|codex|opencode)
+    [ "$LEAD" != auto ] || LEAD="$PROFILE"
+    [ "$LEAD" = "$PROFILE" ] || { echo "team.sh: lead adapter $LEAD is not in the $PROFILE scaffold profile; reconcile explicitly first" >&2; exit 1; } ;;
+esac
 case "$LEAD" in
   auto)
     if command -v claude >/dev/null 2>&1; then
@@ -186,12 +195,11 @@ if [ "$LEAD" = "claude" ]; then
     LEAD_CMD="claude --session-id $CLAUDE_UUID"
   fi
 elif [ "$LEAD" = "codex" ]; then
-  # Codex has no create-with-id equivalent. Its --last lookup is scoped to
-  # the current project, so resume that unless --fresh requested a new chat.
+  # The helper captures and resumes only this team's exact lead id.
   if [ "$FRESH" -eq 1 ]; then
-    LEAD_CMD="codex"
+    LEAD_CMD=".agent-pipeline/bin/codex-lead.sh $SESSION --fresh"
   else
-    LEAD_CMD="codex resume --last || codex"
+    LEAD_CMD=".agent-pipeline/bin/codex-lead.sh $SESSION"
   fi
 else
   LEAD_CMD="OPENCODE_PASSWORD=\"\$(cat '$PASSWORD_FILE')\" opencode --server http://localhost:$PORT"

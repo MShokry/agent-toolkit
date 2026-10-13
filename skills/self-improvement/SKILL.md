@@ -46,7 +46,7 @@ specific feature is not a standing rule.
    - About a durable fact about the project (a platform gotcha, a
      constraint, an incident) that isn't about *how the pipeline runs* →
      not this skill's job — that's exactly what *Findings for docs* +
-     `scripts/promote-findings.sh` already exist for. Use that path,
+     `.agent-pipeline/bin/promote-findings.sh` already exist for. Use that path,
      don't invent a second one.
 2. **Make the smallest edit that captures it** — a sentence or a bullet,
    not a rewrite. State the *why*, the same way this toolkit's own

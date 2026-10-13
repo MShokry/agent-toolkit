@@ -27,6 +27,8 @@ class FakeHerdr:
         self.calls = []
         self.next_id = 2
         self.fail_board = False
+        self.fail_split = False
+        self.next_tab = 2
         self.panes = {
             "w1:p1": {
                 "pane_id": "w1:p1", "terminal_id": "term_lead", "workspace_id": "w1", "tab_id": "w1:t1",
@@ -37,11 +39,11 @@ class FakeHerdr:
             },
         }
 
-    def create_pane(self, cwd):
+    def create_pane(self, cwd, tab_id="w1:t1"):
         pane_id = "w1:p" + str(self.next_id)
         self.next_id += 1
         pane = {"pane_id": pane_id, "terminal_id": "term_" + pane_id, "workspace_id": "w1",
-                "tab_id": "w1:t1", "cwd": cwd}
+                "tab_id": tab_id, "cwd": cwd}
         self.panes[pane_id] = pane
         return copy.deepcopy(pane)
 
@@ -56,12 +58,19 @@ class FakeHerdr:
         if args[:2] == ("pane", "list"):
             return {"panes": [copy.deepcopy(p) for p in self.panes.values() if p["workspace_id"] == args[3]]}
         if args[:2] == ("pane", "split"):
-            return {"pane": self.create_pane(args[args.index("--cwd") + 1])}
+            if self.fail_split:
+                raise plugin.PluginError("simulated split failure")
+            return {"pane": self.create_pane(args[args.index("--cwd") + 1], self.panes[args[2]]["tab_id"])}
         if args[:3] == ("plugin", "pane", "open"):
             if self.fail_board:
                 raise plugin.PluginError("simulated board failure")
-            return {"plugin_pane": {"pane": self.create_pane(args[args.index("--cwd") + 1])}}
-        if args[:2] in (("pane", "report-metadata"), ("pane", "rename"), ("agent", "focus"), ("agent", "prompt")):
+            if args[args.index("--placement") + 1] == "tab":
+                tab_id = "w1:t" + str(self.next_tab)
+                self.next_tab += 1
+            else:
+                tab_id = self.panes[args[args.index("--target-pane") + 1]]["tab_id"]
+            return {"plugin_pane": {"pane": self.create_pane(args[args.index("--cwd") + 1], tab_id)}}
+        if args[:2] in (("pane", "report-metadata"), ("pane", "rename"), ("agent", "focus"), ("agent", "prompt"), ("tab", "rename"), ("tab", "focus")):
             return {"type": "ok"}
         raise AssertionError("Unexpected Herdr operation: " + repr(args))
 
@@ -131,6 +140,31 @@ class AdapterTests(unittest.TestCase):
             self.run_action("adopt")
         self.assertFalse(self.path.exists())
 
+    def test_neutral_profile_can_adopt_and_brief_without_claude_files(self):
+        (self.project / ".claude/commands/feature.md").unlink()
+        roles = self.project / ".agent-pipeline/roles"
+        roles.mkdir()
+        (roles / "leader.md").write_text("neutral contract\n")
+        self.run_action("adopt")
+        self.run_action("brief-leader")
+        prompt = self.fake.calls[-1]
+        self.assertEqual(prompt[:3], ("agent", "prompt", "w1:p1"))
+        self.assertIn(".agent-pipeline/roles/leader.md", prompt[3])
+        self.assertNotIn("Read .claude/commands/feature.md", prompt[3])
+
+    def test_missing_selected_claude_lead_entrypoint_blocks_briefing(self):
+        (self.project / ".claude/commands/feature.md").unlink()
+        roles = self.project / ".agent-pipeline/roles"
+        roles.mkdir()
+        (roles / "leader.md").write_text("neutral contract\n")
+        target = self.fake.panes["w1:p1"]
+        target["agent"] = "claude"
+        target["agent_session"].update(agent="claude", source="herdr:claude")
+        self.run_action("adopt")
+        with self.assertRaisesRegex(plugin.PluginError, "Claude feature entrypoint is missing"):
+            self.run_action("brief-leader")
+        self.assertFalse(any(c[:2] == ("agent", "prompt") for c in self.fake.calls))
+
     def test_explicit_wrong_project_is_rejected(self):
         other = self.base / "other"
         (other / ".agent-pipeline").mkdir(parents=True)
@@ -142,9 +176,10 @@ class AdapterTests(unittest.TestCase):
 
     def test_shell_or_unrecognized_agent_cannot_be_adopted(self):
         self.fake.panes["w1:p1"]["agent"] = None
-        with self.assertRaisesRegex(plugin.PluginError, "recognized"):
+        with self.assertRaisesRegex(plugin.PluginError, "Select the existing lead pane"):
             self.run_action("adopt")
         self.assertFalse(self.path.exists())
+        self.assertFalse(any(call[:2] == ("agent", "get") for call in self.fake.calls))
 
     def test_global_plugin_bindings_are_scoped_by_server_workspace_and_project(self):
         first = self.path
@@ -234,6 +269,92 @@ class AdapterTests(unittest.TestCase):
         with self.assertRaisesRegex(plugin.PluginError, "run Adopt first"):
             self.run_action("layout")
         self.assertFalse(any(c[:2] == ("pane", "split") for c in self.fake.calls))
+
+    def test_team_tabs_adopt_existing_lead_and_start_dashboard_only(self):
+        original = copy.deepcopy(self.fake.panes["w1:p1"])
+        output = self.run_action("team")
+        self.assertIn("Two-tab team ready", output)
+        self.assertEqual(self.fake.panes["w1:p1"], original)
+        saved = self.binding()["team_panes"]
+        self.assertEqual(set(saved), {"board", "workers", "server"})
+        tabs = {p["tab_id"] for p in saved.values()}
+        self.assertEqual(tabs, {"w1:t2"})
+        opens = [c for c in self.fake.calls if c[:3] == ("plugin", "pane", "open")]
+        self.assertEqual(len(opens), 1)
+        self.assertEqual(opens[0][opens[0].index("--placement") + 1], "tab")
+        self.assertIn("--no-focus", opens[0])
+        self.assertEqual(self.fake.calls[-1], ("tab", "focus", "w1:t2"))
+        self.assertFalse(any(c[:2] in (("pane", "run"), ("pane", "move"), ("pane", "close"),
+                                      ("agent", "start"), ("agent", "prompt")) for c in self.fake.calls))
+        self.assertTrue(all(c[2] != "w1:p1" for c in self.fake.calls if c[:2] == ("pane", "split")))
+
+    def test_team_tabs_reuse_from_tools_context_and_focus_exact_lead(self):
+        self.run_action("team")
+        board = self.binding()["team_panes"]["board"]["pane_id"]
+        os.environ["HERDR_PLUGIN_CONTEXT_JSON"] = json.dumps({"focused_pane_id": board})
+        self.run_action("team")
+        self.run_action("focus-tools")
+        self.assertEqual(sum(c[:3] == ("plugin", "pane", "open") for c in self.fake.calls), 1)
+        self.assertEqual(sum(c[:2] == ("pane", "split") for c in self.fake.calls), 2)
+        self.assertEqual(self.fake.calls[-1], ("tab", "focus", "w1:t2"))
+        self.run_action("focus-leader")
+        self.assertEqual(self.fake.calls[-1], ("agent", "focus", "w1:p1"))
+
+    def test_team_tabs_save_partial_creation_and_recreate_closed_shell(self):
+        self.fake.fail_split = True
+        with self.assertRaisesRegex(plugin.PluginError, "simulated split failure"):
+            self.run_action("team")
+        self.assertEqual(set(self.binding()["team_panes"]), {"board"})
+        self.fake.fail_split = False
+        self.run_action("team")
+        self.assertEqual(sum(c[:3] == ("plugin", "pane", "open") for c in self.fake.calls), 1)
+        worker = self.binding()["team_panes"]["workers"]["pane_id"]
+        self.fake.panes.pop(worker)
+        self.run_action("team")
+        self.assertNotEqual(self.binding()["team_panes"]["workers"]["pane_id"], worker)
+
+    def test_moved_tools_board_is_not_focused_or_used_to_split_lead(self):
+        self.run_action("team")
+        board = self.binding()["team_panes"]["board"]["pane_id"]
+        self.fake.panes[board]["tab_id"] = "w1:t1"
+        with self.assertRaisesRegex(plugin.PluginError, "missing or moved"):
+            self.run_action("focus-tools")
+        before = len(self.fake.calls)
+        self.run_action("team")
+        self.assertNotEqual(self.binding()["team_panes"]["board"]["pane_id"], board)
+        new_splits = [c for c in self.fake.calls[before:] if c[:2] == ("pane", "split")]
+        self.assertTrue(all(c[2] not in (board, "w1:p1") for c in new_splits))
+
+    def test_closed_dashboard_is_restarted_in_saved_tools_tab_without_duplicate_shells(self):
+        self.run_action("team")
+        original = self.binding()["team_panes"]
+        self.fake.panes.pop(original["board"]["pane_id"])
+        self.run_action("team")
+        saved = self.binding()["team_panes"]
+        self.assertEqual(saved["board"]["tab_id"], original["board"]["tab_id"])
+        self.assertNotEqual(saved["board"]["pane_id"], original["board"]["pane_id"])
+        self.assertEqual(saved["workers"], original["workers"])
+        self.assertEqual(saved["server"], original["server"])
+        self.assertEqual(sum(c[:2] == ("pane", "split") for c in self.fake.calls), 2)
+
+    def test_team_setup_never_adopts_shell_or_silently_replaces_existing_lead(self):
+        self.fake.panes["w1:p1"]["agent"] = None
+        with self.assertRaisesRegex(plugin.PluginError, "recognized"):
+            self.run_action("team")
+        self.fake.panes["w1:p1"]["agent"] = "opencode"
+        self.run_action("team")
+        self.fake.panes["w1:p1"]["agent_session"]["value"] = "replaced"
+        with self.assertRaisesRegex(plugin.PluginError, "replaced"):
+            self.run_action("team")
+
+    def test_team_tab_support_for_all_three_lead_kinds_without_session_identity(self):
+        self.fake.panes["w1:p1"].pop("agent_session")
+        for kind in ("claude", "codex", "opencode"):
+            self.fake.panes["w1:p1"]["agent"] = kind
+            self.run_action("adopt")
+            self.run_action("team")
+            self.assertNotEqual(self.binding()["team_panes"]["board"]["tab_id"], "w1:t1")
+        self.assertFalse(any(c[:2] == ("agent", "prompt") for c in self.fake.calls))
 
     def test_layout_is_idempotent_and_never_runs_commands_in_the_lead(self):
         self.run_action("adopt")
@@ -435,6 +556,49 @@ class AdapterTests(unittest.TestCase):
         view.assert_called_once_with(self.project)
         self.assertEqual(self.fake.calls, [])
 
+    def test_visual_number_sort_is_numeric_and_default_priority_is_unchanged(self):
+        for name, status in (("2", "done"), ("10", "draft"), ("001", "testing"),
+                             ("z", "blocked:question")):
+            (self.project / (".agent-pipeline/T-" + name + ".md")).write_text("**Status:** " + status + "\n")
+        default = "\n".join(text for text, _ in plugin.visual_lines(self.project, 100))
+        numeric = "\n".join(text for text, _ in plugin.visual_lines(self.project, 100, sort_mode="number"))
+        self.assertLess(default.index("T-z /"), default.index("T-001 /"))
+        self.assertLess(default.index("T-10 /"), default.index("T-2 /"))
+        self.assertLess(numeric.index("T-001 /"), numeric.index("T-2 /"))
+        self.assertLess(numeric.index("T-2 /"), numeric.index("T-10 /"))
+        self.assertLess(numeric.index("T-10 /"), numeric.index("T-z /"))
+        filtered = "\n".join(text for text, _ in plugin.visual_lines(self.project, 100, True, "number"))
+        self.assertIn("T-z /", filtered)
+        self.assertNotIn("T-2 /", filtered)
+        self.assertIn("Sort: task number", numeric)
+        self.assertEqual(self.fake.calls, [])
+
+    def test_sort_shortcut_toggles_and_survives_filter_and_refresh(self):
+        from types import SimpleNamespace
+
+        class Screen:
+            keys = iter(map(ord, "ssbsrq"))
+            def getmaxyx(self): return (30, 100)
+            def getch(self): return next(self.keys)
+            def keypad(self, value): pass
+            def timeout(self, value): pass
+            def erase(self): pass
+            def addnstr(self, *args): pass
+            def refresh(self): pass
+
+        screen = Screen()
+        fake_curses = SimpleNamespace(curs_set=lambda value: None, has_colors=lambda: False,
+            error=RuntimeError, A_BOLD=1, A_DIM=2, A_REVERSE=4,
+            KEY_DOWN=258, KEY_UP=259, KEY_NPAGE=338, KEY_PPAGE=339,
+            KEY_HOME=262, KEY_END=360, KEY_RESIZE=410, wrapper=lambda fn: fn(screen))
+        with patch.dict(sys.modules, {"curses": fake_curses}), \
+                patch.object(plugin._view, "visual_lines", wraps=plugin._view.visual_lines) as view:
+            plugin.visual_board(self.project)
+        self.assertEqual([(call.args[2], call.args[3]) for call in view.call_args_list],
+                         [(False, "priority"), (False, "number"), (False, "priority"),
+                          (True, "priority"), (True, "number"), (True, "number")])
+        self.assertEqual(self.fake.calls, [])
+
     def test_unreadable_task_does_not_crash_the_entire_board(self):
         (self.project / ".agent-pipeline/T-001.md").mkdir()
         self.assertIn("unavailable (refresh to retry)", plugin.board_text(self.project))
@@ -463,11 +627,11 @@ class TransportTests(unittest.TestCase):
                                            "--reviewer-model", "a/c", "--reviewer-fallback-model", "d/e",
                                            "--tester-model", "a/b"], capture_output=True, text=True, timeout=30)
             self.assertEqual(first.returncode, 0, first.stderr)
-            dashboard = project / "scripts/dashboard"
+            dashboard = project / ".agent-pipeline/bin/dashboard"
             self.assertTrue(os.access(dashboard, os.X_OK))
             stamp = (project / ".agent-pipeline/.toolkit-version").read_bytes()
             original = dashboard.read_bytes()
-            (project / ".agent-pipeline/T-001.md").write_text("**Status:** testing\n")
+            (project / ".agent-pipeline/tasks/T-001.md").write_text("**Status:** testing\n")
             # This copied artifact has no imports from the checkout or host.
             env = {"PATH": "/nonexistent", "TERM": "dumb"}
             view = subprocess.run([sys.executable, str(dashboard), "--once"], cwd=project,
@@ -475,7 +639,7 @@ class TransportTests(unittest.TestCase):
             self.assertEqual(view.returncode, 0, view.stderr)
             self.assertIn("T-001 — testing", view.stdout)
             dashboard.unlink()
-            triage = subprocess.run(init + ["--update", "--only", "scripts/dashboard"],
+            triage = subprocess.run(init + ["--update", "--only", ".agent-pipeline/bin/dashboard"],
                                     capture_output=True, text=True, timeout=30)
             self.assertEqual(triage.returncode, 1, triage.stderr)
             self.assertIn("new      " + str(dashboard), triage.stdout)
@@ -489,7 +653,7 @@ class TransportTests(unittest.TestCase):
             rerun = subprocess.run(init, capture_output=True, text=True, timeout=30)
             self.assertEqual(rerun.returncode, 0, rerun.stderr)
             self.assertEqual(dashboard.read_bytes(), customized)
-            drift = subprocess.run(init + ["--update", "--only", "scripts/dashboard"],
+            drift = subprocess.run(init + ["--update", "--only", ".agent-pipeline/bin/dashboard"],
                                    capture_output=True, text=True, timeout=30)
             self.assertEqual(drift.returncode, 1, drift.stderr)
             self.assertIn("differs  " + str(dashboard), drift.stdout)
@@ -566,7 +730,7 @@ class TransportTests(unittest.TestCase):
         self.assertEqual(manifest["platforms"], ["linux", "macos"])
         self.assertFalse(any(key in manifest for key in ("build", "startup", "events")))
         actions = {action["id"] for action in manifest["actions"]}
-        self.assertEqual(actions, {"adopt", "brief-leader", "layout", "status", "focus-leader"})
+        self.assertEqual(actions, {"adopt", "brief-leader", "layout", "team", "focus-tools", "status", "focus-leader"})
         for item in manifest["actions"]:
             self.assertEqual(item["command"][:2], ["python3", "plugin.py"])
         self.assertEqual(manifest["panes"][0]["command"][:2], ["python3", "-c"])

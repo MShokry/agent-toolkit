@@ -3,7 +3,7 @@
 A reusable version of the planner → implement → review → test multi-agent
 pipeline: Claude, Codex, or OpenCode as the lead, matching-tool planning,
 OpenCode (any vendor) for cross-vendor implement/review/test, a state file
-(`.agent-pipeline/T-<id>.md`) as the single handoff surface between roles, and a
+(`.agent-pipeline/tasks/T-<id>.md`) as the single handoff surface between roles, and a
 `delegate` skill so the lead's own context stays small across a long run. 
 
 It was distilled from real multi-agent pipeline runs and hardened there
@@ -13,32 +13,84 @@ re-invented and re-debugged from scratch in every new repo.
 
 OpenCode is also a supported direct lead: `/feature` and `/toolkit-update`
 select a `leader` adapter, and its `planner` references the canonical role
-instructions. No Claude or Codex CLI is required; the generated `.claude/`
-files remain shared instruction sources, not executable dependencies.
+instructions. No Claude or Codex CLI is required. Native
+entrypoints reference neutral `.agent-pipeline/roles/` contracts; Claude files
+are not dependencies of an OpenCode-only scaffold.
 
-Codex is a supported fallback lead: the scaffold includes project instructions,
-a `feature` skill, a `toolkit-update` skill, and a Codex planner. For any other
+Codex is a supported lead: the scaffold includes project instructions,
+a `feature` skill, a `toolkit-update` skill, a Codex planner, and an optional
+`codex-dev` implementer. `--reviewer-model codex/<id>`, a Codex reviewer fallback,
+or `--tester-model codex/<id>` adds the matching native worker. OpenCode workers
+remain the defaults; native workers require verified Codex dispatch capability.
+See [docs/CODEX.md](docs/CODEX.md). Configured `claude/<id>` primary/fallback
+reviewers also have a consent-gated headless adapter for all leaders; see
+[docs/CLAUDE-REVIEW.md](docs/CLAUDE-REVIEW.md). For any other
 lead tool, read [`SYSTEM.md`](SYSTEM.md) — one tool-agnostic page meant to be
 handed to an AI ("recreate this system, with yourself as the lead").
 
 ## How it flows
+
+### Lean team profiles and context
+
+**v1.0.0 major layout:** the toolkit-owned core lives in one `.agent-pipeline/`
+folder. Runtime scripts move to bin/, task records/template to tasks/, and each
+task uses one typed Role assignments table. Client-required discovery files stay
+native. Existing projects apply one reviewed bulk migration before bootstrap;
+see [migration 04](migrations/04-team-upgrade.md).
+
+```bash
+bash /path/to/agent-toolkit/bin/init.sh --target . --project-name my-app \
+  --leader opencode --extras none
+# --leader claude or codex uses the same neutral role contracts.
+# Add --extras herdr to get the two-tab host helper and dashboard.
+```
+
+The leader loads its compact contract and only selected backend adapters.
+Workers load their own role, project constraints, and required task evidence—
+not the leader workflow. Default selected profiles install **25–26 files**;
+`--leader all` retains all-tool compatibility. Existing files are never deleted
+or overwritten. See [context/loading and profiles](docs/CONTEXT.md) and
+[migration 04](migrations/04-team-upgrade.md).
+
+### One file to introduce the team to any app
+
+Every profile installs **`.agent-pipeline/README.md`**: configured team/model
+details, role boundaries, task handoffs, and the complete leader rules. Share it
+and ask: “Act as this project's team leader using this guide; confirm access and
+worker capabilities first.” It is generated from the same leader contract, not
+another hand-maintained policy copy. Workers do not load it; normal native leads
+still use their small entrypoint and role contract. A shared file grants no tools,
+credentials, or approval; an app without project/dispatch access must report that.
+
+### Herdr two-tab team (optional)
+
+Link the reviewed host plugin with
+`herdr plugin link /path/to/agent-toolkit/integrations/herdr`, start your lead
+normally in a Herdr project tab, then run `.agent-pipeline/bin/herdr-team.sh setup` from its
+shell tool or invoke `agent-toolkit.team` in Herdr's actions UI. Your lead stays
+in its tab; a second **Toolkit tools** tab starts the live dashboard alongside
+empty worker/server shells. `actions`, `agents`, `focus-leader`, `focus-tools`,
+and `logs` expose host discovery/navigation. No duplicate agent/server or approval
+is launched. See [the Herdr guide](integrations/herdr/README.md).
 
 ### Standalone visual dashboard
 
 From any project with `.agent-pipeline/` task records, run:
 
 ```bash
-./scripts/dashboard
+./.agent-pipeline/bin/dashboard
 ```
 
-Init installs this self-contained command in the project. It does not need the
+The dashboard extra installs this self-contained command in the project
+(all-tools defaults include it). It does not need the
 toolkit checkout to remain on disk. You can still use
 `/path/to/agent-toolkit/bin/dashboard` for projects without the installed copy.
 
 It discovers the project from your current directory (including nested folders),
 shows live pipeline boxes/task cards, and refreshes every two seconds. No Herdr,
 agent CLI, server, or model calls required. Python 3.8+ on macOS/Linux is enough.
-Use arrows or `j/k` to scroll, `b` for blocked tasks, and `q` to close.
+Use arrows or `j/k` to scroll, `b` for blocked tasks, `s` to toggle sorting between
+the current priority order (default) and task number, and `q` to close.
 Task cards show the latest recorded review verdict and test result, owner,
 acceptance progress, and loop budgets. Blocked/unknown tasks appear first;
 completed tasks last. Status colors distinguish blockers (red), attention
@@ -48,8 +100,8 @@ completed tasks last. Status colors distinguish blockers (red), attention
 For another project or a plain-text snapshot:
 
 ```bash
-./scripts/dashboard --project /path/to/project
-./scripts/dashboard --once
+./.agent-pipeline/bin/dashboard --project /path/to/project
+./.agent-pipeline/bin/dashboard --once
 ```
 
 Optionally add the toolkit's `bin/` directory to your shell's `PATH` to run
@@ -64,7 +116,7 @@ If task records still live in `.agents/`, first apply
 legacy layout until the lead completes the approved relocation.
 
 ```bash
-bash /path/to/agent-toolkit/bin/init.sh --update --target . --only scripts/dashboard
+bash /path/to/agent-toolkit/bin/init.sh --update --target . --only .agent-pipeline/bin/dashboard
 bash /path/to/agent-toolkit/bin/init.sh --target .
 ```
 
@@ -81,7 +133,7 @@ flowchart TD
     Spec -- fails --> Planner
     Spec -- passes --> Approve{User approves?}
     Approve -- no or open questions --> Req
-    Approve -- yes --> Impl[Implementer<br/>builder or senior-dev]
+    Approve -- yes --> Impl[Implementer<br/>builder / senior-dev / codex-dev]
     Impl -- spec unbuildable, max 1 bounce --> Planner
     Impl -->|code, per-pass patch, Decisions log| Review[Reviewer]
     Review -- CHANGES_REQUESTED, max 2 loops --> Impl
@@ -95,14 +147,19 @@ flowchart TD
 
 
 Every arrow into or out of a role is really a write to, or a read from,
-`.agent-pipeline/T-<id>.md` — see below.
+`.agent-pipeline/tasks/T-<id>.md` — see below.
 
 ### Task files stay visible; artifacts stay grouped
 
 ```text
 .agent-pipeline/
-├── T-023.md                     # task state, decisions, findings, results
-├── TEAM.md / TEMPLATE.md        # shared guidance (plus toolkit metadata)
+├── README.md                   # shareable team/leader guide; not worker context
+├── bin/                        # runtime scripts; no project-level scripts pollution
+├── tasks/
+│   ├── TEMPLATE.md             # task shape
+│   └── T-023.md                # task state, decisions, findings, results
+├── roles/                      # compact role contracts
+├── adapters/                   # selected backend dispatch instructions
 ├── prompts/T-023/
 │   ├── builder-1.md
 │   ├── reviewer-1.md
@@ -121,6 +178,14 @@ use a new positive pass number for every attempt, including retries. Prior
 prompts, transcripts, and patches are never overwritten. State files link to
 them in an **Artifacts** table and identify the current patch for review;
 review findings and test results remain in the state file itself.
+
+Run `.agent-pipeline/bin/verify-models.sh` before planning to catch unavailable/mistyped worker
+ids against the authenticated catalog. This verifies resolution, not quota or
+served-model identity. For hosts without durable background calls,
+`.agent-pipeline/bin/bg-dispatch.sh start/wait` keeps OpenCode workers detached and stores
+the actual exit status under `logs/T-<id>/<role>-<pass>.dispatch/`. It never
+overwrites attempts or automatically retries; a session receipt alone is not
+completion evidence. All three leaders follow these same rules.
 
 The dashboard lists task state/status only, not individual artifacts. Existing
 files are not moved automatically, and active-run artifacts must never move.
@@ -147,7 +212,7 @@ rename, keeping native skills in place and reconciling links and permissions.
 sequenceDiagram
     participant Lead
     participant Role as Role (any)
-    participant File as .agent-pipeline/T-id.md
+    participant File as .agent-pipeline/tasks/T-id.md
 
     Lead->>Role: dispatch (task id, short prompt)
     Role->>File: full detail - diff, Decisions log,<br/>verdict, test results
@@ -170,8 +235,8 @@ and test log it dispatched.
 | Role                                   | Reads                  | Writes                                      | Notes                                                   |
 | -------------------------------------- | ---------------------- | ------------------------------------------- | ------------------------------------------------------- |
 | Lead                                   | state file             | the acceptance-criteria ledger, Status      | the only role that records whether a criterion was met  |
-| Planner                                | whole repo             | `.agent-pipeline/T-<id>.md` only                    | never touches source; owns criteria *text*, not outcome |
-| Implementer (`senior-dev` / `builder`) | whole repo             | source + `.agent-pipeline/logs/T-<id>/<implementer>-<pass>.patch` + state file | the only roles that edit source                         |
+| Planner                                | whole repo             | `.agent-pipeline/tasks/T-<id>.md` only                    | never touches source; owns criteria *text*, not outcome |
+| Implementer (`senior-dev` / `builder` / `codex-dev`) | whole repo             | source + `.agent-pipeline/logs/T-<id>/<implementer>-<pass>.patch` + state file | the only roles that edit source                         |
 | Reviewer                               | whole repo (read-only) | state file only, or nothing — see below     | blanket `edit`/`write: deny` by default in this toolkit |
 | Tester                                 | whole repo (read-only) | `<test-dir>/**` + state file only           | never fixes, only reports                               |
 
@@ -188,6 +253,11 @@ source-read-only boundary is explicit role instruction rather than filesystem
 enforcement. This limitation is stated in the generated planner file rather
 than hidden.
 
+Optional Codex implementer/tester agents likewise disclose their workspace-write
+scope limits. Native Codex reviewers are read-only and return full findings for
+the lead to record unchanged. Native dispatch requires live discovery and
+resolved model/sandbox checks; valid files alone are not proof of those controls.
+
 ## What's in it
 
 ```
@@ -201,22 +271,28 @@ test/smoke.sh         automated smoke test for the guarantees above (run by CI)
 test/invariants.sh    asserts every load-bearing rule is present in each of the
                         hand-synced copies that must carry it (run by CI) —
                         catches the omission that hand-syncing keeps producing
+test/runtime.py       mocked worker completion/ownership and model-catalog checks
 CHANGELOG.md          impact-tagged per-release changes ([contract] › [safety]
                       › [process] › [docs]) — read this before merging an update
 migrations/           hand-appliable notes for [contract] changes only
 integrations/herdr/   optional plugin: adopt an existing lead, show task records,
                        and add support panes without requiring team.sh
 templates/             every generated file, with __PLACEHOLDER__ tokens
+  pipeline/roles/       leader, planner, implementer, reviewer, tester contracts
+  pipeline/adapters/    opencode, codex, claude dispatch instructions (load selectively)
   claude/agents/        planner.md.tmpl, senior-dev.md.tmpl
   claude/commands/      feature.md.tmpl — the /feature pipeline command;
                           toolkit-update.md.tmpl — the /toolkit-update merge command
-  codex/                AGENTS.md.tmpl, a project-scoped planner agent, and
+   codex/                AGENTS.md.tmpl, project-scoped planner/codex-dev agents,
+                           optional pinned reviewer/tester agents, and
                           feature/toolkit-update skills for a Codex lead
   opencode/agent/        builder.md.tmpl, reviewer.md.tmpl, tester.md.tmpl
   opencode/agents/       leader.md.tmpl, planner.md.tmpl — native V2 adapters
   opencode/commands/     feature.md.tmpl, toolkit-update.md.tmpl — direct lead commands
   agents-state/          TEMPLATE.md.tmpl — the T-<id> state file shape
-  scripts/                oc.sh.tmpl (OpenCode CLI wrapper), team.sh.tmpl (tmux
+   scripts/                oc.sh.tmpl (OpenCode CLI wrapper), bg-dispatch.sh.tmpl
+                           (durable detached start/wait), verify-models.sh.tmpl
+                           (bounded authenticated catalog preflight), team.sh.tmpl (tmux
                           layout — resumes the lead by default, --port for
                           running a second project at once, see docs/TEAM.md),
                           team-completion.bash.tmpl (optional shell completion
@@ -300,9 +376,7 @@ model families** — the fallback is what the pipeline switches to when
 reviewer, which would defeat cross-vendor independence. Do not use `auto`
 for the reviewer.
 
-Cost/quality picks (Kimi implementer, GLM reviewer, DeepSeek Flash
-tester, Claude Sonnet lead/planner/fallback), and why one OpenCode
-aggregator plus Claude is better than a new toolkit tool per lab: see
+Current scaffold defaults, model-family independence, and provider choices: see
 [`docs/MODELS.md`](docs/MODELS.md).
 
 `init.sh` never overwrites a file that already exists in the target — it
@@ -330,17 +404,17 @@ After scaffolding a target project, start OpenCode normally:
 ```bash
 opencode
 # or
-scripts/team.sh --lead opencode
+.agent-pipeline/bin/team.sh --lead opencode
 ```
 
 Ask it to act as the toolkit leader and read `.opencode/agents/leader.md`, or
 choose your model and run `/feature <request>` or
 `/toolkit-update`. These commands select `leader` in the current session; the
 planner runs as an OpenCode child agent, and builder/reviewer/tester still use
-`scripts/oc.sh`. No Claude or Codex CLI is required. The `.claude/` prompt
-files are deliberately retained as the shared source of role policy.
+`.agent-pipeline/bin/oc.sh`. No Claude or Codex CLI is required. Neutral role contracts are
+the shared policy; a lean OpenCode profile does not install Claude entrypoints.
 
-`scripts/team.sh --lead opencode` is an optional tmux launcher, not a prerequisite
+`.agent-pipeline/bin/team.sh --lead opencode` is an optional tmux launcher, not a prerequisite
 for acting as leader. For Herdr, the optional
 [`integrations/herdr/`](integrations/herdr/README.md) plugin adopts your existing
 agent without relaunching it. It offers an optional briefing, task board, and
@@ -354,8 +428,7 @@ written by `team.sh`). Do not start the lead with `--auto`.
 OpenCode starts a fresh lead chat by default; `--continue` might resume a worker
 instead. To resume a known lead explicitly, set `TEAM_OPENCODE_SESSION=ses_...`
 when launching `team.sh`. `--fresh` ignores it. This does not change the
-canonical worker-session policy or eliminate its documented shared-context
-tradeoff. Verify live agent discovery and denied actions before trusting
+canonical one-task-per-role worker-session policy. Verify live agent discovery and denied actions before trusting
 permission controls; the smoke suite does not make that guarantee.
 
 For an already-stamped project, a plain `bin/init.sh --target <project>` adds
@@ -386,13 +459,13 @@ against the *toolkit checkout*, not the target's own commands:
    selection past the standard single-model-plus-fallback shape will need
    `--reviewer-fallback-model` by hand). This prints the drift summary and
    **doesn't write anything yet**. Before merging, check
-   `.agent-pipeline/T-*.md` for any `Status:` that isn't `done` — merge at a task
+   `.agent-pipeline/tasks/T-*.md` for any `Status:` that isn't `done` — merge at a task
    boundary, not mid-flight.
 3. Run the **same command again with the same flags, minus `--update`**
    (i.e. plain `bin/init.sh --target <path> --project-name ... [...]`) —
    skip-if-exists makes this safe. This is what actually adds the files
    your scaffold predates (`.claude/commands/toolkit-update.md`,
-   `scripts/verify-spec.sh`); it is **not** flag-free the way a re-run
+   `.agent-pipeline/bin/verify-spec.sh`); it is **not** flag-free the way a re-run
    against an already-current project is — you still need the values from
    step 2, because this run doesn't attempt recovery itself.
 4. Merge in `CHANGELOG.md` impact order. Coming from ≤ v0.2.x also apply
@@ -449,16 +522,16 @@ Codex discovers the generated root `AGENTS.md`, the repository-scoped skill at
 `.agents/skills/feature/SKILL.md`, and the planner at
 `.codex/agents/planner.toml`. The skill reads the same canonical feature flow,
 but uses the Codex planner and OpenCode builder instead of Claude roles.
-`scripts/team.sh` makes this choice automatically: Claude when installed,
-otherwise Codex. Override it with `--lead claude` or `--lead codex`.
+When the launcher extra is installed, `.agent-pipeline/bin/team.sh` honors a single-leader
+profile; all-tools profiles select Claude, then Codex, then OpenCode by availability.
 Two things need to be true first:
 
-- `opencode serve` must be reachable — `scripts/team.sh` starts it in a
+- `opencode serve` must be reachable — `.agent-pipeline/bin/team.sh` starts it in a
 tmux layout (and resumes the lead's own conversation by default — see
 [`docs/TEAM.md`](docs/TEAM.md) for that and for running a second project
-at the same time), or run `opencode serve` yourself. `feature.md`'s own
-Preflight step checks this (`curl -sS -m 5 http://localhost:4096`) and
-tells you to start it if it isn't running.
+at the same time), or run `opencode serve` yourself. The neutral leader's
+preflight runs authenticated `.agent-pipeline/bin/verify-models.sh`; an unavailable server
+is a reported blocker, not permission to silently launch a duplicate.
 - The target project needs its own project-specific guidance in `CLAUDE.md` or
   `AGENTS.md`. The generated `AGENTS.md` is an integration entry point with an
   explicitly unpopulated project-guidance section; it does not satisfy this
@@ -473,11 +546,10 @@ block — verify it's actually enforced against your real OpenCode server,
 not just correct-looking YAML.
 
 The first `/feature` run on a freshly-scaffolded project also asks, once,
-whether to fill the generated role files' generic "what this codebase will
-punish you for" sections with real specifics from your actual codebase —
+whether to fill project guidance with real constraints from your codebase —
 gated by a `.agent-pipeline/.needs-customization` marker that `init.sh` drops only
 on a genuinely fresh scaffold, deleted the moment it's asked either way.
-See `feature.md.tmpl`'s Preflight step 1; the Codex feature skill executes the
+See `templates/pipeline/roles/leader.md.tmpl`'s preflight; every lead executes the
 same check.
 
 ## Design decisions, and why
@@ -488,7 +560,7 @@ same check.
   small, standard footprint each one documents in its own header:
   `python3` and `curl` everywhere (`oc.sh`), GNU/coreutils `timeout` on
   macOS via `brew install coreutils` (`oc.sh`), and `tmux` if you use
-  `scripts/team.sh`.
+  `.agent-pipeline/bin/team.sh`.
 - **Project-specific constraints are never duplicated into the templates.**
 Every generated agent file says "read this project's own `CLAUDE.md` /
 `AGENTS.md` first" rather than trying to guess or hardcode what a given
@@ -503,35 +575,21 @@ exactly how to verify before loosening it (dispatch the agent, try to
 make it edit a source file, confirm it's refused). Do not trust "the
 reviewer can't touch source" without having run that check once against
 your actual OpenCode server.
-- **Session reuse (implement → review → test in one OpenCode session) is
-documented as a real tradeoff, not a free win.** It saves reload cost but
-feeds the reviewer the implementer's full read/edit trace, which can be
-larger than the diff it's meant to review. Measure it before assuming
-it's cheaper.
-- **Implementation/review/test role files are self-contained, one full copy
-per tool — not a
-canonical file with thin per-tool shims.** `senior-dev` (Claude) and
-`builder` (OpenCode) do the identical job for two different vendors, and
-yes, their prose is duplicated by hand. A shared-file-plus-shim version was
-tried and reverted: it meant an extra file open before a role could do
-anything, made "can this role load a skill" depend on plumbing that turned
-out to differ unpredictably per tool, and added structure for a
-generalization (N tools per role) that, in practice, only ever had two
-tools and one duplicated role. Two full files you can read start to finish
-beat one indirection layer for a toolkit this size. The real cost of
-duplication — a fix needing N edits — is real, but it's a one-time,
-occasional cost each time behavior actually changes, not a permanent
-runtime cost every dispatch pays. See `docs/ADDING-A-TOOL.md` for the
-recipe to follow **at the point a role genuinely needs a second or third
-tool** — extract to a shared file then, not preemptively.
-
-  Codex lead support is deliberately different: its `feature` skill and
-  planner TOML are short, tool-required adapters that read the canonical
-  Claude feature/planner files. They contain only Codex-specific dispatch and
-  capability differences. Duplicating the 500-line lead flow and full planner
-  contract would add policy copies, not independent worker behavior;
-  `test/invariants.sh` verifies both adapters still point at their canonical
-  files.
+- **Sessions are isolated by task and role.** Builder, reviewer, and tester
+start separate conversations; retries reuse only the matching role's session.
+The reviewer reads the recorded decisions and patch, not the builder's private
+trace. Model-family independence is still required. See
+[migration 04](migrations/04-team-upgrade.md) for the unified unreleased upgrade.
+- **One concise contract per role, thin native adapters.** With three supported
+leaders and several native worker backends, duplicated behavioral prose now costs
+more than one explicit contract read. Permissions/models/sandboxes stay native;
+role behavior lives in `.agent-pipeline/roles/`. Workers never read the leader
+workflow. Leaders load backend instructions only when needed, not every provider's
+manual. `test/context.py` checks links, word budgets, selective installation, and
+unchanged OpenCode permission values; live prompt loading remains a separate check.
+- **Profiles reduce installation, not safety.** Select a leader and optional
+extras; an explicit all-tools option retains compatibility. Re-scaffolding never
+removes older files or overwrites local customization. See docs/CONTEXT.md.
 
 
 
@@ -540,7 +598,7 @@ tool** — extract to a shared file then, not preemptively.
 Independent of `init.sh` — it's about the **lead's** own context, not the
 pipeline's shape. Load it (`/delegate` or however skills are invoked in
 your setup) at the start of any session that's going to dispatch several
-subagents or shell out to `scripts/oc.sh` repeatedly. It covers: when a
+subagents or shell out to `.agent-pipeline/bin/oc.sh` repeatedly. It covers: when a
 dispatch is worth its overhead, why raw event streams are the biggest
 avoidable context cost, named anti-patterns (circular delegation, context
 loss across a handoff, silent scope creep, retrying into a collision)
@@ -623,8 +681,8 @@ of N. You can hand that file to an AI directly ("follow
 docs/ADDING-A-TOOL.md to add `<tool>` support for `<role>`") and it has
 enough to act on without re-deriving the pattern from scratch.
 
-That recipe is for porting a *worker* role to a new tool. Claude and Codex lead
-entry points are generated by `init.sh`; for any other lead AI, use
+That recipe is for porting a *worker* role to a new tool. Claude, Codex, and
+OpenCode lead entry points are generated by `init.sh`; for any other lead AI, use
 [`SYSTEM.md`](SYSTEM.md), the tool-agnostic file meant to be handed directly to
 that AI.
 
@@ -665,7 +723,7 @@ project on its own.
   impact-tagged `CHANGELOG.md`, `--update`'s triage mode, `migrations/`,
   and `/toolkit-update`. See "Updating a project" above for the commands;
   this file is the reasoning behind them.
-- [`REVIEW.md`](REVIEW.md) / [`REVIEW-2.md`](REVIEW-2.md) — point-in-time
-  honest reviews of this toolkit's own design, kept rather than deleted so
-  the reasoning behind a fix (and what's still open) isn't lost once the
-  fix lands.
+- [`docs/BACKLOG.md`](docs/BACKLOG.md) — current open verification work, policy
+  decisions, and accepted tradeoffs. Historical reviews remain in Git history.
+- [`docs/PERMISSIONS.md`](docs/PERMISSIONS.md) — live permission verification;
+  configured rules are not proof of enforcement or filesystem isolation.

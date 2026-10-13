@@ -1,0 +1,55 @@
+"""Capture the launcher's Codex lead id from trusted hook event JSON."""
+import json
+import os
+from pathlib import Path
+import re
+import sys
+
+
+def main():
+    team = os.environ.get("TEAM_CODEX_SESSION", "")
+    if not team:
+        return  # Ordinary Codex chats do not belong to a toolkit launcher.
+    if not re.fullmatch(r"[a-zA-Z0-9_-]+", team):
+        raise ValueError("invalid team name")
+    event = json.load(sys.stdin)
+    if not isinstance(event, dict):
+        raise ValueError("hook input must be an object")
+    if event.get("hook_event_name") not in {"SessionStart", "UserPromptSubmit"}:
+        return
+    root = Path(__file__).resolve().parents[2]
+    if Path(os.environ["TEAM_CODEX_ROOT"]).resolve() != root:
+        raise ValueError("launcher root does not match hook installation")
+    cwd = Path(event["cwd"]).resolve()
+    if cwd != root and root not in cwd.parents:
+        raise ValueError("hook cwd is outside the project")
+    session = event["session_id"]
+    if not isinstance(session, str) or not re.fullmatch(r"[a-zA-Z0-9_-]+", session):
+        raise ValueError("invalid session id")
+    directory = root / ".agent-pipeline"
+    if directory.is_symlink():
+        raise ValueError("pipeline directory must not be a symlink")
+    # Capture only a launch in progress, not inherited stale environment alone.
+    lock = directory / f".codex-lead-lock.{team}"
+    if lock.is_symlink() or not lock.is_dir():
+        raise ValueError("no active toolkit lead launch")
+    pin = directory / f".codex-session-id.{team}"
+    if pin.is_symlink():
+        raise ValueError("session pin must not be a symlink")
+    try:
+        fd = os.open(pin, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        with os.fdopen(fd, "w") as output:
+            output.write(session + "\n")
+    except FileExistsError:
+        if pin.read_text().strip() != session:
+            raise ValueError("event differs from pinned lead; refusing replacement")
+    # Current Codex subagent hook events report the parent session id. Distinct
+    # ids from nested CLI chats can never replace an established lead pin.
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except (KeyError, TypeError, ValueError, OSError) as error:
+        print(f"codex-session: {error}", file=sys.stderr)
+        sys.exit(2)

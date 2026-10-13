@@ -1,0 +1,121 @@
+#!/usr/bin/env bash
+# Headless Claude review for any supported lead. Same immutable reviewer prompt/
+# transcript contract as oc.sh; model must be an explicitly configured claude/*
+# reviewer or fallback. Requires recorded task consent for external Claude review.
+# Usage: --model claude/<id> --prompt-file .../reviewer-<pass>.md
+#        --raw-out .../reviewer-<pass>.jsonl [--session <reviewer-uuid>]
+# Only Read/Grep/Glob tools; no shell, edits, agents, or MCP. This is a runtime
+# guardrail, not OS filesystem isolation; verify exact generated settings live.
+set -eu
+REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd -P)"
+cd "$REPO_ROOT"
+die() { printf 'claude-review.sh: %s\n' "$*" >&2; exit 1; }
+MODEL="" PROMPT_FILE="" RAW_OUT="" SESSION=""
+while [ $# -gt 0 ]; do
+  [ $# -ge 2 ] || die "$1 needs a value"
+  case "$1" in
+    --model) MODEL="$2" ;;
+    --prompt-file) PROMPT_FILE="$2" ;;
+    --raw-out) RAW_OUT="$2" ;;
+    --session) SESSION="$2" ;;
+    *) die "unsupported argument: $1" ;;
+  esac
+  shift 2
+done
+[[ "$MODEL" =~ ^claude/[a-zA-Z0-9][a-zA-Z0-9._-]*$ ]] || die "--model must be a configured claude/<id>"
+MANIFEST=".agent-pipeline/.toolkit-version"
+[ -f "$MANIFEST" ] || die "missing provenance stamp"
+PRIMARY="$(sed -n 's/^reviewer_model: *//p' "$MANIFEST" | head -1)"
+FALLBACK="$(sed -n 's/^reviewer_fallback_model: *//p' "$MANIFEST" | head -1)"
+if [ "$MODEL" = "$PRIMARY" ]; then
+  AGENT=reviewer
+elif [ "$MODEL" = "$FALLBACK" ]; then
+  AGENT=reviewer_fallback
+else
+  die "model is not the configured primary/fallback reviewer"
+fi
+[ -f ".claude/agents/$AGENT.md" ] || die "missing configured Claude reviewer agent"
+[[ "$PROMPT_FILE" =~ ^\.agent-pipeline/prompts/(T-[a-zA-Z0-9_-]+)/reviewer-([1-9][0-9]*)\.md$ ]] || die "prompt must use canonical task/reviewer/pass path"
+TASK="${BASH_REMATCH[1]}" PASS="${BASH_REMATCH[2]}"
+[ "$RAW_OUT" = ".agent-pipeline/logs/$TASK/reviewer-$PASS.jsonl" ] || die "transcript must match prompt task/pass"
+[ -s "$PROMPT_FILE" ] && [ ! -L "$PROMPT_FILE" ] || die "prompt is missing, empty, or a symlink"
+[ -f ".agent-pipeline/tasks/$TASK.md" ] || die "task state is missing"
+[ "$(grep -c '^\*\*Claude review approved:\*\*' ".agent-pipeline/tasks/$TASK.md" || true)" -eq 1 ] || die "task must have exactly one Claude review approval field"
+grep -qxF '**Claude review approved:** on' ".agent-pipeline/tasks/$TASK.md" || die "external Claude review requires recorded task approval"
+[ ! -L .agent-pipeline ] || die "pipeline directory must not be a symlink"
+[ "$(cd "$(dirname "$PROMPT_FILE")" && pwd -P)" = "$REPO_ROOT/.agent-pipeline/prompts/$TASK" ] || die "prompt directory escapes project"
+mkdir -p ".agent-pipeline/logs/$TASK"
+[ "$(cd "$(dirname "$RAW_OUT")" && pwd -P)" = "$REPO_ROOT/.agent-pipeline/logs/$TASK" ] || die "transcript directory escapes project"
+command -v claude >/dev/null 2>&1 || die "claude CLI not installed"
+command -v python3 >/dev/null 2>&1 || die "python3 required for JSON results"
+if command -v timeout >/dev/null 2>&1; then TIMEOUT_BIN=timeout
+elif command -v gtimeout >/dev/null 2>&1; then TIMEOUT_BIN=gtimeout
+else die "timeout or gtimeout required (coreutils)"; fi
+CEILING="${CLAUDE_REVIEW_TIMEOUT:-1200}"
+[[ "$CEILING" =~ ^[1-9][0-9]*$ ]] || die "CLAUDE_REVIEW_TIMEOUT must be positive seconds"
+SESSION_ARGS=()
+if [ -n "$SESSION" ]; then
+  [[ "$SESSION" =~ ^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$ ]] || die "reviewer --session must be a UUID"
+  SESSION_ARGS=(--resume "$SESSION")
+  STORED="$(python3 .agent-pipeline/bin/task-record.py session ".agent-pipeline/tasks/$TASK.md" reviewer claude "$MODEL")" || die "invalid reviewer assignment"
+  [ "$SESSION" = "$STORED" ] || die "resume id is not this task's recorded Claude reviewer session"
+  MODEL_RECORD=".agent-pipeline/logs/$TASK/claude-review-session.$SESSION.model"
+  [ -f "$MODEL_RECORD" ] && [ ! -L "$MODEL_RECORD" ] || die "reviewer model record missing; do not resume an unverified thread"
+  [ "$(cat "$MODEL_RECORD")" = "$MODEL" ] || die "reviewer model changed; start a fresh session"
+else
+  SESSION="$(python3 -c 'import uuid; print(uuid.uuid4())')"
+  SESSION_ARGS=(--session-id "$SESSION")
+  MODEL_RECORD=".agent-pipeline/logs/$TASK/claude-review-session.$SESSION.model"
+fi
+umask 077
+set -C
+exec 3> "$RAW_OUT" || die "attempt already exists; use an unused pass"
+set +C
+(umask 077; set -C; printf '%s\n' "$MODEL" > "$MODEL_RECORD") 2>/dev/null || {
+  [ "$(cat "$MODEL_RECORD")" = "$MODEL" ] || die "conflicting reviewer model record"
+}
+printf 'claude-review.sh: session=%s model=%s agent=%s\n' "$SESSION" "$MODEL" "$AGENT" >&2
+STATUS=0
+"$TIMEOUT_BIN" "$CEILING" claude -p --agent "$AGENT" --model "${MODEL#claude/}" \
+  --output-format stream-json --verbose "${SESSION_ARGS[@]}" \
+  --tools Read,Grep,Glob --allowedTools Read Grep Glob \
+  --disallowedTools Edit Write NotebookEdit Bash Agent Task 'mcp__*' \
+  --permission-mode dontAsk --strict-mcp-config --mcp-config '{"mcpServers":{}}' \
+  < "$PROMPT_FILE" >&3 || STATUS=$?
+exec 3>&-
+if [ "$STATUS" -ne 0 ]; then
+  printf 'claude-review.sh: failed exit=%s transcript=%s\n' "$STATUS" "$RAW_OUT" >&2
+  exit "$STATUS"
+fi
+python3 - "$RAW_OUT" "$SESSION" <<'PY'
+import json
+import sys
+
+results = []
+try:
+    for line in open(sys.argv[1], encoding="utf-8"):
+        if not line.strip():
+            continue
+        item = json.loads(line)
+        if item.get("type") == "result":
+            results.append(item)
+except (ValueError, AttributeError) as error:
+    sys.exit("claude-review.sh: malformed transcript: " + str(error))
+if len(results) != 1:
+    sys.exit("claude-review.sh: missing or ambiguous final result; not a pass")
+result = results[0]
+if result.get("session_id") != sys.argv[2]:
+    sys.exit("claude-review.sh: final result session does not match assigned reviewer")
+if result.get("is_error") is True or result.get("subtype") != "success":
+    sys.exit("claude-review.sh: Claude returned an error result; not a pass")
+text = result.get("result", "")
+if not isinstance(text, str):
+    sys.exit("claude-review.sh: invalid final text")
+lines = [line.strip() for line in text.splitlines() if line.strip()]
+if not lines or lines[0] not in {"VERDICT: PASS", "VERDICT: CHANGES_REQUESTED"}:
+    sys.exit("claude-review.sh: missing exact leading verdict; not a pass")
+if sum(line.startswith("VERDICT:") for line in lines) != 1:
+    sys.exit("claude-review.sh: ambiguous verdict lines; not a pass")
+print(text)
+print("claude-review.sh: done " + lines[0] + " transcript=" + sys.argv[1], file=sys.stderr)
+PY

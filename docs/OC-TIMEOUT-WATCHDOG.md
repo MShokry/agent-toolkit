@@ -1,137 +1,61 @@
-# oc.sh — the keep-alive watchdog (why a run is bounded, but not on a flat clock)
+# OpenCode dispatch watchdog
 
-_Added 2026-09-10. Supersedes the "flat timeout is the current design"
-conclusion in `skills/dev-team-generator/reference/lessons-learned.md` §3 —
-see the update note there._
+`.agent-pipeline/bin/oc.sh` bounds dispatches with an idle detector and an absolute ceiling.
+It uses `opencode run --server` and authenticated `opencode api` calls. It does
+not infer progress from transcript-file growth, which may be buffered.
 
-## The problem
+## Current contract
 
-`scripts/oc.sh` used a flat wall-clock kill: `timeout $OC_TIMEOUT opencode
-run …`, default 600 s. That is wrong for the models the pipeline actually
-runs:
-
-- `opencode-go/glm-5.3-flash` (builder) and `opencode-go/kimi-k2.7-code`
-  (reviewer) routinely do **20–60 minutes** of genuinely active work on a
-  non-trivial task — one implementation, one two-pass review of a
-  1000-line diff.
-- A flat 600 s (or even 2400 s) `timeout` SIGTERMs those mid-tool-call. In
-  one real session (resto-agent T-10) **every** dispatch needed
-  `OC_TIMEOUT` raised by hand, and two still died mid-run.
-- Bumping the flat number just trades false kills for the opposite failure:
-  a genuinely wedged run (unanswered permission prompt, black-holed
-  provider call) sits undetected for the whole inflated window.
-
-## Why the obvious fixes don't work (verified against opencode 1.18.25)
-
-| Signal | Result |
-| --- | --- |
-| `opencode run --format json` stdout / the `--raw-out` file growing | **Dead.** Buffers to end-of-turn. Observed: 0 bytes → one 304-byte early chunk → frozen through 80 s of real multi-file work → the entire 9 KB turn flushed at once on completion. This is lessons-learned §3's finding, re-confirmed. |
-| `GET /event` or `GET /session/<id>/event` (SSE) | **Dead.** Emits only `server.connected` / `server.heartbeat`. No per-message / step / tool events ever reach these streams for an attached `opencode run` turn. |
-| `GET /session/<id>` state — `time.updated`, `tokens`, `cost` | **Too coarse.** Advances only at some step boundaries; sat frozen through 80 s of active file-reading in testing. |
-| `GET /session/<id>/message?limit=1` — the last message's body | **Works.** Its byte-fingerprint changes as parts are appended and streamed text grows (observed changing every ~10–50 s in a 96 s run), and it carries the `completed` timestamp. This is the signal the watchdog uses. It is also the same session-state API lessons-learned §2 already trusts for abort verification. |
-
-## What the watchdog does
-
-`oc.sh` backgrounds `opencode run` and, every `OC_POLL` seconds (default
-20), fetches `GET $OC_SERVER/session/<id>/message?limit=1` and fingerprints
-it as `<byte-size>:<md5>`. Any change resets an idle timer. The run is
-aborted only when **either**:
-
-1. the fingerprint has not changed for `OC_IDLE_TIMEOUT` seconds (default
-   **600**) **and** the message has no `completed` timestamp — a real
-   wedge; or
-2. the absolute `OC_TIMEOUT` ceiling (default **2400**) is reached while
-   the turn is still running.
-
-On abort it `POST $OC_SERVER/session/<id>/abort`s (verified live: 200,
-idempotent) and exits **124**, with a stderr message that says which of the
-two fired. A run that keeps making progress is never touched, however long
-it takes.
-
-Safety rails:
-
-- The session id is resolved even for a fresh `--session`-less run
-  (snapshot session ids before launch, diff after) — so the abort always
-  has a target. This also closes the old "no session id known to abort"
-  gap.
-- If the session id can't be resolved within 60 s, or the message endpoint
-  keeps returning non-JSON, the watchdog **disables itself** and the only
-  bound is the `OC_TIMEOUT` ceiling — never worse than the old flat
-  timeout.
-- An outer `timeout $((OC_TIMEOUT + 300))` wraps the whole thing as an
-  ultimate backstop against a wedged watchdog loop.
-
-## Env
-
-| Var | Default | Meaning |
+| Variable | Default | Meaning |
 | --- | --- | --- |
-| `OC_TIMEOUT` | `2400` | Absolute ceiling, seconds. A still-progressing run is killed here; raise it for a job legitimately longer than 40 min. |
-| `OC_IDLE_TIMEOUT` | `600` | Seconds the last message may stay byte-identical, while not completed, before the run is treated as wedged. 10× the worst active-gap observed in testing. |
-| `OC_POLL` | `20` | Fingerprint poll interval, seconds. |
+| `OC_TIMEOUT` | `2400` | Absolute ceiling in seconds; raise explicitly for longer work |
+| `OC_IDLE_TIMEOUT` | `600` | Unchanged newest message while a turn is incomplete |
+| `OC_POLL` | `20` | Poll interval in seconds |
 
-## How to test / verify
+The wrapper fingerprints the newest message from
+`GET /api/session/<id>/message`, selecting by creation time rather than assuming
+response order or server-side limits. A changing fingerprint resets the idle
+timer. An incomplete, unchanged message can trigger an idle abort; reaching the
+ceiling while polling can trigger a ceiling abort. An outer timeout at
+`OC_TIMEOUT + 300` is a final backstop.
 
-Prereq: `opencode serve` up (`scripts/team.sh`, or `opencode serve --port 4096`).
-Create `.agent-pipeline/prompts/T-watchdog/` and `.agent-pipeline/logs/T-watchdog/` first.
-Write each request below into its named prompt file without overwriting an
-existing attempt. Every repeat needs a new unused pass number and matching
-transcript path; link them from the test task's state file.
+If a fresh session cannot be identified, polling stops and the outer timeout
+remains. Message-read failures do not establish progress or completion; inspect
+the API/runtime before diagnosing a permission stall. Do not assume every
+ceiling hit proves productive work.
 
-1. **Fast turn still works**
-   ```
-   scripts/oc.sh --agent tester --model hcnsec/auto --text \
-     --prompt-file .agent-pipeline/prompts/T-watchdog/tester-1.md \
-     --raw-out .agent-pipeline/logs/T-watchdog/tester-1.jsonl
-   ```
-   Prompt: `reply with exactly: pong`.
-   → prints `pong`, exit 0, one `oc.sh: session=ses_…` line.
+On timeout the wrapper attempts `POST /api/session/<id>/interrupt` when an ID is
+known and exits 124. The interrupt is best-effort: confirm the server-side turn
+has stopped before retrying. A killed client is not proof of a cancelled turn.
+Manual interruption or the lead's own tool timeout may bypass wrapper cleanup.
 
-2. **A long active run is NOT killed** (the regression this fixes)
-   ```
-   time scripts/oc.sh --agent reviewer --model opencode-go/kimi-k2.7-code --text \
-     --prompt-file .agent-pipeline/prompts/T-watchdog/reviewer-1.md \
-     --raw-out .agent-pipeline/logs/T-watchdog/reviewer-1.jsonl
-   ```
-   Prompt: read every file under scripts/ and project guidance one at a time,
-   writing a detailed six-bullet analysis for each; be exhaustive.
-   → runs for minutes, exit 0, real output. **Not** `ABORTED — … did not change for 600s`. (resto-agent verified a 2-minute run here.)
+## Live verification (disposable project)
 
-3. **The watchdog still catches a wedge** — force a tiny idle window against a run that stalls
-   ```
-   OC_IDLE_TIMEOUT=30 OC_POLL=10 scripts/oc.sh --agent builder --model opencode-go/glm-5.3-flash \
-     --prompt-file .agent-pipeline/prompts/T-watchdog/builder-1.md \
-     --raw-out .agent-pipeline/logs/T-watchdog/builder-1.jsonl
-   ```
-   Prompt: run and report a safe, deliberately stalled command in a disposable
-   environment. Never point this test at production.
-   → exit 124 within ~40 s; stderr `oc.sh: ABORTED — the session's last message did not change for 30s …` + `Aborted server-side session ses_…`. Then confirm the turn actually stopped:
-   ```
-   curl -s $OC_SERVER/session/<id>/message?limit=1 | python3 -c 'import json,sys;print(json.load(sys.stdin)[-1]["info"]["time"])'
-   ```
-   → a `completed` timestamp is present (not an open turn).
+Start an authenticated server with `.agent-pipeline/bin/team.sh`, or export
+`OPENCODE_PASSWORD` when launching it manually. Set `OC_SERVER` when needed.
+Choose available model IDs with `opencode models`.
 
-4. **The ceiling still bounds a runaway**
-   ```
-   OC_TIMEOUT=60 scripts/oc.sh --agent reviewer --model opencode-go/kimi-k2.7-code \
-     --prompt-file .agent-pipeline/prompts/T-watchdog/reviewer-2.md \
-     --raw-out .agent-pipeline/logs/T-watchdog/reviewer-2.jsonl
-   ```
-   Prompt: a safe read-only analysis task expected to take more than 60 seconds.
-   → exit 124, stderr `ABORTED — the run hit the absolute 60s ceiling`.
+Create task directories and write each prompt before dispatch:
 
-5. **Portability**: `bash -n scripts/oc.sh` clean. Needs `python3`, `curl`,
-   `md5`/`md5sum`, GNU `timeout`/`gtimeout` (already required).
+```bash
+mkdir -p .agent-pipeline/prompts/T-watchdog .agent-pipeline/logs/T-watchdog
+.agent-pipeline/bin/oc.sh --agent tester --model <available-model> --text \
+  --prompt-file .agent-pipeline/prompts/T-watchdog/tester-1.md \
+  --raw-out .agent-pipeline/logs/T-watchdog/tester-1.jsonl
+```
 
-Tests 1, 2, 4 are deterministic. Test 3 needs a reproducible stall; if you
-can't induce one, the loop logic is short enough to read — `KILL_REASON=idle`
-is set only when `message_fp` is byte-identical for `OC_IDLE_TIMEOUT` **and**
-`turn_completed` returns false.
+Use a new positive pass number on every attempt, including failures. Check:
 
-## If a future opencode changes this
+1. A short prompt returns its expected output, exit 0, and a session receipt.
+2. A long active read-only task survives idle intervals below the ceiling.
+3. A safe reproducible stall in a disposable environment triggers idle abort
+   with a deliberately small idle window; a permission prompt is not the only
+   possible cause. Never enable `--auto` or widen permissions as an automatic fix.
+4. A task longer than an explicitly shortened ceiling exits 124.
+5. After any abort, inspect the session's newest message/turn through
+   `opencode api GET /api/session/<id>/message --server <url>` and verify that
+   work actually stopped before session reuse.
 
-The message-body signal is **tool-and-version specific** (opencode 1.18.25,
-Sep 2026). Re-run tests 2 and 3 against any new opencode before trusting it.
-If `GET /session/<id>/message?limit=1` ever stops tracking sub-turn
-progress, fall back to a higher flat `OC_TIMEOUT` and say so plainly —
-per lessons-learned §3, a bounded flat timeout with no false-positive risk
-beats a fancier mechanism built on a broken assumption.
+These are manual runtime checks, not deterministic CI tests. Reverify the
+message signal, response shape, authentication, and cancellation behavior after
+runtime upgrades. See [PERMISSIONS.md](PERMISSIONS.md) for permission checks.

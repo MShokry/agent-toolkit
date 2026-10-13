@@ -1,22 +1,22 @@
-# `scripts/team.sh`
+# `.agent-pipeline/bin/team.sh`
 
 A tmux layout for running the pipeline: pane 0 is the lead (`claude` when
 installed, otherwise `codex`, then `opencode`), pane
-1 is `opencode serve` (what `scripts/oc.sh` attaches to), pane 2 tails
+1 is `opencode serve` (what `.agent-pipeline/bin/oc.sh` attaches to), pane 2 tails
 `.agent-pipeline/` for activity, pane 3 is free.
 
 ## Usage
 
 ```
-scripts/team.sh [session-name]     start, or attach if it's already running
-scripts/team.sh --fresh            start a NEW lead conversation, not a resume
-scripts/team.sh --lead <name>      auto (default), claude, codex, or opencode
-scripts/team.sh --port <N>         opencode server port (default 4096)
-scripts/team.sh --kill [session-name]
+.agent-pipeline/bin/team.sh [session-name]     start, or attach if it's already running
+.agent-pipeline/bin/team.sh --fresh            start a NEW lead conversation, not a resume
+.agent-pipeline/bin/team.sh --lead <name>      auto (default), claude, codex, or opencode
+.agent-pipeline/bin/team.sh --port <N>         opencode server port (default 4096)
+.agent-pipeline/bin/team.sh --kill [session-name]
 ```
 
 Flags can combine with a session name in any order:
-`scripts/team.sh --port 4097 my-second-project`.
+`.agent-pipeline/bin/team.sh --port 4097 my-second-project`.
 
 ## Lead selection
 
@@ -45,7 +45,7 @@ so by pinning to a stored UUID (`.agent-pipeline/.claude-session-id.<session-nam
 written the first time that session name runs) rather than
 `claude --continue`. `--continue` only means "the most recent conversation
 in this directory," with no notion of *which* tmux session started it, so
-running a second `scripts/team.sh` session name against the same repo (or
+running a second `.agent-pipeline/bin/team.sh` session name against the same repo (or
 just running a one-off `claude` there for something unrelated) could make
 the next `--continue` resume the wrong thread entirely. The pinned id
 removes that ambiguity: each session name always resumes its own
@@ -55,20 +55,26 @@ conversations have happened in the same directory since.
 This exists because killing the tmux session (the usual way to free up a
 port, or just closing the terminal) used to also throw away the lead's
 context, with no way back into the same conversation. Now: kill it, come
-back later, run `scripts/team.sh` again, the lead is where you left it.
+back later, run `.agent-pipeline/bin/team.sh` again, the lead is where you left it.
 
 Pass `--fresh` on the rare run where you actually want a clean slate
 instead — this mints a new pinned id, so later resumes follow the new
 conversation, not the old one.
 
-Codex has no create-with-session-id equivalent. Without `--fresh`, the launcher
-uses `codex resume --last`, whose lookup is scoped to the current repository;
-if no saved session exists it starts `codex`. With `--fresh`, it starts a new
-Codex conversation directly.
+Codex uses `.agent-pipeline/bin/codex-lead.sh <team-name>`, which captures the actual lead id
+via trusted SessionStart/UserPromptSubmit hooks into
+`.agent-pipeline/.codex-session-id.<team-name>`. Review/trust with `/hooks`;
+hand-merge capture handlers if `.codex/hooks.json` already exists. Existing
+hooks/config are never overwritten. The launcher requires `--no-daemon` support
+to keep launch environment isolated and preserves configured approvals/sandbox.
+It never uses latest-session lookup, the picker, or a failed-resume fallback.
+Missing capture blocks later launches: recover the exact lead `/status` id into
+its pin, or explicitly choose `--fresh`. Confirm inactivity before clearing a
+stale lock. `--fresh` discards this team's pin, not its saved conversation history.
 
 OpenCode deliberately does **not** use `--continue`: the latest session may be
 a worker, not the lead. It starts a fresh lead chat unless you supply a known
-lead session id via `TEAM_OPENCODE_SESSION=ses_... scripts/team.sh --lead opencode`.
+lead session id via `TEAM_OPENCODE_SESSION=ses_... .agent-pipeline/bin/team.sh --lead opencode`.
 `--fresh` ignores this variable. Obtain the exact id from OpenCode; never
 invent it or strip uppercase characters. This is not automatic pinned resume.
 
@@ -80,10 +86,10 @@ now the only fix was killing the first project's session. Instead, give
 the second project its own port:
 
 ```
-scripts/team.sh --port 4097
+.agent-pipeline/bin/team.sh --port 4097
 ```
 
-That port gets written to `.agent-pipeline/.oc-port` in this repo. `scripts/oc.sh`
+That port gets written to `.agent-pipeline/.oc-port` in this repo. `.agent-pipeline/bin/oc.sh`
 reads it automatically (when `OC_SERVER` isn't already set), so every
 `oc.sh` call in this project just uses the right port — you don't export
 `OC_SERVER` by hand for every call.
@@ -98,16 +104,16 @@ predates that, or ignores it differently, add it by hand.
 From the project root, open the read-only visual dashboard:
 
 ```bash
-./scripts/dashboard
+./.agent-pipeline/bin/dashboard
 ```
 
-It refreshes `.agent-pipeline/T-*.md` every two seconds, showing stage graphs, task
+It refreshes `.agent-pipeline/tasks/T-*.md` every two seconds, showing stage graphs, task
 cards, acceptance ticks, blockers, and latest handoffs. Use arrows or `j/k` to
 scroll, `b` to filter blocked tasks, `r` to refresh, and `q` to close.
 
 ```bash
-./scripts/dashboard --once                  # plain-text snapshot
-./scripts/dashboard --project /path/to/repo # another project
+./.agent-pipeline/bin/dashboard --once                  # plain-text snapshot
+./.agent-pipeline/bin/dashboard --project /path/to/repo # another project
 ```
 
 Requires Python 3.8+ on macOS/Linux; no Herdr, tmux, running agent, toolkit
@@ -117,11 +123,11 @@ Init installs the command automatically. For older scaffolds, see
 
 ## Shell completion (optional)
 
-`scripts/team-completion.bash` completes `--fresh`, `--lead`, `--port`, `--kill`,
+`.agent-pipeline/bin/team-completion.bash` completes `--fresh`, `--lead`, `--port`, `--kill`,
 and `-h`/`--help`. It's not installed automatically — source it from your
 shell rc file if you want it:
 
 ```bash
 # ~/.bashrc or ~/.zshrc (zsh needs `autoload -U +X bashcompinit && bashcompinit` first)
-source /path/to/this/repo/scripts/team-completion.bash
+source /path/to/this/repo/.agent-pipeline/bin/team-completion.bash
 ```

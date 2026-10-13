@@ -61,7 +61,7 @@ whatever's actually available):
 Two different things are easy to conflate:
 
 - A **tool** is a harness with its own agent files and permission model.
-  Adding one is real work — see `tool-onboarding.md`.
+   Adding one is real work — see `tool-onboarding.md`.
 - A **model family** (which lab, which weights) is a model-selection
   argument on an *existing* role under an *existing* tool, not a reason to
   add a new templated tool. Don't add a new `templates/<lab>/`-equivalent

@@ -62,7 +62,10 @@ def project_root(start):
         raise PluginError("No absolute project cwd supplied by Herdr; select a project pane.")
     path = Path(start).resolve()
     for root in (path, *path.parents):
-        if (root / ".agent-pipeline/TEMPLATE.md").is_file() and (root / ".claude/commands/feature.md").is_file():
+        if (((root / ".agent-pipeline/tasks/TEMPLATE.md").is_file()
+             or (root / ".agent-pipeline/TEMPLATE.md").is_file())
+                and ((root / ".agent-pipeline/roles/leader.md").is_file()
+                     or (root / ".claude/commands/feature.md").is_file())):
             return root
     raise PluginError("Project is not scaffolded. Run bin/init.sh explicitly first; adoption never scaffolds.")
 
@@ -146,6 +149,10 @@ def save_binding(path, value):
 def adopt(root, workspace, pane, path):
     if not pane:
         raise PluginError("Select the running lead pane before adoption.")
+    if pane.get("agent") not in KINDS:
+        raise PluginError("Adoption requires a recognized OpenCode, Claude, or Codex agent, not a shell. "
+                          "Select the existing lead pane and run setup there (or Adopt from its actions UI). "
+                          "No replacement agent was launched.")
     agent = object_field(herdr("agent", "get", pane["pane_id"]), "agent")
     if agent.get("agent") not in KINDS:
         raise PluginError("Adoption requires a recognized OpenCode, Claude, or Codex agent, not a shell.")
@@ -157,6 +164,7 @@ def adopt(root, workspace, pane, path):
         "pane_id": agent["pane_id"], "terminal_id": agent["terminal_id"],
         "agent": agent["agent"], "session": agent.get("agent_session"),
         "panes": previous.get("panes", {}) if same_terminal else {},
+        "team_panes": previous.get("team_panes", {}) if same_terminal else {},
     }
     save_binding(path, binding)
     # Metadata does not take lifecycle/session authority from Herdr integrations.
@@ -207,15 +215,22 @@ def brief_leader(root, workspace, binding):
         if not (root / ".agents/skills/feature/SKILL.md").is_file():
             raise PluginError("Codex feature skill is missing; bootstrap it explicitly first.")
     else:
+        if not (root / ".claude/commands/feature.md").is_file():
+            raise PluginError("Claude feature entrypoint is missing; reconcile the selected lead profile explicitly first.")
         instruction = "Use .claude/commands/feature.md as the canonical lead workflow."
     prompt = (
         "Act as this project's agent-toolkit lead in this existing session, not as an implementer. "
-        "Read the project's AGENTS.md and CLAUDE.md when present. " + instruction + " "
-        "Read .claude/commands/feature.md in full; keep the pipeline in .agent-pipeline/T-<id>.md. "
+        "Read the project's AGENTS.md and CLAUDE.md when present. " + instruction + " " +
+        ("Read .agent-pipeline/roles/leader.md; " if (root / ".agent-pipeline/roles/leader.md").is_file()
+         else "Read .claude/commands/feature.md in full; ") +
+        "keep task records in .agent-pipeline/tasks/T-<id>.md. "
         "This role briefing is not a feature request, spec approval, auto-mode consent, or merge approval. "
         "Do not dispatch work or modify files yet. Confirm readiness briefly and ask for the task. "
         "Herdr hosts terminals only; keep reviewer independence, loop budgets, permission checks, "
-        "and human approval gates unchanged."
+        "and human approval gates unchanged. "
+        "Use .agent-pipeline/bin/herdr-team.sh actions to discover installed Herdr actions, and agents to inspect "
+        "this workspace's panes/native sessions. Use explicit targets for native read/focus/prompt/wait "
+        "controls; do not send approval keys, silently switch conversations, or treat idle as acceptance."
     )
     herdr("agent", "prompt", target["pane_id"], prompt)
     print("Leader briefing submitted once. No automatic retry; inspect the agent if completion is uncertain.")
@@ -255,6 +270,75 @@ def layout(root, workspace, binding, path):
     print("Support panes ready. Existing lead untouched; worker/server shells are empty. No server or agent launched.")
 
 
+def team_tabs(root, workspace, binding, path):
+    """Keep the adopted lead in place; put the live board and tools in another tab."""
+    target = lead(root, workspace, binding)
+    panes = herdr("pane", "list", "--workspace", workspace).get("panes")
+    if not isinstance(panes, list):
+        raise PluginError("Herdr response has no pane list.")
+    present = {p["pane_id"]: p for p in panes}
+    saved = binding.setdefault("team_panes", {})
+    board_ref = saved.get("board", {})
+    board = present.get(board_ref.get("pane_id"))
+    if (not board or board.get("terminal_id") != board_ref.get("terminal_id")
+            or board.get("tab_id") != board_ref.get("tab_id")
+            or board.get("tab_id") == target.get("tab_id")):
+        # If only the dashboard closed/moved, reuse the saved tools tab through
+        # a still-live support pane. Never split or move the lead to recover it.
+        anchor = None
+        for role in ("workers", "server"):
+            ref = saved.get(role, {})
+            candidate = present.get(ref.get("pane_id"))
+            if (candidate and candidate.get("terminal_id") == ref.get("terminal_id")
+                    and candidate.get("tab_id") == board_ref.get("tab_id")
+                    and candidate.get("tab_id") != target.get("tab_id")):
+                require_project(candidate, root)
+                anchor = candidate
+                break
+        result = open_board(root, workspace, anchor["pane_id"] if anchor else target["pane_id"],
+                            "split" if anchor else "tab")
+        board = object_field(object_field(result, "plugin_pane"), "pane")
+        # Save even before cosmetic calls: an API failure must not duplicate a
+        # known successful launch on retry. Never move an existing live pane.
+        saved["board"] = {key: board[key] for key in ("pane_id", "terminal_id", "tab_id")}
+        save_binding(path, binding)
+    require_project(board, root)
+    if not board.get("tab_id") or board["tab_id"] == target.get("tab_id"):
+        raise PluginError("Tools board is not in a separate tab; no lead pane will be split.")
+    herdr("tab", "rename", board["tab_id"], "Toolkit tools")
+    for role, direction in (("workers", "right"), ("server", "down")):
+        ref = saved.get(role, {})
+        current = present.get(ref.get("pane_id"))
+        if (current and current.get("terminal_id") == ref.get("terminal_id")
+                and current.get("tab_id") == board["tab_id"]):
+            require_project(current, root)
+            continue
+        pane = object_field(herdr("pane", "split", board["pane_id"], "--direction", direction,
+                                  "--cwd", str(root), "--no-focus"), "pane")
+        saved[role] = {key: pane[key] for key in ("pane_id", "terminal_id", "tab_id")}
+        save_binding(path, binding)
+        if pane["tab_id"] != board["tab_id"]:
+            raise PluginError("Support shell opened outside the tools tab; inspect before retrying.")
+        herdr("pane", "rename", pane["pane_id"], "Toolkit " + role)
+    herdr("tab", "focus", board["tab_id"])
+    print("Two-tab team ready: existing lead tab + Toolkit tools (live dashboard, worker/server shells).")
+    print("Shells are empty: no duplicate server, worker, prompt, or approval was launched.")
+
+
+def focus_tools(root, workspace, binding):
+    target = lead(root, workspace, binding)
+    ref = binding.get("team_panes", {}).get("board", {})
+    panes = herdr("pane", "list", "--workspace", workspace).get("panes", [])
+    matches = [p for p in panes if p.get("pane_id") == ref.get("pane_id")
+               and p.get("terminal_id") == ref.get("terminal_id")
+               and p.get("tab_id") == ref.get("tab_id")]
+    if len(matches) != 1 or matches[0].get("tab_id") == target.get("tab_id"):
+        raise PluginError("Tools tab is missing or moved; run Team tabs explicitly to recreate it.")
+    require_project(matches[0], root)
+    herdr("tab", "focus", matches[0]["tab_id"])
+    print("Focused this project's saved tools tab; no process launched.")
+
+
 _view_spec = importlib.util.spec_from_file_location("toolkit_dashboard", Path(__file__).with_name("dashboard.py"))
 _view = importlib.util.module_from_spec(_view_spec)
 sys.dont_write_bytecode = True
@@ -268,7 +352,7 @@ visual_board = _view.visual_board
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("adopt", "brief-leader", "layout", "status", "focus-leader", "board"))
+    parser.add_argument("action", choices=("adopt", "brief-leader", "layout", "team", "focus-tools", "status", "focus-leader", "board"))
     parser.add_argument("--project", help="Explicit scaffolded project (never the plugin cwd)")
     parser.add_argument("--pane", help="Explicit Herdr pane on the invoking server")
     parser.add_argument("--once", action="store_true", help="Print the board once without terminal refresh")
@@ -293,7 +377,10 @@ def main(argv=None):
         if args.action == "adopt":
             adopt(root, workspace, pane, path)
             return
-        binding = load_binding(path)
+        binding = load_binding(path, required=args.action != "team")
+        if binding is None:
+            adopt(root, workspace, pane, path)
+            binding = load_binding(path)
         if args.action == "brief-leader":
             brief_leader(root, workspace, binding)
         elif args.action == "focus-leader":
@@ -302,6 +389,10 @@ def main(argv=None):
             print("Focused the exact adopted lead session; no new process launched.")
         elif args.action == "layout":
             layout(root, workspace, binding, path)
+        elif args.action == "team":
+            team_tabs(root, workspace, binding, path)
+        elif args.action == "focus-tools":
+            focus_tools(root, workspace, binding)
 
 
 if __name__ == "__main__":

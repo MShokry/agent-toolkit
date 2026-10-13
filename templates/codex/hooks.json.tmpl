@@ -1,0 +1,7 @@
+{
+  "description": "Capture the exact toolkit-launched Codex lead id. Review/trust with /hooks; merge handlers into existing hooks rather than replacing them.",
+  "hooks": {
+    "SessionStart": [{"hooks": [{"type": "command", "command": "if [ -n \"${TEAM_CODEX_SESSION:-}\" ]; then python3 \"$TEAM_CODEX_ROOT/.agent-pipeline/bin/codex-session.py\"; fi", "timeout": 5}]}],
+    "UserPromptSubmit": [{"hooks": [{"type": "command", "command": "if [ -n \"${TEAM_CODEX_SESSION:-}\" ]; then python3 \"$TEAM_CODEX_ROOT/.agent-pipeline/bin/codex-session.py\"; fi", "timeout": 5}]}]
+  }
+}

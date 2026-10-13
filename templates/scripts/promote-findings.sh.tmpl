@@ -13,20 +13,20 @@
 #
 # Findings are written as:
 #   - [docs/SOME-DOC.md] one-line finding text
-# under a "## Findings for docs" heading in the task's .agent-pipeline/T-<id>.md.
+# under a "## Findings for docs" heading in .agent-pipeline/tasks/T-<id>.md.
 #
-# Usage: scripts/promote-findings.sh T-03
+# Usage: .agent-pipeline/bin/promote-findings.sh T-03
 
 set -eu
 
 # Anchor to the repo root like oc.sh/team.sh do, so the script works from any
 # CWD and — more importantly — so the repo-escape check below is checked
 # against a known root rather than wherever the caller happened to be.
-REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$REPO_ROOT"
 
 ID="${1:?usage: promote-findings.sh <task-id, e.g. T-03>}"
-FILE=".agent-pipeline/${ID}.md"
+FILE=".agent-pipeline/tasks/${ID}.md"
 [ -f "$FILE" ] || { echo "promote-findings.sh: no such file: $FILE" >&2; exit 1; }
 
 LINES="$(awk '/^## Findings for docs/{f=1;next} /^## /{f=0} f && /^- \[/' "$FILE")"

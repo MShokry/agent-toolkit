@@ -1,26 +1,19 @@
-# Agent pipeline instructions for __PROJECT_NAME__
+# __PROJECT_NAME__ — project entrypoint
 
-Read `CLAUDE.md` first when it exists. It is this project's primary guidance
-file; these instructions add lead integration without duplicating or
-overriding the project's own constraints.
+Read `CLAUDE.md` when present for project constraints.
+**Explicit worker assignment takes precedence over generic lead routing.**
+Workers read only their assigned role contract and task evidence; do not invoke
+the `feature` skill, read leader rules, or dispatch another team.
 
-This repository uses a planner -> implement -> review -> test pipeline.
-In Codex, for a feature or bug-fix request, invoke the `feature` skill and act
-as its lead. For an agent-toolkit scaffold update, invoke the `toolkit-update`
-skill. Do not run either workflow from memory: load the skill and follow its
-referenced canonical flow. In OpenCode, use `/feature` or `/toolkit-update`, which select the
-`leader` adapter under `.opencode/agents/` and reference the same canonical
-Claude instruction files. Do not use the Codex-specific planner adaptation
-in an OpenCode-led run. No Claude or Codex CLI is needed for that run.
-
-The task state file under `.agent-pipeline/` is the only handoff surface between roles.
-Keep role replies short and leave full details in that file.
+For unassigned feature/bug-fix work: Claude uses `/feature`, Codex invokes the
+`feature` skill, OpenCode uses `/feature` with its leader agent. Each loads
+`.agent-pipeline/roles/leader.md` and only needed backend adapters.
+Toolkit updates use `toolkit-update`, at an idle task boundary.
+The task record is the handoff surface; replies are short receipts except
+read-only reviewers returning findings for the lead to persist unchanged.
 
 ## Project-specific guidance
 
-Not populated by agent-toolkit: a generic scaffolder must not guess this
-project's architecture, security boundaries, test commands, or style. If
-`CLAUDE.md` does not exist and this paragraph has not been replaced with real
-project guidance, stop before feature work and ask the user to customize this
-section. Do not treat the pipeline instructions above as project-specific
-constraints.
+Not populated by agent-toolkit. If CLAUDE.md is absent and this section has not
+been customized with actual architecture, constraints, style, and test commands,
+stop before feature work and ask the user. Pipeline rules are not project guidance.

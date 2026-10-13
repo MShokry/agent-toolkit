@@ -15,10 +15,16 @@ jobs:
         run: bash test/invariants.sh
       - name: Herdr adapter contracts (no agents or LLM calls)
         run: python3 test/herdr.py
+      - name: Worker runtime contracts (mocked, no model calls)
+        run: python3 test/runtime.py
+      - name: Lean context and scaffold profiles (no model calls)
+        run: python3 test/context.py
+      - name: Major layout and task schema migration
+        run: python3 test/layout.py
       - name: ShellCheck
         run: |
           shellcheck --version >/dev/null 2>&1 || { echo "shellcheck not installed; skipping"; exit 0; }
           shellcheck bin/init.sh bin/release.sh test/smoke.sh test/invariants.sh
-          for f in templates/scripts/*.tmpl; do
+          for f in templates/scripts/*.sh.tmpl templates/scripts/*.bash.tmpl; do
             shellcheck --shell=bash "$f"
           done

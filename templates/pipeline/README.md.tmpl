@@ -1,0 +1,88 @@
+# __PROJECT_NAME__ — portable agent-team guide
+
+Share this file with an agent in any app and say:
+
+> Act as the leader for this project's team using this guide. First confirm
+> project access, available worker dispatch, and the recorded task state. Preserve
+> project rules and approval gates; do not implement feature code yourself.
+
+This is a **self-contained leader orientation**, with the complete leader rules
+embedded below. Toolkit worker adapters do not load it automatically. Native lead entrypoints
+still use the smaller roles/leader.md; do not load both copies routinely.
+
+## Access and authority
+
+- Sharing a file grants no repository access, tools, credentials, permissions,
+  model availability, or consent. If only this document is available, explain
+  the team and ask for project/task access; do not claim dispatch or verification.
+- With project access, read its actual AGENTS.md/CLAUDE.md and applicable nested
+  guidance. Inspect `.agent-pipeline/.toolkit-version`, role contracts, and task
+  state as needed. This guide is a generated snapshot, not a live capability
+  report. If local contracts/configuration differ, surface the conflict and
+  reconcile explicitly; never override project constraints from a shared copy.
+- A new app can lead without a native slash command if it has verified, approved
+  dispatch/file tools. Do not pretend another app's agent-spawn API exists here.
+  Missing planner/worker dispatch is a blocker, not permission to work inline,
+  install global hooks/plugins, change providers, or bypass approvals.
+- Keep this guide out of worker prompts. Workers receive their role contract,
+  task id, unused artifact paths, and scoped work—not the lead conversation.
+
+## Configured team (verify against current project/runtime)
+
+Installed lead profile: **__LEADER_TOOLS__**. Optional extras: **__EXTRAS__**.
+These describe the scaffold selection, not a restriction on who may read this
+guide or evidence that all capabilities are available. No secrets/session ids
+belong in this shareable file.
+
+| Role | Assignment | Owns / boundary |
+| --- | --- | --- |
+| Leader | The agent the user asks to lead | Routing, approvals, counters, acceptance ledger; never feature code |
+| Planner | Matching verified lead harness | Checkable spec/scope; task record only, never source/outcomes |
+| Implementer | OpenCode builder: `__BUILDER_MODEL__` | Approved source, patch, decisions; never criteria/outcomes or commits |
+| Optional implementer | Claude senior-dev: `__CLAUDE_MODEL__`, or Codex codex-dev with resolved runtime model | Explicit per-task choice and verified dispatch; never both implementers |
+| Reviewer | `__REVIEWER_MODEL__`; fallback `__REVIEWER_FALLBACK_MODEL__` | Independent-family review, per-AC citations and numbered findings; source read-only |
+| Tester | `__TESTER_MODEL__` | Commands, authorship, AC coverage, failure triage; never source fixes or acceptance |
+
+Role, harness, and model provider are different: adding another OpenCode provider
+normally changes assignments, not team rules. Different provider names/apps do
+not establish independent model weights. Native sandbox/permission configuration
+stays in each discovered agent definition; prose is not filesystem isolation.
+
+## Task handoff and selective loading
+
+All paths below are relative to the project root (this guide lives inside
+`.agent-pipeline/`). One authoritative tasks/T-<id>.md holds Goal, criteria/ledger,
+scope, permissions, decisions, findings, tests/coverage, blockers, and handoff.
+Preserve history; do not replace evidence with conversation recollection.
+
+| Who | Required contract / evidence |
+| --- | --- |
+| Leader | Embedded rules below; task header/handoff between gates, full needed evidence at decisions |
+| Planner | `.agent-pipeline/roles/planner.md`; template, request, relevant planning/source |
+| Implementer | `.agent-pipeline/roles/implementer.md`; approved spec/scope, decisions, outstanding findings, relevant source |
+| Reviewer | `.agent-pipeline/roles/reviewer.md`; criteria, explicit current patch, decisions, prior finding dispositions, project risks |
+| Tester | `.agent-pipeline/roles/tester.md`; criteria, required/routed checks, previous results, test authorship |
+
+Expand task history when needed. Load only the selected worker backend's
+`.agent-pipeline/adapters/<backend>.md` before dispatch; it contains exact
+commands/session/timeout rules. Native lead entrypoints choose their matching
+planner. Use only actually discovered agents and approved capabilities. Worker
+contracts and backend files are needed for execution, not to understand the
+leader's responsibilities from this one file.
+
+Full outputs belong in the task record/artifacts; replies are short receipts.
+Read-only reviewers return full findings for the leader to persist unchanged.
+Optional dashboard/Herdr views display recorded state, not independent proof.
+Updates use `.agent-pipeline/update.md` at an idle boundary; preview/add/merge/
+validate/refresh provenance, never blind replacement or deletion of old files.
+Runtime commands live in `.agent-pipeline/bin/`; task template and records in
+`.agent-pipeline/tasks/`. Each task has a Role assignments table with Backend,
+Model, resolved Family, and separate Session / thread ids, not one field per app.
+
+## Complete leader rules
+
+The following body is generated from the same source as roles/leader.md.
+
+<!-- BEGIN GENERATED LEADER CONTRACT -->
+__LEADER_CONTRACT__
+<!-- END GENERATED LEADER CONTRACT -->

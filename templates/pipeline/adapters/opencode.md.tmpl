@@ -1,0 +1,44 @@
+# OpenCode dispatch
+
+For OpenCode worker assignments only; native codex/* and claude/* aliases must
+never reach oc.sh. Verify exact generated agents' discovery/resolved permissions
+live; legacy permission syntax remains unchanged pending separate investigation.
+Model catalog resolution alone is not enforcement or served model identity.
+
+Write prompt before dispatch. Example first builder attempt (use the assigned
+role/model/pass, not these paths on a rerun):
+
+```bash
+.agent-pipeline/bin/oc.sh --agent builder --model __BUILDER_MODEL__ --text \
+  --prompt-file .agent-pipeline/prompts/T-<id>/builder-1.md \
+  --raw-out .agent-pipeline/logs/T-<id>/builder-1.jsonl
+```
+
+Prompt includes task id, role, assigned patch for implementation, baseline, and
+specific outstanding work, not leader instructions. First call omits --session;
+record `oc.sh: session=ses_...` in the implementer/reviewer/tester role row on
+any outcome. Later calls use only that task/role/model session after inactivity
+is confirmed. Do not use --fork. Session receipts are not completion evidence.
+Always --text; raw-out is immutable diagnostic evidence, not a lead input.
+
+--auto is off unless approved and recorded OpenCode auto mode: on for this task;
+only builder calls may use it. Never reviewer, tester, lead, or timeout recovery.
+It can auto-approve non-denied commands; do not claim denies work until verified
+live with the exact generated artifact and explicit consent for auto-mode tests.
+
+Prefer host background execution/completion notifications. If unavailable:
+
+```bash
+.agent-pipeline/bin/bg-dispatch.sh start T-<id> builder-1 -- .agent-pipeline/bin/oc.sh \
+  --agent builder --model __BUILDER_MODEL__ --text \
+  --prompt-file .agent-pipeline/prompts/T-<id>/builder-1.md \
+  --raw-out .agent-pipeline/logs/T-<id>/builder-1.jsonl
+.agent-pipeline/bin/bg-dispatch.sh wait T-<id> builder-1 30
+```
+
+Link the .dispatch/ directory. Wait uses actual wrapper exit status: 0 success,
+2 failed/unknown, 3 running. On 3 wait in bounded slices, never replace; on 2
+inspect saved stderr and confirm authenticated server-side inactivity first.
+Timeout (124)/killed wrapper cancellation is best-effort; unknown activity blocks
+redispatch. No automatic retries or model substitutions. Report quota/permission
+failure immediately; scheduled retry needs authorization and an actual scheduler.

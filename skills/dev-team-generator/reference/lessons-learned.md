@@ -72,7 +72,7 @@ usually, "dangerous."
 ## 2. A killed dispatch may not be a finished dispatch — check before reusing its session
 
 If the dispatched tool has any concept of a server-side session/turn that
-outlives the CLI client process (OpenCode's `--attach` sessions are the
+outlives the CLI client process (OpenCode's attached server sessions are the
 worked example), then killing the *client* does not necessarily cancel the
 *turn*. A killed-but-not-cancelled turn can leave an orphaned
 in-progress message with no completion marker — and reusing that session
@@ -118,26 +118,22 @@ worse than the flat timeout it was meant to improve on.
   actual installed version of that tool, with genuinely long real work, not
   a quick synthetic test — synthetic tests can pass on the logic while the
   underlying I/O assumption is still wrong.
-- If it turns out not to stream incrementally, a flat timeout (bounded,
-  simple, no false-positive risk) is the better and current design — say so
-  plainly rather than shipping the fancier mechanism anyway.
+- If it does not stream incrementally, do not use output growth as an idle
+  signal. Use a bounded flat timeout until another progress signal is verified.
 - If you do find a tool that streams incrementally and want to build an
   idle-watchdog for it, re-verify against that tool's actual version before
   reusing this note as precedent — the finding above is tool-and-version
   specific, not a general property of CLI tools.
 
-**Update 2026-09-10 — an idle watchdog now ships, on a different signal.**
-The output-file-growth signal above is still dead (re-confirmed on opencode
-1.18.25). But `oc.sh` no longer needs it: it polls the tool's own
-**session-state API** — `GET /session/<id>/message?limit=1`, whose
-byte-fingerprint tracks sub-turn progress and carries the `completed`
-flag — the same API §2 already trusts for abort verification. Verified
-against opencode 1.18.25 with a real multi-minute run (not false-killed) and
-a forced stall (caught). `OC_TIMEOUT` is now the ceiling, `OC_IDLE_TIMEOUT`
-(default 600 s) the wedge detector. Full write-up + test procedure:
-`docs/OC-TIMEOUT-WATCHDOG.md`. The "flat timeout is the current design"
-conclusion above held only while every candidate signal was broken — one
-wasn't.
+The current wrapper uses a verified session-message signal rather than stdout
+growth, with an idle window and an absolute ceiling. Reverify that signal after
+runtime upgrades; do not assume server response order or limit semantics.
+Cancellation remains best-effort: confirm a server-side turn stopped before
+reusing its session. A timeout diagnosis must not recommend widening permissions
+or enabling auto-approval mid-task, nor claim safety a separate warning calls
+unverified. Keep operational guidance consistent; preserve incident history in
+version control rather than copying contradictory conclusions into every role.
+The toolkit's current manual procedure is in `docs/OC-TIMEOUT-WATCHDOG.md`.
 
 ## 4. Implementer testing: scoped to fast/deterministic, not banned, not unlimited
 
@@ -466,16 +462,17 @@ fewest rules about removing it.
   of internal, and give the human something concrete to push back on other
   than the planner's own framing.
 
-## 21. Session scope is one task, not one sub-agent
+## 21. Session scope is one task per role
 
-When a dispatch tool supports session continuity it is tempting to give
-every dispatched role a fresh session "for independence". That trades a
-real cost for a partial benefit: a fresh reviewer/tester must re-read every
-file the implementer already read — on a large implementation that burns
-more context than the independence is worth. The rule that held up: **same
-task → same session, new task → new session, for all sub-agents alike.**
-The implementer, reviewer, and tester of one task share its single
-session; nothing carries across tasks.
+Sharing an implementer's conversation with its reviewer exposes the reviewer
+to the author's private reasoning and tool history, even with a different model.
+Some runtimes may also retain the opening role's capabilities; verify that
+behavior live rather than treating it as a universal fact. Isolate conversations
+by task and role, and reuse only within a role for fixes and reruns. A reviewer
+model change starts fresh. Recorded decisions and the current patch provide
+auditable context without inheriting the author's trace. Separate session fields
+make accidental cross-role reuse detectable; historical shared ids must never
+be copied into every role field during migration.
 
 ## 22. Track classifications with their decision source
 
@@ -703,3 +700,127 @@ under test.
   same non-destructive update triage as other generated artifacts. A generated
   launcher must not depend on the original toolkit checkout still existing;
   additive installation must preserve customization and provenance.
+
+## 32. Dispatch identity, completion, and acceptance are different facts
+
+- A session receipt identifies a conversation, including on failures. Detached
+  dispatch must record the process's actual exit status atomically, not grep a
+  receipt for success. Missing completion evidence is unknown, not a pass; a
+  successful wrapper still needs recorded review/test evidence for acceptance.
+- Reserve each task/role/pass before launching and retain every attempt's logs.
+  Refuse duplicate ownership even after completion. A retry needs unused artifact
+  paths and confirmed server-side inactivity, not a replay that truncates evidence.
+- Prefer the host's background notifications when available; detached bounded
+  wait is a fallback for hosts that cannot keep long shell calls alive. Do not
+  turn that fallback into implicit retry, model substitution, or auto-approval.
+- Agreement between configured model names does not prove the ids resolve.
+  Validate the actual configured assignments against authenticated catalogs
+  before planning, with bounded requests and limited cold-start discovery retry.
+  Report unchecked native ids separately; catalog presence does not establish
+  quota, valid provider credentials, or the identity actually served.
+
+## 33. Native worker parity must preserve boundaries, not just role names
+
+- A harness being a supported lead does not make every native worker available
+  to every other lead. Keep worker selection optional and capability-gated;
+  missing discovery/resume/sandbox support must block dispatch, not trigger a
+  silent substitution or a lead doing its own implementation/review.
+- Inherit settings intentionally and record the actual model family. Moving
+  review to another harness does not create independent weights. A pinned model
+  may inherit an incompatible reasoning setting; verify the resolved pair.
+- Map each runtime's role to the same written contract, but disclose differences
+  in enforceable scope. Workspace-write is not a task-path sandbox. A read-only
+  reviewer cannot persist findings: return them once and have the lead record
+  the unmodified result, then verify its structural placement.
+- Keep role threads and tool-specific session ids distinct. Use file-based briefs
+  without inheriting implementer conversation, retain prompts on every attempt,
+  and explicitly label unavailable transcript exports instead of fabricating
+  records. Capability checks and catalog presence do not establish enforcement.
+
+## 34. Resume identity and headless review must fail closed
+
+- A latest-conversation lookup can select a worker, not the lead. Capture the
+  actual lead id under a launch-specific lock and isolate its environment;
+  reject mismatched events. Missing capture/failed resume must not silently start
+  another chat. Preserve user hooks and require their normal trust review.
+- External headless review needs task consent, account/model verification,
+  immutable evidence, separate reviewer conversations, and strict final-result
+  validation. PASS inside a failed run is not success. Restrict tools narrowly,
+  but audit hook commands separately: tool allowlists do not constrain hook side
+  effects and are not an OS sandbox.
+
+## 35. Host layout is not worker dispatch or conversation identity
+
+- Keep a running lead intact when adding a tools/dashboard tab. Record exact
+  terminal/tab identities and each successful creation before cosmetic calls;
+  retries should reuse known live panes, not duplicate them after partial failure.
+- Discover host actions and native sessions without installing broad permissions.
+  Navigation and explicit messages still require correct server/project/session
+  targets. Native idle/done is not acceptance, and headless workers may have no
+  interactive host session. Preserve file-based handoffs and existing gates.
+
+## 36. Separate role contracts from harnesses and model providers
+
+- A shared role contract avoids N copies of behavioral rules; native adapters
+  retain real model/permission/sandbox differences. New provider assignments
+  should not grow every role's starting prompt.
+- Automatically loaded project guidance must distinguish explicitly assigned
+  workers from unassigned feature requests. Otherwise a worker may recursively
+  load the leader workflow even though its own contract never asks for it.
+- Keep approval/independence/artifact gates in the compact lead contract. Load
+  transport/host details only for selected backends; test links and context budgets
+  as well as syntax. Fewer installed files alone do not prove fewer prompt tokens.
+- Give counters exactly one owner. Instruction extraction can expose previously
+  conflicting ownership; preserve budgets without double increments. Quota
+  notification does not authorize recurring retries or provide a scheduler.
+- Selective profiles add only needed files; they never silently delete old native
+  discovery files or erase customizations. Preserve the approved provenance and
+  migrate at idle boundaries; existing conversations retain previously loaded text.
+
+## 37. A portable leader guide must not become every worker's startup prompt
+
+- Embed the leader rules from one canonical source rather than maintaining another
+  policy copy. Use the same composition for scaffolding and read-only update preview;
+  test equality, assignment substitution, and customization preservation.
+- Make a shareable guide opt-in. It can orient a leader from another app without
+  loading every role, but cannot grant project access, dispatch tools, credentials,
+  or approval. Explicit capability checks prevent documentation from masquerading
+  as working integration. Treat its configuration as a snapshot, not live evidence.
+
+## 38. A major layout upgrade needs one coherent transaction, not split state
+
+- A worker must not load a lead's historical handoff just because that file
+  exists. Pass relevant verified facts in the scoped brief; static word budgets
+  do not prove that a live runtime loads only the intended context.
+
+- Upgrade acceptance updates owned provenance, not arbitrary project metadata.
+  Preserve extensions/notes and treat absent or ambiguous model fallbacks as
+  disabled or requiring human resolution, never consent to a new provider.
+  Plans must surface intentionally retained artifacts/custom callers; adjust
+  relative links only when the referencing file actually moved.
+
+- Host action submission is not completion, and adopting a terminal is not
+  assigning role behavior. Diagnose the exact action log; refuse shell targets
+  with an explicit select-the-existing-agent instruction, never guess a worker
+  or launch a second lead. Briefing a working session remains prohibited.
+
+- Preserve deliberately disabled fallback assignments explicitly; absence in an
+  old stamp must not silently authorize a new reviewer provider during upgrade.
+
+- Native directory aliases are not migration inputs: leave them untouched and
+  never traverse them. Still refuse symlinked files or destination ancestors that
+  would redirect writes. Test with real cross-client skill discovery aliases.
+  Prune installed dependency/cache trees before scanning native configuration;
+  their manifests and executable links are not project-owned toolkit callers.
+
+- Keep runtime and task records under one toolkit-owned core while leaving native
+  discovery paths alone. Update root calculations, hooks, dispatch callers, artifact
+  links and read-only host readers together; directory moves alone are not an upgrade.
+- Plan first and bind approval to exact file hashes/diffs. Refuse symlinks, collisions
+  and unknown activity. Publish moved files without overwriting destinations, retain
+  private backups, and roll back only known owned bytes—not concurrent user edits.
+- Preserve historical metadata; a typed per-role table replaces client-specific
+  header proliferation for new tasks. Missing family/consent is not verification.
+  Immutable model/session bindings prevent a renamed assignment from silently
+  reusing an old reviewer conversation. Pending attribution is better than a fake
+  default decision. Schema validators need backward and mixed-schema regressions.

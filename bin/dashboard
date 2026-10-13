@@ -7,6 +7,6 @@ import sys
 
 
 if __name__ == "__main__":
-    # Same standalone artifact that init installs as scripts/dashboard.
+    # Same standalone artifact that init installs as .agent-pipeline/bin/dashboard.
     sys.dont_write_bytecode = True
     runpy.run_path(str(Path(__file__).resolve().parents[1] / "integrations/herdr/dashboard.py"), run_name="__main__")

@@ -1,0 +1,168 @@
+"""Read/validate typed role assignments; legacy headers remain readable."""
+import argparse
+import json
+import os
+from pathlib import Path
+import re
+import sys
+
+ROLES = ("planner", "implementer", "reviewer", "tester")
+BACKENDS = {"opencode", "codex", "claude"}
+EMPTY = {"", "—", "-", "none", "none yet", "pending", "unknown", "unverified"}
+LEGACY = {
+    ("implementer", "opencode"): "OpenCode builder session id",
+    ("reviewer", "opencode"): "OpenCode reviewer session id",
+    ("tester", "opencode"): "OpenCode tester session id",
+    **{(role, "codex"): f"Codex {role} thread id" for role in ROLES},
+    ("reviewer", "claude"): "Claude reviewer session id",
+}
+
+
+def fields(text):
+    result = {}
+    for key, value in re.findall(r"^\*\*([^*]+):\*\*\s*(.*)$", text, re.M):
+        if key in result:
+            raise ValueError("duplicate field: " + key)
+        result[key] = value.strip()
+    return result
+
+
+def assignments(text):
+    schemas = re.findall(r"<!-- task-schema: (\d+) -->", text)
+    if schemas and schemas != ["2"]:
+        raise ValueError("unsupported or duplicate task schema marker")
+    headings = list(re.finditer(r"^## Role assignments\s*$", text, re.M))
+    if not headings:
+        if schemas:
+            raise ValueError("schema 2 task is missing Role assignments")
+        return None
+    if len(headings) != 1:
+        raise ValueError("duplicate Role assignments section")
+    section = re.split(r"^## ", text[headings[0].end():], maxsplit=1, flags=re.M)[0]
+    rows = {}
+    header = ["Role", "Backend", "Model", "Family", "Session / thread"]
+    seen_header = False
+    for line in section.splitlines():
+        if not line.startswith("|"):
+            continue
+        cells = [cell.strip().strip("`") for cell in line.strip().strip("|").split("|")]
+        if cells == header:
+            if seen_header:
+                raise ValueError("duplicate role table header")
+            seen_header = True
+            continue
+        if all(re.fullmatch(r":?-+:?", cell) for cell in cells):
+            continue
+        if not seen_header or len(cells) != 5 or cells[0] not in ROLES:
+            raise ValueError("invalid role assignment row: " + line)
+        if cells[0] in rows:
+            raise ValueError("duplicate role: " + cells[0])
+        rows[cells[0]] = dict(zip(("backend", "model", "family", "session"), cells[1:]))
+    if set(rows) != set(ROLES):
+        raise ValueError("role table must contain planner, implementer, reviewer, tester exactly once")
+    metadata = fields(text)
+    if any(label in metadata for label in LEGACY.values()):
+        raise ValueError("mixed role table and legacy session headers; reconcile explicitly")
+    used = set()
+    for role, row in rows.items():
+        backend, model, family, session = (row[key] for key in ("backend", "model", "family", "session"))
+        if backend not in BACKENDS | EMPTY:
+            raise ValueError(role + ": unknown backend")
+        if backend in EMPTY:
+            if any(value not in EMPTY for value in (model, family, session)):
+                raise ValueError(role + ": assignment has no backend")
+            continue
+        if model not in EMPTY:
+            if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.#/-]+", model):
+                raise ValueError(role + ": model must be a full backend/provider assignment")
+            if backend == "opencode" and model.startswith(("codex/", "claude/")):
+                raise ValueError(role + ": native alias is not an OpenCode assignment")
+            if backend in {"codex", "claude"} and not model.startswith(backend + "/"):
+                raise ValueError(role + ": model/backend mismatch")
+        if session in EMPTY:
+            continue
+        if model in EMPTY:
+            raise ValueError(role + ": populated session requires a model")
+        if backend == "opencode" and not re.fullmatch(r"ses_[A-Za-z0-9_-]+", session):
+            raise ValueError(role + ": OpenCode session must start ses_")
+        if backend == "codex" and (session.startswith("ses_") or not re.fullmatch(r"[A-Za-z0-9_-]+", session)):
+            raise ValueError(role + ": invalid native Codex thread")
+        if backend == "claude":
+            pattern = (r"[a-fA-F0-9]{8}(?:-[a-fA-F0-9]{4}){3}-[a-fA-F0-9]{12}" if role == "reviewer"
+                       else r"[A-Za-z0-9_-]+")
+            if session.startswith("ses_") or not re.fullmatch(pattern, session):
+                raise ValueError(role + ": invalid Claude native agent id/reviewer UUID")
+        if session in used:
+            raise ValueError("roles must not share a session/thread")
+        used.add(session)
+    # Only require resolved independent families when review evidence is claimed.
+    if re.search(r"^### Pass \d+.*verdict: (?:PASS|CHANGES_REQUESTED)$", text, re.M):
+        author, reviewer = rows["implementer"], rows["reviewer"]
+        if any(row[key].lower() in EMPTY for row in (author, reviewer) for key in ("backend", "model", "family", "session")):
+            raise ValueError("recorded review requires resolved author/reviewer assignments")
+        if author["family"].lower() == reviewer["family"].lower():
+            raise ValueError("reviewer family must differ from implementer family")
+    if rows["reviewer"]["backend"] == "claude" and rows["reviewer"]["session"] not in EMPTY:
+        if metadata.get("Claude review approved") != "on":
+            raise ValueError("external Claude review needs recorded consent")
+    return rows
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("operation", choices=("validate", "session", "bind"))
+    parser.add_argument("file", type=Path)
+    parser.add_argument("role", nargs="?", choices=ROLES)
+    parser.add_argument("backend", nargs="?", choices=sorted(BACKENDS))
+    parser.add_argument("model", nargs="?")
+    parser.add_argument("--session")
+    args = parser.parse_args()
+    if args.file.is_symlink() or args.file.parent.is_symlink() or args.file.parent.parent.is_symlink():
+        raise ValueError("task path must not be a symlink")
+    text = args.file.read_text()
+    rows = assignments(text)
+    if args.operation in {"session", "bind"}:
+        if not all((args.role, args.backend, args.model)):
+            raise ValueError("session requires role, backend, and model")
+        if rows is None:
+            value = fields(text).get(LEGACY.get((args.role, args.backend)), "pending")
+        else:
+            row = rows[args.role]
+            if row["backend"] != args.backend or row["model"] != args.model:
+                raise ValueError("recorded role backend/model differs; start a fresh conversation")
+            value = row["session"]
+        if value in EMPTY:
+            raise ValueError("role has no recorded session")
+        if rows is not None:
+            task = args.file.resolve()
+            if task.parent.name != "tasks" or task.parent.parent.name != ".agent-pipeline" or not re.fullmatch(r"T-[A-Za-z0-9_-]+\.md", task.name):
+                raise ValueError("session binding needs a canonical task path")
+            binding = task.parent.parent / "logs" / task.stem / ".sessions" / (args.role + "-" + value + ".json")
+            for path in (binding, *binding.parents):
+                if path == task.parent.parent.parent:
+                    break
+                if path.is_symlink():
+                    raise ValueError("session binding path is a symlink")
+            expected = dict(role=args.role, backend=args.backend, model=args.model, session=value)
+            if args.operation == "bind":
+                if args.session != value:
+                    raise ValueError("receipt does not match recorded role session")
+                binding.parent.mkdir(parents=True, exist_ok=True)
+                try:
+                    fd = os.open(binding, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+                    with os.fdopen(fd, "w") as output:
+                        json.dump(expected, output, sort_keys=True)
+                except FileExistsError:
+                    pass
+            if not binding.is_file() or json.loads(binding.read_text()) != expected:
+                raise ValueError("model/backend changed or binding missing; confirm inactivity and start a fresh role session")
+        elif args.operation == "bind":
+            raise ValueError("bind requires the new role table; migrate metadata explicitly")
+        print(value)
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except (OSError, ValueError) as error:
+        sys.exit("task-record: " + str(error))

@@ -19,7 +19,7 @@ needed, not maintaining an ever-growing library of pre-built adapters.
      permission/capability model, a system-prompt field, temperature or
      similar generation controls.
    - **How — or whether — it can be dispatched non-interactively from a
-     script.** OpenCode has `opencode run --attach`; a Claude Code
+     script.** OpenCode has `opencode run --server`; a Claude Code
      subagent is dispatched via that session's own Agent/Task mechanism,
      not a separate CLI at all. A given tool might only support an
      interactive UI, in which case it **cannot** be a scripted pipeline

@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+# Use Herdr's installed toolkit actions; no tmux, automatic installation,
+# relaunch, model dispatch, or approval bypass. Start the lead normally first.
+set -eu
+ROOT="$(cd "$(dirname "$0")/../.." && pwd -P)"
+cd "$ROOT"
+die() { printf 'herdr-team.sh: %s\n' "$*" >&2; exit 1; }
+usage() {
+  cat <<'HELP'
+Usage: .agent-pipeline/bin/herdr-team.sh [setup|actions|agents|logs|adopt|brief-leader|focus-leader|focus-tools|status]
+  setup          Adopt the selected running lead if needed; open/reuse a tools
+                 tab containing the live dashboard and worker/server shells.
+  actions        Pull available installed plugin actions from Herdr.
+  agents         List panes/native sessions in the calling pane's workspace.
+  logs           Inspect asynchronous toolkit action results/errors.
+  adopt          Explicitly bind the selected running lead (never relaunch it).
+  brief-leader   Send one role briefing to the adopted idle lead; no task approval.
+  focus-leader   Return to the exact adopted native session.
+  focus-tools    Switch to the saved dashboard/tools tab.
+  status         Open a standalone dashboard tab (use setup for the two-tab team).
+
+Run inside the intended Herdr project workspace. The agent-toolkit plugin must
+already be linked/installed; setup does not change global installations/hooks.
+Actions run asynchronously: inspect logs, not a successful invoke exit alone.
+Worker/server shells are empty. Configure OC_SERVER/password for your existing
+server before .agent-pipeline/bin/oc.sh dispatch; setup never starts a duplicate server.
+Herdr read/focus/prompt/wait controls remain available via its native CLI. Use
+explicit pane/session targets; never send approval keys or treat idle as acceptance.
+HELP
+}
+[ $# -le 1 ] || die "expected one action; use --help"
+ACTION="${1:-setup}"
+case "$ACTION" in --help|-h) usage; exit 0 ;; esac
+HERDR_BIN="${HERDR_BIN_PATH:-herdr}"
+command -v "$HERDR_BIN" >/dev/null 2>&1 || die "herdr is not installed"
+if [ ! -f .agent-pipeline/tasks/TEMPLATE.md ] || { [ ! -f .agent-pipeline/roles/leader.md ] && [ ! -f .claude/commands/feature.md ]; }; then
+  die "project is not scaffolded; run init explicitly first"
+fi
+case "$ACTION" in
+  actions) exec "$HERDR_BIN" plugin action list ;;
+  logs) exec "$HERDR_BIN" plugin log list --plugin agent-toolkit ;;
+esac
+[ -n "${HERDR_PANE_ID:-}" ] && [ -n "${HERDR_WORKSPACE_ID:-}" ] || die "run in the intended Herdr project pane; no arbitrary focused workspace fallback"
+command -v python3 >/dev/null 2>&1 || die "python3 required for Herdr context validation"
+python3 - "$ROOT" "$HERDR_BIN" "$HERDR_PANE_ID" "$HERDR_WORKSPACE_ID" <<'PY'
+import json
+from pathlib import Path
+import subprocess
+import sys
+
+try:
+    result = subprocess.run([sys.argv[2], "pane", "get", sys.argv[3]],
+                            capture_output=True, text=True, timeout=20, check=True)
+    pane = json.loads(result.stdout)["result"]["pane"]
+    if pane["workspace_id"] != sys.argv[4]:
+        raise ValueError("caller pane is not in the requested workspace")
+    start = pane.get("foreground_cwd") or pane.get("cwd")
+    if not start or not Path(start).is_absolute():
+        raise ValueError("Herdr supplied no absolute project cwd")
+    current = Path(start).resolve()
+    root = next((p for p in (current, *current.parents)
+                 if (p / ".agent-pipeline/tasks/TEMPLATE.md").is_file()
+                 and ((p / ".agent-pipeline/roles/leader.md").is_file()
+                      or (p / ".claude/commands/feature.md").is_file())), None)
+    if root != Path(sys.argv[1]).resolve():
+        raise ValueError("caller pane belongs to another project; no action submitted")
+except (ValueError, KeyError, TypeError, OSError, subprocess.SubprocessError) as error:
+    sys.exit("herdr-team.sh: context validation failed: " + str(error))
+PY
+case "$ACTION" in
+  agents) exec "$HERDR_BIN" pane list --workspace "$HERDR_WORKSPACE_ID" ;;
+  setup) ACTION=team ;;
+  adopt|brief-leader|focus-leader|focus-tools|status) : ;;
+  *) die "unknown action: $ACTION (use --help)" ;;
+esac
+printf 'herdr-team.sh: submitting %s; inspect .agent-pipeline/bin/herdr-team.sh logs for completion/errors.\n' "$ACTION" >&2
+exec "$HERDR_BIN" plugin action invoke "agent-toolkit.$ACTION"

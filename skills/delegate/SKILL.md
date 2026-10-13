@@ -15,7 +15,7 @@ programmatically from inside the loop.
 
 **Everything a delegate produces lands on disk, not in your context.** A
 subagent's chat reply is a receipt, not the record. The record is the file
-it wrote — a state file (`.agent-pipeline/T-<id>.md`), a diff, a test report. Read
+it wrote — a state file (`.agent-pipeline/tasks/T-<id>.md`), a diff, a test report. Read
 the file to verify placement and content; do not ask the delegate to repeat
 itself into the conversation, and do not re-paste what is already on disk.
 
@@ -70,8 +70,8 @@ recurs:
 - **Simple and mechanical, and you've now done it more than once** — stop
   and write a script under `scripts/`. A structural check, a copy, a
   format conversion: none of that needs judgment, so it never needed an
-  LLM call in the first place. `scripts/verify-state.sh`,
-  `scripts/verify-spec.sh` and `scripts/promote-findings.sh` exist because
+  LLM call in the first place. `.agent-pipeline/bin/verify-state.sh`,
+  `.agent-pipeline/bin/verify-spec.sh` and `.agent-pipeline/bin/promote-findings.sh` exist because
   the same "did this land in the right place", "is this spec actually
   finished" and "does this belong in a doc" questions were being re-answered
   by hand every task; now they're free and can't misjudge.

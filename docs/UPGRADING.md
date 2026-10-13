@@ -1,332 +1,176 @@
-# Keeping a scaffolded project up to date with this toolkit
+# Updating a scaffolded project
 
-> **Status: implemented.** Stages 1–5 below are live as of v0.3.0:
-> `init.sh` writes the provenance stamp and defaults `--update` flags from
-> it; `--update` is a triage tool (summary-first, `--diff`/`--only`,
-> exit 0/1); `CHANGELOG.md` carries impact-tagged entries; the first real
-> migration lives in `migrations/01-delivery-contract.md`; and
-> `/toolkit-update` and `$toolkit-update` are rendered into scaffolded
-> projects for Claude and Codex respectively. This file is now
-> reference documentation for how it works and why.
+Generated files are project-owned copies, not a package to overwrite. Update
+at a task boundary and preserve local customizations.
 
-`bin/init.sh --update` already does the mechanical half: render the
-current templates, `diff -u` each one against the live file in the target,
-write nothing. What is missing is everything *around* it — which is why
-downstream projects drift and stay drifted.
+## v1.0.0 upgrade: one migration
+
+Projects on **v0.10.2** use [migration 04](../migrations/04-team-upgrade.md)
+once. It combines the formerly separate unreleased drafts 04–07: role sessions,
+optional native workers/review, exact lead resume, and lean contracts/profiles.
+The final major layout uses bin/ for runtime and tasks/ for task records, plus
+one typed role table. There are no intermediate releases to install. Published migrations 01–03 stay
+separate and apply first only when the project's baseline/layout requires them.
+
+The upgrade is **preview → approved bulk layout move → add missing dependencies → reviewed merge → validate
+→ refresh provenance → fresh lead**. It is not automatic replacement:
+
+- `--update` writes nothing; exit 1 reports drift/new files or required migration.
+- Before bootstrap, review `python3 "$TOOLKIT/bin/migrate-layout.py" plan --project .`.
+  Apply only with its reviewed approval digest and confirmed inactive workers.
+  It refuses collisions/symlinks and retains private backups; native paths stay put.
+- Plain init adds missing selected files and skips EVERY existing file. It does
+  not shrink an old feature prompt or convert an old agent definition by itself.
+  This also bootstraps the shareable `.agent-pipeline/README.md`; existing guides
+  need reviewed merges, and stamp refresh alone never updates their contents.
+- The lead reviews/merges existing entrypoints, role adapters, task template,
+  and scripts together. Local constraints move into the proper neutral contract
+  or project guidance; native permissions remain unchanged unless separately approved.
+- A smaller profile does not delete old files. Any retirement/removal needs an
+  explicit reviewed plan; extra discovery files may otherwise remain visible.
+- Stamp refresh records the accepted inputs/version, not proof of a successful
+  merge. Start a fresh lead after the boundary to avoid old loaded instructions.
+
+For example, from a target project choosing Codex + Herdr:
+
+```bash
+TOOLKIT=/path/to/agent-toolkit
+PROFILE=(--leader codex --extras herdr)
+bash "$TOOLKIT/bin/init.sh" --update --target . "${PROFILE[@]}"
+python3 "$TOOLKIT/bin/migrate-layout.py" plan --project .
+# Review the plan and confirm inactivity, then:
+python3 "$TOOLKIT/bin/migrate-layout.py" apply --project . \
+  --approve <reviewed-approval-digest> --workers-inactive
+bash "$TOOLKIT/bin/init.sh" --target . "${PROFILE[@]}"
+# Stop here: review and merge existing files per migration 04. Do not dispatch.
+# After approval and validation:
+bash "$TOOLKIT/bin/init.sh" --refresh-stamp --target . "${PROFILE[@]}"
+bash "$TOOLKIT/bin/init.sh" --update --target .
+```
+
+For an all-tools installation, an additional read-only/project-copy check is:
+`python3 "$TOOLKIT/test/project.py" --project .`. It checks installed contracts
+and runs installed runtime scripts with mocked CLIs in disposable fixtures,
+including the project's hardened findings promotion. It is not a live permission,
+model-identity, native-discovery, or application/device test.
+
+Choose claude/opencode/all instead if desired. Keep existing model assignments
+unless explicitly changing them; add the same model flags to every command when
+you do. Retain all-tools by omitting profile flags on a legacy stamp. Run model
+preflight against the accepted stamp before new work; verify discovery/permissions
+live. Herdr plugin update/relink and hook trust review remain explicit opt-ins.
+
+An old `/toolkit-update` still leads the reconciliation, but must read the current
+migration before bootstrap: its old instructions may not know the new profile or
+neutral paths. New update entrypoints load `.agent-pipeline/update.md` for future
+upgrades. This section documents the coordinated v1.0.0 upgrade.
+
+## Standard workflow
+
+1. Update your toolkit checkout and record its SHA/tag.
+2. Read `.agent-pipeline/.toolkit-version` in the target for the baseline and
+   original scaffold inputs. Before directory migration, read the legacy
+   `.agents/.toolkit-version` instead.
+3. Preview from the target project:
+
+   ```bash
+   /path/to/agent-toolkit/bin/init.sh --update --target .
+   ```
+
+   Exit 0 means the checked templates match; exit 1 means drift or a required
+   directory migration. Preview writes nothing. Summary paths identify new or
+   differing files; impact classifications come from the changelog, not from
+   automatic classification of each diff.
+4. Read changelog entries after the baseline in impact order:
+   `[contract]` → `[safety]` → `[process]` → `[docs]`. Apply numbered migration
+   notes first. Show permission changes separately, obtain explicit approval,
+   and verify enforcement live afterward.
+5. Inspect each change:
+
+   ```bash
+   /path/to/agent-toolkit/bin/init.sh --update --target . --only .agent-pipeline/bin/oc.sh --diff
+   ```
+
+   Choose upstream, keep local, or hand-merge. Never silently overwrite a local
+   customization. Add genuinely missing files with a plain run only after any
+   directory migration is complete:
+
+   ```bash
+   /path/to/agent-toolkit/bin/init.sh --target .
+   ```
+
+   This loads stamped inputs and skips existing files. It also adds missing
+   runtime ignore rules in Git checkouts. If preview used profile/model override
+   flags, repeat them in bootstrap, per-file previews, and stamp refresh too.
+6. Validate the latest task with `.agent-pipeline/bin/verify-state.sh <id>` and, if installed,
+   inspect `.agent-pipeline/bin/dashboard --once`. Refresh provenance only after accepting the
+   merge:
+
+   ```bash
+   /path/to/agent-toolkit/bin/init.sh --refresh-stamp --target .
+   /path/to/agent-toolkit/bin/init.sh --update --target .
+   ```
+
+   Refreshing provenance does not remove intentional local differences.
+   Report merged, kept-local, and deferred items and record the new baseline.
+
+Claude/OpenCode `/toolkit-update` and Codex `$toolkit-update` guide this same
+reconciliation. If an older installed command conflicts with a current
+migration, follow the current migration before its bootstrap step.
+
+## Legacy layouts and unstamped projects
+
+- [Migration 04](../migrations/04-team-upgrade.md) covers role isolation, compact
+  contracts/profile selection, and optional Codex workers/lead capture/Claude
+  review together. Preserve completed task records; never copy a legacy shared
+  id into every role field. Keep OpenCode defaults unless native roles are chosen;
+  hand-merge hooks, use normal trust review, and verify live capability/independence.
+- For optional two-tab Herdr hosting, bootstrap `.agent-pipeline/bin/herdr-team.sh` with
+  plain init and explicitly update/relink the reviewed host plugin; setup preserves
+  the existing lead and starts the dashboard in a separate tools tab. No task
+  migration or agent permission change is required.
+
+- Pipeline records under `.agents/` require
+  [migration 03](../migrations/03-pipeline-directory.md). The lead may execute
+  an approved move plan with paused readers/workers, backups, collision checks,
+  coordinated reference changes, and rollback. Keep `.agents/skills/` in place.
+- Plain init and stamp refresh refuse detected legacy layouts to prevent two
+  competing task-record directories. Read-only preview can still read the old
+  stamp and compare the old state template.
+- An unstamped project's preview infers original inputs from generated files.
+  Verify the recovered values; supply missing inputs explicitly. Use the same
+  values for the plain bootstrap and initial stamp refresh. See README's
+  pre-v0.3.0 procedure and migrations 01/02 for earlier contract changes.
 
 ## Adding the project dashboard
 
-If pipeline state still lives in `.agents/`, apply
-[`migration 03`](../migrations/03-pipeline-directory.md) before the plain init
-below. It can be carried out by the lead with an approved move plan; the
-read-only preview is safe before migration.
-
-New scaffolds include `scripts/dashboard`. For an existing stamped project,
-run these commands from its root after updating your toolkit checkout:
+After required migrations, preview and install the self-contained viewer. If the
+profile does not already include it, select a new extras list that retains any
+other desired extras (example below adds dashboard only):
 
 ```bash
-bash /path/to/agent-toolkit/bin/init.sh --update --target . --only scripts/dashboard
-bash /path/to/agent-toolkit/bin/init.sh --target .
-./scripts/dashboard
+/path/to/agent-toolkit/bin/init.sh --update --target . --extras dashboard --only .agent-pipeline/bin/dashboard
+/path/to/agent-toolkit/bin/init.sh --target . --extras dashboard
+./.agent-pipeline/bin/dashboard --once
 ```
 
-The first command previews only the dashboard and writes nothing: exit 1
-means it is missing or differs. The second loads settings from the provenance
-stamp and installs missing files without overwriting existing customizations.
-It may add other missing upstream files too. Existing dashboard changes are
-reconciled through `/toolkit-update`, not overwritten by re-running init.
-
-The installed viewer is self-contained and requires only Python 3.8+ on
-macOS/Linux. Use `./scripts/dashboard --once` for a text snapshot or
-`--project /path/to/repo` to view another project. No Herdr or model calls are
-needed. See [the team guide](TEAM.md#task-dashboard-no-launcher-required) for
-controls and status limitations.
+The viewer requires Python 3.8+, not Herdr, a server, or the toolkit checkout.
+Existing customized viewers are reconciled, not overwritten by plain init.
+Refresh the stamp with the accepted extras selection afterward; extras flags
+replace the selection, not append to it. Herdr/launcher already include dashboard.
 
 ## Bootstrapping a newly supported lead
 
-An update command cannot bootstrap itself into a project that does not have it
-yet. After pulling the toolkit checkout, an existing stamped project can add
-newly introduced template files without repeating its original flags:
+A new command cannot install itself. Use read-only preview followed by plain
+init after migration; then use the installed lead's update command/skill for
+future reconciliation. No original flags are needed when a valid stamp exists.
 
-```bash
-<toolkit-checkout>/bin/init.sh --update --target <project>  # inspect first
-<toolkit-checkout>/bin/init.sh --target <project>           # missing files only
-```
+## Maintenance cadence
 
-For legacy `.agents/` pipeline layouts, apply
-[`migration 03`](../migrations/03-pipeline-directory.md) before the plain
-missing-file bootstrap or stamp refresh. `--update` reads the legacy stamp
-without writing and reports the rename even with a filtered comparison. The
-lead can execute an approved move plan at a task boundary; native
-`.agents/skills/` stays in place. If an old update command suggests bootstrap
-first, follow the current migration note instead.
+Preview periodically. Merge safety/contract changes before the next task and
+batch process/docs changes when convenient. Never change a live task contract.
+Upstream must keep template/flow copies synchronized and run
+`test/invariants.sh`; downstream merging cannot repair an incoherent release.
 
-The plain run now loads values from `.agent-pipeline/.toolkit-version` and retains
-`render()`'s skip-if-exists guarantee. A Claude user whose older scaffold
-already has `/toolkit-update` can let that command perform these steps. A
-Codex-only user upgrading from before Codex support must run the shell bootstrap
-once; afterward `$toolkit-update` is installed and handles future updates. A
-pre-v0.3.0 scaffold has no stamp, so it still follows README's one-time flag
-recovery procedure.
-
-This is the plan to close that, in five stages. Stages 1–2 are the ones
-worth doing first; each stage is useful on its own and none blocks the
-next.
-
-## What is broken today, precisely
-
-Run `--update` against a project scaffolded three months ago and you hit
-four problems in a row:
-
-1. **You must remember the original flags.** Pass a different
-   `--builder-model` than the original init and every substituted line in
-   every file shows up as diff noise. Nothing recorded what was used.
-2. **No baseline.** There is no record of *which version* of the toolkit
-   the project was scaffolded from, so "what changed since I took this"
-   is unanswerable — you get a diff against your local edits, which
-   conflates upstream changes with your own customizations.
-3. **No signal.** Twelve files of raw `diff -u` with no indication that
-   one hunk is a permission-block change you must merge today and another
-   is a typo fix in a comment. Every upstream change looks equally
-   urgent, so none of them get merged.
-4. **No migrations.** When the state-file contract gains a field or a
-   section — as it has now, substantially (the acceptance-criteria ledger,
-   three budget counters, a split blocked status) — existing
-   `.agent-pipeline/T-*.md` files in flight silently lack it, and nothing says so.
-   Stage 4 below now carries the real migration note for that change.
-
-Consequence: `--update` is technically correct and practically unused. A
-project scaffolds once and never upgrades, which means every hardening
-lesson this toolkit earns after the scaffold date stays upstream.
-
----
-
-## Stage 1 — Stamp provenance at scaffold time
-
-**The single highest-value change.** `init.sh` writes, on a real scaffold:
-
-```
-.agent-pipeline/.toolkit-version
-```
-
-```
-toolkit_sha:   79f0e14
-toolkit_tag:   v0.2.0
-scaffolded:    2026-08-26
-project_name:  my-project
-claude_model:  sonnet
-builder_model: hcnsec/kimi-k2.7-code
-reviewer_model: hcnsec/glm-5.2
-reviewer_fallback_model: sonnet
-tester_model:  hcnsec/deepseek-v4-flash
-test_dir:      e2e
-```
-
-Then:
-
-- **`--update` defaults every flag from this file.** `bin/init.sh --update
-  --target .` becomes the whole command. Problem 1 disappears, and with it
-  the diff noise that makes the output unreadable.
-- **`--update` prints the baseline** — "scaffolded from `79f0e14`
-  (2026-08-26); toolkit is now at `a1b2c3d` (14 commits ahead)". Problem 2
-  disappears.
-- A successful merge updates the stamp; `--update` alone never writes it.
-- It is committed (unlike `.agent-pipeline/.oc-port`) — it describes the project,
-  not the laptop.
-
-Follow the existing conventions: written only when `FRESH_SCAFFOLD` was
-true before any `render()` ran, same ordering rule as
-`.needs-customization`; never written by `--update`. Add one smoke case.
-
-**Cost:** ~30 lines in `init.sh`, one smoke case.
-
-## Stage 2 — Version the toolkit and classify every change
-
-There are currently **zero git tags**. Downstream has nothing to pin to.
-
-**Tag releases**, with the version number meaning something specific to
-this toolkit rather than to code:
-
-| Bump | Means | Downstream obligation |
-| --- | --- | --- |
-| **MAJOR** | The state-file contract, a role's authority, or a script's interface changed | Must merge deliberately; may need a migration (Stage 4) |
-| **MINOR** | New template, script, flag, or role rule | Should merge at the next task boundary |
-| **PATCH** | Prose, docs, comments, formatting | Merge whenever, or never |
-
-**`CHANGELOG.md`, with an impact tag per entry** — this is what makes a
-diff triage-able:
-
-```markdown
-## v0.3.0 — 2026-09-xx
-- `[contract]`  state file: added *Reviewer for this task* / *Tester for
-                this task*. Migration: 03-reviewer-tester-fields.md
-- `[safety]`    builder: removed blanket `git *: allow`; enumerated
-                read-only git verbs. Merge this one now.
-- `[process]`   feature.md: ask before splitting a very large task
-- `[docs]`      README: quick-start blocks merged
-```
-
-Four tags, in descending order of "drop what you are doing":
-`contract` › `safety` › `process` › `docs`. A downstream operator (or
-their AI lead) reads the changelog *first* and the diffs second — which
-inverts today's experience, where the diff is all you get.
-
-**Cost:** a file plus the discipline to append to it. It is the same
-"write down why" discipline the toolkit already applies everywhere else.
-
-## Stage 3 — Make `--update` a triage tool, not a diff dump
-
-With Stages 1–2 in place, `--update` gets three cheap upgrades:
-
-- **Summary first.** List changed files with their changelog impact tag
-  before printing any hunks:
-
-  ```
-  init.sh: 3 of 12 files differ from toolkit v0.3.0 (you are on v0.2.0)
-    [safety]   .opencode/agent/builder.md      — permission block
-    [contract] .agent-pipeline/TEMPLATE.md             — 2 new fields
-    [docs]     scripts/team.sh                 — comment only
-  run with --diff to see hunks, or --diff <path> for one file
-  ```
-- **`--only <path>`** to diff one file, so merging can be done one file at
-  a time rather than all-or-nothing.
-- **Meaningful exit codes:** `0` clean, `1` drift. That is all a
-  downstream project needs to run `init.sh --update` in its own CI weekly
-  (or in `/loop`) and open an issue when the toolkit moves — the
-  difference between pull-when-you-remember and being told.
-
-**Cost:** ~40 lines, all in the existing `render()` update branch.
-
-## Stage 4 — Migrations for contract changes
-
-Only `[contract]` changes need this, which is rare by design. Ship a note
-per contract change under `migrations/`. **There is now a real one to
-write** — the delivery-contract work applied from `REVIEW-2.md` changed the
-state file more than anything since the toolkit was extracted:
-
-```markdown
-# 01 — Delivery contract (ledger, budgets, split blocked status)
-Applies to: .agent-pipeline/TEMPLATE.md, scripts/verify-state.sh, every role file,
-            and any in-flight .agent-pipeline/T-*.md
-
-New header fields (add under **Implementer for this task:**):
-  **Reviewer for this task:** / **Tester for this task:**
-  **Test-fix loops:** 0 / 2      **Spec bounces:** 0 / 1
-  **Blocked since:** —
-
-New section, under Acceptance criteria:
-  ### Acceptance criteria ledger — one row per AC, columns:
-  | AC | Met? | Reviewer evidence | Test evidence |
-
-Status enum: `blocked` split into `blocked:question` / `blocked:spec`.
-  Bare `blocked` still validates — it is kept as the legacy value precisely
-  so in-flight files don't break. Nothing to do for existing tasks.
-
-New script: scripts/verify-spec.sh (run at the end of step 1).
-
-Safe to skip for tasks already at Status `done`.
-```
-
-**Backward compatibility, deliberately:** the new `verify-state.sh` treats
-every new field as optional — an absent budget counter is skipped rather
-than failed, an absent ledger means the done-gate has nothing to check, and
-bare `blocked` still validates. So a downstream project can take the new
-script before it takes the new template, and its in-flight tasks keep
-passing. What it does *not* get until it takes the template is the
-guarantee: no ledger means nothing refuses a premature `done`. That is the
-difference between the checks being installed and the checks being load-
-bearing, and it is worth saying out loud in the changelog entry.
-
-Short, literal, and hand-appliable. Do **not** build a migration runner —
-these are two-line edits a few times a year, and a runner is exactly the
-kind of machinery this toolkit is right to refuse. The value is the note
-existing at all, so an in-flight task does not silently lack a field that
-`verify-state.sh` will later check for.
-
-## Stage 5 — A lead update command in the target project
-
-The AI-assisted merge path the README already gestures at ("hand the diff
-to your AI lead and ask it to reconcile"), made into a real, templated
-command/skill rendered by `init.sh` alongside each lead's feature entry point:
-
-1. Read `.agent-pipeline/.toolkit-version` for the baseline.
-2. Run `bin/init.sh --update` (flags come from the stamp).
-3. Read the toolkit's `CHANGELOG.md` for entries after the baseline.
-4. Work the diffs **in impact order** — `contract`, then `safety`, then
-   `process`, then `docs`.
-5. For each: show the user what changed upstream, what this project
-   customized locally, and the proposed merge. **Never silently
-   overwrite a local customization** — that is the whole reason
-   `render()` is skip-if-exists.
-6. **Hard stop on permission blocks.** Any hunk touching a `permission:`
-   or `tools:` block is presented, never auto-applied, and carries the
-   toolkit's standing rule: verify it live against the real server before
-   trusting it.
-   Treat a new or changed structural script (`verify-state.sh`,
-   `verify-spec.sh`, `promote-findings.sh`) as `[safety]` too: these are
-   what the pipeline's guarantees actually rest on, and a project running
-   an old `verify-state.sh` against a new template silently loses the
-   done-gate rather than failing loudly about it. This toolkit's own history is the argument — a
-   blanket-deny that read correctly and did not enforce.
-7. Update the stamp to the new SHA/tag when the merge is accepted.
-8. Report merged / skipped / deferred, and record it in the project's
-   Decisions log.
-
-Run it **at a task boundary, never mid-task** — the state file contract is
-live while a task is in flight, and changing the template under a running
-task is exactly how an in-flight `T-<id>` ends up half on each contract.
-
----
-
-## Upstream's own half of this
-
-A downstream project can only merge what upstream shipped coherently. This
-toolkit keeps several hand-synced copies of the same rules (three of the
-lead's flow, two of the state-file contract), and hand-syncing failed twice
-on consecutive commits before `test/invariants.sh` existed to check it —
-including one rule that a review file recorded as applied and that was not
-actually in the file.
-
-That test is the upstream-side counterpart to everything above: it asserts
-one grep per (rule, file) pair and runs in CI, so a release cannot ship a
-rule that reached only two of its three homes. Add a rule to a flow copy and
-you add one line to its table in the same commit. Without that, a downstream
-project merging faithfully still inherits whichever copy happened to be
-stale.
-
-## Rejected: submodule or subtree
-
-Considered and deliberately not recommended.
-
-A git submodule or subtree would make updates trivial (`git pull`) — and
-would break the property the whole design rests on: **every generated file
-is meant to be edited locally.** Projects are expected to widen the
-reviewer's permission block after verifying it live, fill role files with
-their own project-specific pitfalls, and add steps to `feature.md`. A
-submodule makes those edits either impossible or upstream-hostile.
-
-Copy-with-provenance is the correct model for generated-then-customized
-files. What is missing is not a different distribution mechanism — it is
-the provenance stamp and the changelog that make merging a copy tractable.
-Stages 1–2 supply exactly that.
-
----
-
-## Recommended cadence for a downstream project
-
-| When | Do |
-| --- | --- |
-| Weekly, in CI or a `/loop` | `bin/init.sh --update --target .` — exit 1 means the toolkit moved |
-| On a `[safety]` entry | Merge at the next task boundary, verify permission changes live |
-| On a `[contract]` entry | Merge before starting the next task; apply the migration to in-flight state files |
-| On `[process]` / `[docs]` | Batch them; merge whenever convenient |
-| Never | Mid-task |
-
-## Suggested build order
-
-Stage 1 → Stage 2 → Stage 3 → Stage 5 → Stage 4 as needed.
-
-Stages 1 and 2 alone remove the two things that actually stop people from
-upgrading (remembering the flags, and not knowing what matters). Stages 3
-and 5 are convenience on top of a mechanism that already works. Stage 4 is
-paperwork that only earns its keep when a contract change actually ships.
+Copy-with-provenance preserves project customizations. A submodule is not a
+substitute for deliberate reconciliation of locally edited generated files.

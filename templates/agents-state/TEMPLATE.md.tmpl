@@ -1,102 +1,65 @@
 # T-<id> — <short title>
 
-> The spine of the pipeline. Every role reads this file and appends to it.
-> **Nothing is passed between roles by prose alone.** If a fact is not
-> written here, the next role does not know it.
->
-> Copy to `.agent-pipeline/T-<id>.md` and fill in. Never delete another role's
-> section.
+<!-- task-schema: 2 -->
 
-**Status:** draft | spec-approved | in-progress | blocked:question | blocked:spec | in-review | changes-requested | testing | done
-**Owner right now:** planner | senior-dev | builder | reviewer | tester | lead
-**Implementer for this task:** senior-dev (claude/__CLAUDE_MODEL__) | builder (__BUILDER_MODEL__)
-**Task class:** <routine | standard | sensitive — proposed by the planner
-with a one-line why; the lead asks the human only when genuinely torn>
-**Class decided by:** agent | human
-**Reviewer for this task:** none yet — set by the lead before dispatching review; a model/vendor independent from the implementer (see `.claude/commands/feature.md` step 3's rotation policy)
-**Tester for this task:** none yet — set by the lead before dispatching test
-**OpenCode session id:** none yet — set after the first `oc.sh` call, reused for every later call on this task
-**OpenCode auto mode:** off — only meaningful when Implementer is `builder`. On means `oc.sh --auto` is used for this task's implement call, per the user's answer at spec approval. Off is the default; never turn this on without asking.
+> Authoritative handoff. Follow your role contract; preserve prior evidence.
+> Each status has exactly one owner: draft=planner; spec-approved,
+> changes-requested, done=lead; in-progress, in-review=implementer;
+> testing=tester; blocked states=reporting role/lead. Only lead records outcomes.
+
+**Status:** draft
+**Owner right now:** planner
+**Task class:** <routine | standard | sensitive>
+**Class decided by:** pending
+**Claude review approved:** off
+**OpenCode auto mode:** off
 **Review loop count:** 0 / 2
 **Test-fix loops:** 0 / 2
 **Spec bounces:** 0 / 1
-**Blocked since:** — <date + one line, set whenever Status becomes `blocked:*`, cleared when it isn't. This is what makes "what is this waiting on, and since when" answerable tomorrow, from the file, without the lead's conversation.>
-**Latest handoff:** <one line, overwritten by whichever role finishes last —
-`<role> → <outcome in a few words> → next: <role>`. This is what the lead
-reads between steps instead of the whole file; open the full file only when
-this line, or `scripts/verify-state.sh`, says something needs a look.>
+**Blocked since:** —
+**Latest handoff:** <role → result → next role>
 
-> **Who sets each Status.** A status nobody owns is a status that lies —
-> every value has exactly one setter and one triggering event. Set it when
-> the event happens, not at the end of your turn.
->
-> | Status | Set by | When |
-> | --- | --- | --- |
-> | `draft` | planner | it starts writing this file |
-> | `spec-approved` | lead | the user approves the spec |
-> | `in-progress` | implementer | it starts implementing |
-> | `blocked:question` | implementer, or lead | an *Open question* needs the **human** — also set **Blocked since** |
-> | `blocked:spec` | implementer | the spec itself is unbuildable; bounced back to the planner (max 1, see *Spec bounces*) |
-> | `in-review` | implementer | the diff is written and ready to review |
-> | `changes-requested` | lead | it routes a CHANGES_REQUESTED verdict back to the implementer |
-> | `testing` | tester | it starts running suites |
-> | `done` | lead | step 5 only: ledger closed, review PASS on record, user informed |
->
-> The three budget counters above are caps, not suggestions —
-> `scripts/verify-state.sh` fails loudly when one is exceeded. Blowing a
-> budget is an escalation to the user, never a reason to keep looping.
+## Role assignments
 
----
+> Lead records actual backend, model-maker family and separate conversation ids.
+> Pending is not verified. Model/backend changes require an inactive fresh role
+> conversation; preserve the prior assignment/reason in Decisions log.
+
+| Role | Backend | Model | Family | Session / thread |
+| --- | --- | --- | --- | --- |
+| planner | pending | pending | pending | pending |
+| implementer | pending | pending | pending | pending |
+| reviewer | pending | pending | pending | pending |
+| tester | pending | pending | pending | pending |
 
 ## Artifacts
 
-> The lead links every dispatch prompt and transcript; the implementer links
-> each patch and identifies the current patch for review. Paths are relative
-> to this state file: `prompts/T-<id>/<role>-<pass>.md` and
-> `logs/T-<id>/<role>-<pass>.jsonl` / `<implementer>-<pass>.patch`.
-> Use positive, unused pass numbers, including retries. Never overwrite a prior
-> pass artifact. Never move an artifact while its associated run is active;
-> update links atomically with any explicit, idle-only legacy migration.
-> Findings and verdicts stay in this state file, not in separate review files.
+> Link unused prompts/transcripts per attempt and explicit current patch for
+> review. Never overwrite a prior pass artifact.
+> Never move an artifact while its associated agent run is active.
+> Paths relative to this task:
+> ../prompts/T-<id>/<role>-<pass>.md; ../logs/T-<id>/<role>-<pass>.jsonl/.patch.
 
 | Role / attempt | Prompt | Transcript | Patch / current for review? |
 | --- | --- | --- | --- |
 
 ## Goal
 
-<One paragraph. What the user actually wants, in their terms. Not a
-solution.>
+<One paragraph. What the user needs, not an implementation design.>
 
-**Simplest version considered:** <the smaller thing that could work, and why
-this spec is bigger than that — or "this is the smallest version". Planner
-only. The cheapest place to remove work is before anyone implements it.>
+**Simplest version considered:** <smallest solution and why>
 
-**Blast radius:** <what breaks if this is wrong: which callers, which data,
-which users. Planner only.>
+**Blast radius:** <callers, data, users affected>
 
 ## Acceptance criteria
 
-> Checkable statements only. "Works well" is not checkable. A statement that
-> names an exact input and an exact observable output is. Only the planner
-> writes this list, and **no other role may edit the text of a criterion.**
-> Recording whether one was *met* is a separate job with a separate owner —
-> the ledger below.
+> Planner owns text; only the lead ticks outcomes using both evidence columns.
 
 - [ ] AC1 —
 - [ ] AC2 —
 - [ ] AC3 —
 
 ### Acceptance criteria ledger
-
-> **The lead fills this in, at step 5, and nobody else.** It is the artifact
-> that says what was actually delivered — without it, "criteria met" is one
-> agent's recollection rather than a record.
->
-> **An AC may only be ticked when both evidence cells are non-empty.** Cite
-> what already exists in this file: a reviewer pass + `file:line`, and a
-> tester run + the test name. "I read the diff and it looked right" is not
-> evidence. An AC the user explicitly agreed to drop stays `[ ]` and gets
-> `waived by user <date>` in its row — never a tick.
 
 | AC | Met? | Reviewer evidence | Test evidence |
 | --- | --- | --- | --- |
@@ -106,16 +69,9 @@ which users. Planner only.>
 
 ## Constraints
 
-> From this project's own guidance file unless stated otherwise. Restated
-> here so no role has to remember them.
-
-- Surgical changes only. Every changed line traces to this Goal.
-- No new runtime dependency unless this task explicitly calls for one.
+- Surgical approved-scope changes; no unapproved dependency or permission.
 
 ## Files in scope
-
-> The planner sets this. The implementer may not touch a file outside it
-> without appending to Open questions first and stopping.
 
 | File | Why |
 | --- | --- |
@@ -123,23 +79,11 @@ which users. Planner only.>
 
 ## New permissions required
 
-> Any new manifest permission, API scope, credential, or dependency, with
-> justification. Empty is the expected answer. The reviewer treats a silent
-> addition as an automatic CHANGES_REQUESTED.
-
 | Permission / dependency | Why it is unavoidable |
 | --- | --- |
 | | |
 
 ## Decisions log
-
-> Append-only. Date, role, decision, and the reason. A decision without a
-> reason is not a decision, it is a preference.
->
-> This is also where a disagreement gets resolved on the record: the
-> implementer writes why it disputes a finding, the reviewer answers it by
-> number on its next pass, and the lead writes down which way it
-> adjudicated and why.
 
 | When | Role | Decision | Why |
 | --- | --- | --- | --- |
@@ -147,14 +91,9 @@ which users. Planner only.>
 
 ## Review verdicts
 
-> Written by the reviewer only. PASS or CHANGES_REQUESTED, then numbered
-> findings with file:line and severity.
->
-> **Pass 2 closes Pass 1 by number** — every earlier finding marked fixed,
-> withdrawn, disputed (answering the implementer's Decisions-log reason), or
-> routed to test. A finding about code the diff did not change is admissible
-> on Pass 2 only at `critical` or `high`: without that rule the two-loop cap
-> stops being a convergence guarantee and becomes an arbitrary cutoff.
+> Both review passes, per-AC citations, numbered findings. Later passes close
+> earlier findings by number. Read-only reviewer output is recorded unchanged
+> by lead; never re-author it.
 
 ### Pass 1 — <date> — verdict: <PASS | CHANGES_REQUESTED>
 
@@ -162,47 +101,27 @@ which users. Planner only.>
 
 ## Test results
 
-> Written by the tester only. Never edits source; reports and triages.
-
 ### Run 1 — <date>
 
 - Command:
 - Result:
-- **Tests authored by:** <implementer this task | pre-existing | tester> —
-  say which. A suite the implementer wrote and the tester merely ran is a
-  weaker signal than an independent one, and the reader cannot tell which
-  they are looking at unless this line says so.
+- **Tests authored by:** <implementer this task | pre-existing | tester>
 - Acceptance-criteria coverage:
 
   | AC | Covering test | Result |
   | --- | --- | --- |
   | AC1 | | |
 
-  **ACs with no covering test:** <list them explicitly — an uncovered
-  criterion is a finding, not a silence.>
+  **ACs with no covering test:** <explicit list, or none>
 - Failures with reproduction steps:
 
 ## Findings for docs
 
-> Any role may append a line here when something learned in this task is
-> true beyond this task — a platform gotcha, a design gap, an incident, a
-> constraint someone will hit again. Format, one per line:
->
->     - [docs/SOME-DOC.md] one-line finding, self-contained
->
-> `scripts/promote-findings.sh T-<id>` copies these verbatim into the named
-> doc when you run it (idempotent — already-present lines are skipped). No
-> role is ever granted write access to `docs/` directly; this is a
-> deterministic copy, not an agent editing project documentation.
+> Format: `- [docs/PATH.md] one-line finding`; promote-findings copies it.
 
 ## Open questions
 
-> Any role may append. **The implementer must stop when it adds one here**,
-> set Status to `blocked:question`, and fill in *Blocked since*. Only the
-> lead clears them.
->
-> Prefix each with who it is waiting on — `[human]` or `[planner]` — so a
-> resumed session tomorrow can tell at a glance what the pipeline is
-> parked on.
+> Prefix [human] or [planner]. Implementer stops on questions; set blocked
+> status, Blocked since, and Latest handoff. Only the lead clears questions.
 
 - [ ]

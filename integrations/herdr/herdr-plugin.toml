@@ -1,6 +1,6 @@
 id = "agent-toolkit"
 name = "Agent Toolkit"
-version = "0.1.0"
+version = "0.2.0"
 min_herdr_version = "0.9.1"
 description = "Adopt an existing pipeline lead, show task records, and optionally add support panes."
 platforms = ["linux", "macos"]
@@ -29,6 +29,19 @@ id = "status"
 title = "Toolkit: show task board"
 contexts = ["workspace", "pane"]
 command = ["python3", "plugin.py", "status"]
+
+[[actions]]
+id = "team"
+title = "Toolkit: set up lead and tools tabs"
+description = "Preserve/adopt the existing lead; open a separate live dashboard tab with empty worker/server shells."
+contexts = ["workspace", "pane"]
+command = ["python3", "plugin.py", "team"]
+
+[[actions]]
+id = "focus-tools"
+title = "Toolkit: switch to tools and dashboard tab"
+contexts = ["workspace", "pane"]
+command = ["python3", "plugin.py", "focus-tools"]
 
 [[actions]]
 id = "focus-leader"

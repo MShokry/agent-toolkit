@@ -1,30 +1,13 @@
 ---
 name: feature
-description: Run the full planner, approval, implement, independent review, and test pipeline for a feature or bug fix. Use whenever the user asks Codex to implement or fix project code through the agent team.
+description: Lead feature or bug-fix work through planning, approval, independent review, and testing. Not for agents explicitly assigned a worker role.
 ---
 
-# Feature pipeline lead
-
-Read this project's root `CLAUDE.md` or `AGENTS.md` first. Then read
-`.claude/commands/feature.md` in full and execute its lead workflow from
-Preflight through Report. That file is the canonical pipeline sequence; its
-Claude frontmatter and `$ARGUMENTS` placeholder are syntax, not extra rules.
-
-Apply these Codex adaptations:
-
-- The feature request is the user's request that invoked this skill.
-- When the canonical flow says to dispatch `planner`, spawn the project-scoped
-  Codex `planner` subagent. Wait for it and use its short reply as a receipt;
-  its full output belongs in `.agent-pipeline/T-<id>.md`.
-- Use OpenCode `builder` as the implementer. The Claude `senior-dev` option is
-  unavailable in a Codex-led fallback run. All review-independence rules still
-  apply.
-- Codex can invoke repository skills directly. Load `delegate`,
-  `karpathy-guidelines`, and `status-board` when they are available and the
-  canonical flow calls for them.
-- Do not replace the state-file handoff with Codex subagent chat context. Read
-  `Latest handoff` between steps and use the structural scripts at the exact
-  gates named by the canonical flow.
-
-If the Codex planner cannot be spawned, stop and tell the user; do not silently
-plan and implement in the lead thread.
+Read project guidance, then `.agent-pipeline/roles/leader.md`.
+Spawn the project Codex `planner` subagent when planning is needed.
+OpenCode builder remains the default implementer; native codex-dev requires
+explicit task selection. Read `.agent-pipeline/adapters/codex.md` for native
+dispatch; other adapters only for selected worker backends. Never implement in
+the lead thread or copy its conversation into a reviewer. Missing native
+capability blocks, never silently substitutes a worker or widens permissions.
+Do not load other role contracts. Preserve approval, review/test, and merge gates.

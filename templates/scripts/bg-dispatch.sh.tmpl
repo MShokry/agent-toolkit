@@ -1,0 +1,113 @@
+#!/usr/bin/env bash
+# Detached OpenCode worker dispatch for Claude, Codex, and OpenCode leaders.
+# Use host background tools when they supply completion notifications. Otherwise:
+#   .agent-pipeline/bin/bg-dispatch.sh start T-001 builder-1 -- .agent-pipeline/bin/oc.sh <args...>
+#   .agent-pipeline/bin/bg-dispatch.sh wait T-001 builder-1 [max-seconds]
+# Args must name matching prompt/transcript paths and the label's agent.
+# Each attempt owns logs/T-001/builder-1.dispatch/ permanently; never overwrite it.
+# No implicit retries, model switching, auto-approval, or permission changes.
+# Wait exits: 0 = wrapper succeeded, 2 = failed/unknown, 3 = still running.
+# A wrapper exit is NOT task acceptance or proof a server-side turn stopped.
+set -eu
+REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd -P)"
+cd "$REPO_ROOT"
+die() { printf 'bg-dispatch.sh: %s\n' "$*" >&2; exit 1; }
+[ $# -ge 3 ] || die "usage: start|wait <T-id> <role-pass> ..."
+OP="$1" TASK="$2" LABEL="$3"
+shift 3
+[[ "$TASK" =~ ^T-[[:alnum:]_-]+$ ]] || die "invalid task id"
+[[ "$LABEL" =~ ^(builder|reviewer|tester)-[1-9][0-9]*$ ]] || die "label must be builder|reviewer|tester-<positive pass>"
+ROLE="${LABEL%-*}"
+DIR=".agent-pipeline/logs/$TASK/$LABEL.dispatch"
+
+case "$OP" in
+  start)
+    [ "${1:-}" = -- ] || die "start needs -- before .agent-pipeline/bin/oc.sh"
+    shift
+    [ "${1:-}" = .agent-pipeline/bin/oc.sh ] || die "only .agent-pipeline/bin/oc.sh is supported"
+    shift
+    ARGS=("$@")
+    AGENT="" PROMPT="" RAW=""
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        --agent|--prompt-file|--raw-out)
+          [ $# -ge 2 ] || die "$1 needs a value"
+          case "$1" in
+            --agent) AGENT="$2" ;;
+            --prompt-file) PROMPT="$2" ;;
+            --raw-out) RAW="$2" ;;
+          esac
+          shift 2 ;;
+        --model|--session) [ $# -ge 2 ] || die "$1 needs a value"; shift 2 ;;
+        --text|--auto) shift ;;
+        *) die "unsupported dispatch argument: $1" ;;
+      esac
+    done
+    [ "$AGENT" = "$ROLE" ] || die "agent must match label"
+    [ "$PROMPT" = ".agent-pipeline/prompts/$TASK/$LABEL.md" ] || die "prompt must match task/label"
+    [ "$RAW" = ".agent-pipeline/logs/$TASK/$LABEL.jsonl" ] || die "transcript must match task/label"
+    [ -s "$PROMPT" ] || die "missing or empty prompt"
+    [ ! -e "$RAW" ] && [ ! -L "$RAW" ] || die "transcript already exists; use a new pass"
+    mkdir -p ".agent-pipeline/logs/$TASK"
+    mkdir "$DIR" 2>/dev/null || die "attempt already reserved; use a new pass"
+    # _run owns the completion record; stderr receipts never determine success.
+    nohup bash "$REPO_ROOT/.agent-pipeline/bin/bg-dispatch.sh" _run "$TASK" "$LABEL" "${ARGS[@]}" \
+      > "$DIR/out" 2> "$DIR/err" < /dev/null &
+    disown 2>/dev/null || true
+    printf 'bg-dispatch.sh: started %s %s record=%s\n' "$TASK" "$LABEL" "$DIR"
+    ;;
+  _run)
+    [ -d "$DIR" ] || die "attempt is not reserved"
+    mkdir "$DIR/owner" 2>/dev/null || die "attempt already started"
+    # Publish a complete pid atomically; wait must never read an empty pid file.
+    printf '%s\n' "$$" > "$DIR/pid.tmp"
+    mv "$DIR/pid.tmp" "$DIR/pid"
+    CHILD=""
+    trap '[ -z "$CHILD" ] || kill "$CHILD" 2>/dev/null; exit 143' TERM INT
+    "$REPO_ROOT/.agent-pipeline/bin/oc.sh" "$@" &
+    CHILD=$!
+    RC=0
+    wait "$CHILD" || RC=$?
+    CHILD=""
+    printf '%s\n' "$RC" > "$DIR/exit.tmp"
+    mv "$DIR/exit.tmp" "$DIR/exit"
+    exit "$RC"
+    ;;
+  wait)
+    MAX="${1:-30}"
+    [ $# -le 1 ] || die "wait takes only max-seconds"
+    [[ "$MAX" =~ ^[0-9]+$ ]] && [ "$MAX" -le 540 ] || die "max-seconds must be 0..540"
+    MAX=$((10#$MAX))
+    [ -d "$DIR" ] || die "no attempt recorded"
+    END=$(( $(date +%s) + MAX ))
+    while :; do
+      if [ -f "$DIR/exit" ]; then
+        RC="$(cat "$DIR/exit")"
+        if [ "$RC" = 0 ]; then
+          printf 'finished: exit=0 record=%s\n' "$DIR"
+          exit 0
+        fi
+        printf 'failed: exit=%s record=%s; inspect err and confirm server inactivity before retry\n' "$RC" "$DIR"
+        exit 2
+      fi
+      if [ -f "$DIR/pid" ]; then
+        PID="$(cat "$DIR/pid")"
+        [[ "$PID" =~ ^[1-9][0-9]*$ ]] || die "invalid dispatch pid"
+        if ! kill -0 "$PID" 2>/dev/null; then
+          printf 'unknown: wrapper exited without a completion record; confirm server inactivity (%s)\n' "$DIR"
+          exit 2
+        fi
+      fi
+      if [ "$(date +%s)" -ge "$END" ]; then
+        if [ "$MAX" -gt 0 ] && [ ! -f "$DIR/pid" ]; then
+          printf 'unknown: no supervisor identity published (%s); inspect err before any replacement\n' "$DIR"
+          exit 2
+        fi
+        printf 'still-running: record=%s\n' "$DIR"
+        exit 3
+      fi
+      sleep 1
+    done
+    ;;
+  *) die "unknown operation: $OP" ;;
+esac

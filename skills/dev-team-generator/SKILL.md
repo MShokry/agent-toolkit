@@ -74,7 +74,7 @@ question tool if one is available) before writing anything:
      wrapper needed; weaker cross-vendor independence for review if the
      lead's tool is also the implementer's tool.
    - **Dispatched** — a separate CLI tool, invoked non-interactively with
-     a role + model argument (OpenCode's `opencode run --attach` is the
+     a role + model argument (OpenCode's `opencode run --server` is the
      worked example this toolkit already has; there is no reason a second
      or third CLI tool can't sit alongside it). Needs a dispatch wrapper —
      see Step 3.
@@ -122,6 +122,14 @@ not something to paper over by pretending the fit is closer than it is.
 
 Write files in this order — later ones depend on decisions the earlier
 ones make:
+
+Keep runtime context lean: one compact neutral contract per role, native
+adapters only for real permission/model/dispatch differences, and backend manuals
+loaded only for selected assignments. Automatically loaded project guidance must
+exclude explicitly assigned workers from leader/feature routing. Workers read
+their role and required task evidence, expanding history when necessary; never
+copy the lead conversation into review. Offer selected harness/extras profiles
+instead of installing every backend by default. Preserve an all-tools option.
 
 1. **The lead's own flow/orchestration file first.** This is what defines
    the state-file contract, the pipeline sequence, the loop cap, and the
