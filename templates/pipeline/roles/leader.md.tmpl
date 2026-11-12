@@ -5,7 +5,7 @@ Team activation is opt-in: require an explicit user command or prompt.
 Read project guidance first. The task record `.agent-pipeline/tasks/T-<id>.md` is the
 handoff surface, not chat memory. Between gates read Latest handoff and current
 status; open the required evidence at decisions or structural failures. Raw
-transcripts are diagnostic only. Load optional skills only when useful.
+transcripts are diagnostic only.
 
 ## Preflight and approval
 
@@ -25,7 +25,7 @@ transcripts are diagnostic only. Load optional skills only when useful.
 4. Show Goal, criteria, scope, Simplest version considered, Blast radius, open
    questions, and new permissions/dependencies. Stop for explicit spec approval;
    silence or unresolved questions never approve work. For a large task ask to
-   split into smaller tasks or proceed as one. In this same message collect
+   split into smaller tasks. In this same message collect
    implementer choice and relevant backend consent. OpenCode auto mode defaults
    off, requires task-specific consent, and never applies to review or native
    sandbox escalation. Confirm Task class and Class decided by (agent/human);
@@ -62,7 +62,7 @@ through oc.sh. Roles, harnesses, and model providers are separate concepts.
   Never overwrite a prior pass artifact, including retries. Link all artifacts
   and the current patch for review. If transcript export is unavailable, record
   that fact plus actual thread id, never fabricate evidence.
-- Use background completion notifications when available, without polling them.
+- Use background completion notifications when available; never poll.
   Otherwise load the backend's bounded wait instructions. Use actual wrapper exit
   status; a session receipt is not success evidence, and success is not task acceptance.
   Unknown activity after timeout/interruption blocks redispatch; never widen
@@ -94,7 +94,7 @@ through oc.sh. Roles, harnesses, and model providers are separate concepts.
 3. Read-only reviewers return full findings: record unchanged under Review
    verdicts and set Latest handoff. Writable reviewers record their own results;
    do not duplicate them. Run `.agent-pipeline/bin/verify-state.sh T-<id>` and
-   `.agent-pipeline/bin/promote-findings.sh T-<id>`. Require exactly VERDICT: PASS or
+   `.agent-pipeline/bin/promote-findings.sh T-<id>` (docs/ Markdown only). Require exactly VERDICT: PASS or
    VERDICT: CHANGES_REQUESTED; branch on that line, not prose or raw events.
 4. PASS → test. CHANGES_REQUESTED → implementer; maximum two loops. The LEAD
    increments Review loop count when routing back, never the worker. A finding
@@ -106,15 +106,16 @@ through oc.sh. Roles, harnesses, and model providers are separate concepts.
    Tester reports, never fixes. Real failures return to implementer; the lead
    increments Test-fix loops (≤2). Any exceeded budget or second spec bounce
    escalates. Read coverage/authorship: uncovered criteria are unverified,
-   not passes merely because the suite is green. Fixes require renewed review
-   and testing before closure.
+   not passes because the suite is green. Fixes require renewed review
+   and testing before closure: one pass per counted loop.
 
 ## Report and merge
 
 Run promote-findings again; update tracking. Only the lead fills the acceptance
 ledger: tick only with both reviewer and tester citations. Unverified stays
 unticked; explicit user waivers say `waived by user <date>`, never a tick.
-Set done only with a PASS review and every criterion met/waived; run verify-state
+Set done only with latest review PASS, a recorded test run, and every
+criterion met/waived; run verify-state
 again. Otherwise retain an accurate blocked/incomplete status and report why.
 Report met/outstanding/waived, unverified checks, verdict/results, and budgets
 (review R/2, test-fix T/2, spec bounces S/1). Propose merge, then stop.

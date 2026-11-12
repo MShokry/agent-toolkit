@@ -188,6 +188,21 @@ rule "two-loop review cap" \
   'maximum two loops|two failed loops|max two review loops|two review loops' \
   "$FEATURE" "$SYSTEM" "$FLOW"
 
+rule "review passes follow counted loops" \
+  'one pass per counted loop|one renewed review|1 \+ review loops' \
+  "$FEATURE" "$SYSTEM" "$FLOW" templates/scripts/verify-state.sh.tmpl
+
+rule "done closes on the latest verdict and a recorded run" \
+  'latest review' \
+  "$FEATURE" "$SYSTEM" "$FLOW" templates/scripts/verify-state.sh.tmpl
+
+rule "promoted findings reach approved docs roots only" \
+  'docs/ Markdown only|approved documentation root' \
+  "$FEATURE" "$SYSTEM" "$FLOW" templates/scripts/promote-findings.sh.tmpl
+
+rule "wrapper reports its own session, not an inferred one" \
+  'stream_session' templates/scripts/oc.sh.tmpl
+
 rule "never merge without asking" \
   'never merge' \
   "$FEATURE" "$SYSTEM" "$FLOW"

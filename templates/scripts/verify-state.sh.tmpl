@@ -175,11 +175,26 @@ if ! is_early; then
     || fail "Status is '$STATUS' but no Review verdicts pass records a filled PASS or CHANGES_REQUESTED verdict"
 fi
 
-# The loop cap is structural, not advisory: a Pass 3 heading means a third
-# review loop ran, which feature.md forbids (two failed loops means the spec
-# was wrong, not the code — stop and ask the user).
-if grep -q '^### Pass 3' "$FILE"; then
-  fail "a third review pass (Pass 3) exists — the two-loop cap is exceeded; escalate to the user instead"
+# The loop cap is structural, not advisory — but it is a cap on *loops*, not
+# on headings. Every route back to the implementer (a review loop or a
+# test-fix loop) legitimately earns one renewed review, so the number of
+# recorded passes may be at most 1 + review loops used + test-fix loops used.
+# The counters themselves are capped by check_budget below. A flat "no Pass 3"
+# rule rejected in-budget work (PASS -> test failure -> fix -> PASS -> test
+# failure -> fix -> PASS), leaving a legitimate task unable to close. A file
+# from before the counters existed keeps the historical two-pass ceiling.
+used_count() { # $1 = field label; prints the used number, or nothing if absent
+  grep -m1 "^\*\*$1:\*\*" "$FILE" 2>/dev/null \
+    | sed -n 's/.*:\*\* *\([0-9][0-9]*\) *\/ *[0-9][0-9]*.*/\1/p' || true
+}
+PASSES="$(grep -c '^### Pass [0-9]' "$FILE" || true)"
+REVIEW_USED="$(used_count 'Review loop count')"
+TESTFIX_USED="$(used_count 'Test-fix loops')"
+if [ -n "$REVIEW_USED" ] || [ -n "$TESTFIX_USED" ]; then
+  PASS_ALLOWED=$((1 + ${REVIEW_USED:-0} + ${TESTFIX_USED:-0}))
+  [ "$PASSES" -le "$PASS_ALLOWED" ] || fail "$PASSES review passes recorded but the loop counters authorise only $PASS_ALLOWED (1 + review loops + test-fix loops) — the lead increments a counter before each renewed review; an exhausted budget escalates to the user instead"
+elif [ "$PASSES" -gt 2 ]; then
+  fail "a third review pass exists in a task without loop counters — the two-loop cap is exceeded; escalate to the user instead"
 fi
 
 # Duplicate "### Pass N" headings usually mean a misplaced append rather
@@ -198,7 +213,7 @@ TOTAL="$(grep -c '^### Pass ' "$FILE" || true)"
 # Every re-engagement of the implementer is capped, and the cap is enforced
 # here rather than left to whoever is counting. A blown budget means the
 # spec is wrong or the suite is flaky — either way it is an escalation to
-# the user, not another lap. Review loops had this guarantee via the Pass 3
+# the user, not another lap. Review loops had this guarantee via a pass-heading
 # check above; test-fix loops and spec bounces had no budget at all, which
 # let a flaky suite cycle fix->test indefinitely with nothing noticing.
 check_budget() {
@@ -244,6 +259,17 @@ if [ "$STATUS" = "done" ]; then
   UNMET="$(awk '/^### Acceptance criteria ledger/{f=1;next} /^## /{f=0} f && /^\| *AC[0-9]/ && /\[ \]/ && !/waived/' "$FILE" | wc -l | tr -d ' ')"
   [ "$UNMET" = "0" ] || fail "Status is 'done' but $UNMET acceptance criteria are unticked and unwaived in the ledger"
   grep -q '^### Pass .*verdict: PASS' "$FILE" || fail "Status is 'done' but no review pass records a PASS verdict"
+  # An earlier PASS does not survive a later CHANGES_REQUESTED: the verdict
+  # that closes the task is the latest one recorded.
+  LAST_VERDICT="$(grep '^### Pass [0-9]' "$FILE" | tail -1 | sed 's/.*verdict: *//')"
+  [ "$LAST_VERDICT" = "PASS" ] || fail "Status is 'done' but the latest review pass is '$LAST_VERDICT', not PASS"
+  # A task carrying the Test results section must record a real run before it
+  # closes, unless every criterion was explicitly waived. Files from before
+  # the section existed are not retroactively failed.
+  if grep -q '^## Test results' "$FILE" && [ "$RUNS" -eq 0 ]; then
+    UNWAIVED="$(awk '/^### Acceptance criteria ledger/{f=1;next} /^## /{f=0} f && /^\| *AC[0-9]/ && !/waived/' "$FILE" | wc -l | tr -d ' ')"
+    [ "$UNWAIVED" = "0" ] || fail "Status is 'done' but no test run is recorded under Test results"
+  fi
 
   # A ticked ledger row whose Reviewer-evidence or Test-evidence cell is
   # empty is a tick resting on someone's recollection — the exact failure
@@ -258,6 +284,7 @@ if [ "$STATUS" = "done" ]; then
     f && $2 ~ /AC[0-9]/ {
       met=$3; rev=$4; tst=$5
       gsub(/[ \t]/,"",met)
+      if (met=="[X]") met="[x]"
       gsub(/^[ \t]+|[ \t]+$/,"",rev); gsub(/^[ \t]+|[ \t]+$/,"",tst)
       if (met=="[x]" && (rev=="" || tst=="")) { gsub(/[ \t]/,"",$2); printf "%s ", $2 }
     }' "$FILE")"

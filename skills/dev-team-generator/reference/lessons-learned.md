@@ -829,3 +829,26 @@ under test.
   Immutable model/session bindings prevent a renamed assignment from silently
   reusing an old reviewer conversation. Pending attribution is better than a fake
   default decision. Schema validators need backward and mixed-schema regressions.
+
+- Tie a loop cap to the counters that authorise loops, not to an artifact count.
+  A fixed ceiling on review records contradicted separate fix budgets: work
+  inside every budget needed one more review than the ceiling allowed and
+  could not close. Derive the allowed number of records from the counted
+  loops, and fail a record no counter accounts for.
+- A closing gate must read the latest verdict, not search for any passing one,
+  and must require the evidence it names (a recorded run), or a superseded
+  approval closes the task.
+- Text an agent proposes for promotion is untrusted input. Constrain the
+  destination to an allowlisted documentation root and file type and refuse
+  symlinks; blocking only parent traversal still lets a read-only role append
+  to instructions, contracts, or scripts through a step the lead runs unprompted.
+- Never report an inferred identity as a confirmed one. "The newest session
+  not seen before" is a guess whenever two runs can start together; prefer the
+  id the run itself reports, label an inference as such, and never bind on it.
+- A wrapper that can be signalled must stop its child and keep the partial
+  transcript; otherwise cancelling orchestration orphans a writer and destroys
+  the evidence needed to decide whether a retry is safe.
+- Validate every scaffold value against the syntax of every file it is
+  substituted into, before the first write, and publish rendered files by
+  rename. A half-written file that a never-overwrite scaffolder later skips
+  is a failure that cannot repair itself.

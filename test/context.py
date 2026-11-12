@@ -287,7 +287,8 @@ class ContextTests(unittest.TestCase):
 
     def test_migration_links_resolve_after_unreleased_consolidation(self):
         expected = {"01-delivery-contract.md", "02-artifact-layout.md",
-                    "03-pipeline-directory.md", "04-team-upgrade.md", "05-manual-team-activation.md"}
+                    "03-pipeline-directory.md", "04-team-upgrade.md", "05-manual-team-activation.md",
+                    "06-loop-accounting-and-findings-scope.md"}
         self.assertEqual({p.name for p in (ROOT / "migrations").glob("*.md")}, expected)
         obsolete = ("04-role-sessions.md", "05-codex-workers.md",
                     "06-lead-resume-claude-review.md", "07-lean-context.md")
