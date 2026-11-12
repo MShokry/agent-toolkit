@@ -276,6 +276,19 @@ apply_defaults() {
   [ -n "$REVIEWER_MODEL" ] || REVIEWER_MODEL="opencode-go/minimax-m2.7"
   [ -n "$REVIEWER_FALLBACK_MODEL" ] || REVIEWER_FALLBACK_MODEL="opencode-go/deepseek-v4-flash"
   [ -n "$TESTER_MODEL" ] || TESTER_MODEL="hcnsec/auto"
+  # Every value below is substituted into Markdown, TOML strings, and shell
+  # scripts. Reject characters that would corrupt the substitution itself
+  # (| & \) or be live syntax in a generated file (" $ `), instead of writing
+  # a silently damaged or executable scaffold. Stamp-loaded values pass here too.
+  case "$PROJECT_NAME" in
+    *['|&\"$`']*|*[[:cntrl:]]*) die "invalid --project-name: must not contain | & \\ \" \$ \` or control characters" ;;
+  esac
+  local checked
+  for checked in "$CLAUDE_MODEL" "$BUILDER_MODEL" "$REVIEWER_MODEL" "$REVIEWER_FALLBACK_MODEL" "$TESTER_MODEL"; do
+    [[ "$checked" =~ ^[A-Za-z0-9][A-Za-z0-9._/#:@+-]*$ ]] || die "invalid model id: $checked"
+  done
+  [[ "$TEST_DIR" =~ ^[A-Za-z0-9._][A-Za-z0-9._/-]*$ ]] || die "invalid --test-dir: $TEST_DIR"
+  case "/$TEST_DIR/" in */../*) die "invalid --test-dir: $TEST_DIR" ;; esac
   case "$BUILDER_MODEL" in
     codex/*|claude/*) die "--builder-model selects an OpenCode provider/model; native implementation is a per-task codex-dev or senior-dev choice" ;;
   esac
@@ -584,6 +597,7 @@ scaffold_files() {
   for role in leader planner implementer reviewer tester; do
     "$mode" "$TEMPLATES/pipeline/roles/$role.md.tmpl" "$TARGET/.agent-pipeline/roles/$role.md"
   done
+  "$mode" "$TEMPLATES/pipeline/roles/leader-reference.md.tmpl" "$TARGET/.agent-pipeline/roles/leader-reference.md"
   for backend in opencode codex claude; do
     "$mode" "$TEMPLATES/pipeline/adapters/$backend.md.tmpl" "$TARGET/.agent-pipeline/adapters/$backend.md"
   done
@@ -731,7 +745,15 @@ render() {
     return
   fi
   mkdir -p "$(dirname "$2")"
-  render_content "$1" > "$2"
+  # Render beside the destination and publish by rename. A failed render must
+  # not leave an empty file behind: a later run would skip it as "exists" and
+  # the scaffold could never repair itself.
+  local staged="$2.init-tmp.$$"
+  if ! render_content "$1" > "$staged" || [ ! -s "$staged" ]; then
+    rm -f "$staged"
+    die "failed to render $2; nothing was written for it"
+  fi
+  mv "$staged" "$2"
   printf 'init.sh: wrote %s\n' "$2"
 }
 

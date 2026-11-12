@@ -8,8 +8,9 @@ Share this file with an agent in any app and say:
 
 Activate only by explicit command or prompt; startup guidance stays neutral.
 
-This is a **self-contained leader orientation**, with the complete leader rules
-embedded below. Toolkit worker adapters do not load it automatically. Native lead entrypoints
+This is a **self-contained leader orientation**, with the core leader rules
+embedded below; rules for less common cases are in
+`.agent-pipeline/roles/leader-reference.md`, read one section at a time. Toolkit worker adapters do not load it automatically. Native lead entrypoints
 still use the smaller roles/leader.md; do not load both copies routinely.
 
 ## Access and authority
@@ -81,7 +82,7 @@ Runtime commands live in `.agent-pipeline/bin/`; task template and records in
 `.agent-pipeline/tasks/`. Each task has a Role assignments table with Backend,
 Model, resolved Family, and separate Session / thread ids, not one field per app.
 
-## Complete leader rules
+## Core leader rules
 
 The following body is generated from the same source as roles/leader.md.
 

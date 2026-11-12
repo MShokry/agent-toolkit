@@ -114,7 +114,9 @@
 #   124 aborted — either idle (no progress for OC_IDLE_TIMEOUT; usually a
 #       permission prompt in a non-TTY, unless --auto was passed, or a hung
 #       provider call) or the OC_TIMEOUT ceiling. The stderr message says
-#       which. Server-side interruption is attempted; confirm it stopped.
+#       which. Also used when the wrapper itself is signalled (TERM/INT):
+#       the client is stopped and the partial transcript is kept.
+#       Server-side interruption is attempted; confirm it stopped.
 # END USAGE
 
 set -eu
@@ -268,7 +270,17 @@ list_session_ids() {
     | grep -o '"id":"ses_[^"]*"' | cut -d'"' -f4
 }
 
+# The session id this run's own event stream reports — authoritative when
+# present (output may be buffered, so it can stay empty until the run ends).
+stream_session() {
+  grep -o '"sessionID":"[^"]*"' "$RAW_TMP" 2>/dev/null | head -1 | cut -d'"' -f4
+}
+
 # Echo the first session id present now but not in $1 (newline-separated list).
+# This is only an inference: another dispatch, or a person opening a session
+# on the same server in the same window, is indistinguishable from this run.
+# It is used to watch for progress until the stream names the real id, and is
+# never reported as this run's session when the stream disagrees.
 resolve_new_session() {
   local pre="$1" id
   for id in $(list_session_ids); do
@@ -341,10 +353,14 @@ printf '%s' "$PROMPT" | "$TIMEOUT_BIN" "$((CEIL_SECS + 300))" \
     --model "$MODEL" \
     ${SESSION_ARGS[@]+"${SESSION_ARGS[@]}"} \
     ${AUTO_ARGS[@]+"${AUTO_ARGS[@]}"} \
-    --format json > "$RAW_TMP" 2>>"$RAW_TMP" &
+    --format json > "$RAW_TMP" 2>&1 &
 OC_PID=$!
+# A signalled wrapper must not orphan the worker or lose the transcript: stop
+# the client, then fall through to the normal flush/interrupt/abort path.
+trap 'KILL_REASON="signal"; kill -TERM "$OC_PID" 2>/dev/null' TERM INT
 
 WATCH_SID="$SESSION"
+SID_INFERRED=0
 KILL_REASON=""
 START_TS="$(date +%s)"
 LAST_PROGRESS="$START_TS"
@@ -352,12 +368,25 @@ RESOLVE_DEADLINE="$((START_TS + 60))"
 FP_PREV=""
 
 while kill -0 "$OC_PID" 2>/dev/null; do
-  sleep "$POLL_SECS"
+  sleep "$POLL_SECS" || true
+  [ -z "$KILL_REASON" ] || break
   NOW="$(date +%s)"
+
+  # Adopt the stream's own id as soon as it appears, replacing any inference.
+  if [ -z "$SESSION" ] && { [ -z "$WATCH_SID" ] || [ "$SID_INFERRED" -eq 1 ]; }; then
+    STREAM_SID="$(stream_session)"
+    if [ -n "$STREAM_SID" ]; then
+      if [ "$STREAM_SID" != "$WATCH_SID" ]; then
+        WATCH_SID="$STREAM_SID"; FP_PREV=""; LAST_PROGRESS="$NOW"
+      fi
+      SID_INFERRED=0
+    fi
+  fi
 
   if [ -z "$WATCH_SID" ]; then
     WATCH_SID="$(resolve_new_session "$PRE_SESSIONS")" || WATCH_SID=""
     if [ -n "$WATCH_SID" ]; then
+      SID_INFERRED=1
       LAST_PROGRESS="$NOW"
     elif [ "$NOW" -ge "$RESOLVE_DEADLINE" ]; then
       break   # can't identify this run's session — leave it to the ceiling
@@ -387,6 +416,9 @@ done
 
 wait "$OC_PID"
 STATUS=$?
+# A signal interrupts the first wait; reap the stopping client before flushing.
+if [ "$KILL_REASON" = "signal" ]; then wait "$OC_PID" 2>/dev/null; STATUS=$?; fi
+trap - TERM INT
 set -e
 
 cat "$RAW_TMP" >&3
@@ -395,9 +427,27 @@ exec 3>&-
 # Report the session id actually used, whatever the outcome, so the caller can
 # persist it and continue the same session on the next call for this task/role. The
 # watchdog resolves it even for a fresh run; fall back to the raw stream.
-USED_SESSION="$WATCH_SID"
-[ -n "$USED_SESSION" ] || USED_SESSION="$(grep -o '"sessionID":"[^"]*"' "$RAW_TMP" 2>/dev/null | head -1 | cut -d'"' -f4)"
-[ -n "$USED_SESSION" ] && printf '%s\n' "oc.sh: session=$USED_SESSION" >&2
+# An explicit --session is what was asked for; otherwise the stream's own id
+# outranks the watchdog's inference, which may belong to a concurrent run.
+STREAM_SID="$(stream_session)"
+if [ -n "$SESSION" ]; then
+  USED_SESSION="$SESSION"
+elif [ -n "$STREAM_SID" ]; then
+  if [ -n "$WATCH_SID" ] && [ "$WATCH_SID" != "$STREAM_SID" ]; then
+    printf '%s\n' "oc.sh: WARNING — watchdog inferred session $WATCH_SID but this run's stream reports $STREAM_SID; another session started concurrently. Using the stream's id." >&2
+  fi
+  USED_SESSION="$STREAM_SID"
+  WATCH_SID="$STREAM_SID"
+  SID_INFERRED=0
+else
+  USED_SESSION="$WATCH_SID"
+fi
+if [ -n "$USED_SESSION" ]; then
+  if [ "$SID_INFERRED" -eq 1 ]; then
+    printf '%s\n' "oc.sh: WARNING — session id below was inferred from the server's session list, not confirmed by this run's output. Verify it before binding or resuming." >&2
+  fi
+  printf '%s\n' "oc.sh: session=$USED_SESSION" >&2
+fi
 
 # --- pipeline telemetry (best-effort; never fails the run) ----------------
 {
@@ -462,11 +512,20 @@ if [ -n "$KILL_REASON" ] || [ "$STATUS" -eq 124 ]; then
   if [ -n "$ABORT_SESSION" ]; then
     "$TIMEOUT_BIN" 10 opencode api POST "/api/session/$ABORT_SESSION/interrupt" --server "$SERVER" >/dev/null 2>&1 || true
     ABORT_NOTE="Requested interruption of server-side session $ABORT_SESSION. Confirm the turn stopped before retrying."
+    if [ "$SID_INFERRED" -eq 1 ]; then
+      ABORT_NOTE="$ABORT_NOTE
+  That id was inferred, not confirmed by this run's output: if another dispatch
+  started at the same time, check which session was actually interrupted."
+    fi
   else
     ABORT_NOTE="No session id was known to abort. If this session gets reused, check it isn't still running server-side before sending the next message."
   fi
 
-  if [ "$KILL_REASON" = "idle" ]; then
+  if [ "$KILL_REASON" = "signal" ]; then
+    WHY="the wrapper received a termination signal"
+    HINT="The client was stopped and the partial transcript kept. Treat worker
+  activity as unknown until the server-side turn is confirmed stopped."
+  elif [ "$KILL_REASON" = "idle" ]; then
     WHY="the session's last message did not change for ${IDLE_SECS}s while a turn was still open"
     HINT="Inspect the transcript, provider, API health, and pending permission requests.
   Do not widen permissions or enable --auto automatically after a timeout.

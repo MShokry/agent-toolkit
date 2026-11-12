@@ -278,14 +278,20 @@ The reviewer's reply opens with a machine-readable verdict line
 not on the findings prose or the raw event stream.
 
 If the reviewer flagged anything as true beyond this one task, run the
-findings-promotion script before moving on.
+findings-promotion script before moving on. It appends only to Markdown under
+an approved documentation root (docs/ by default); a finding addressed to
+project guidance, a role contract, or a script is refused — place it by hand
+with the user's approval, never by widening the script.
 
 - **PASS** → go to 4.
 - **CHANGES_REQUESTED, and the finding names a concrete code defect** → back
   to the implementer. It reads the findings from the state file directly —
   you don't need to relay them. **Maximum two loops.** On a third, stop and
   bring it to the user — two failed loops means the spec was wrong, not the
-  code.
+  code. Budgets count loops, not headings: each counted loop (review or
+  test-fix) earns one renewed review pass, and a pass no counter accounts
+  for fails verification. Closing needs the latest review PASS and a
+  recorded test run.
 - **CHANGES_REQUESTED, but the finding names no actionable code change**
   (see `lessons-learned.md` entry 5) → don't spend a loop on it. Route it
   into step 4's test dispatch as an explicit thing to check against the

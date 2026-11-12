@@ -141,6 +141,31 @@ anyone — including `done`, which nothing set, while the status-board rule
 keyed off exactly that value. A status nobody owns is a status that lies,
 and everything downstream that reads it inherits the lie.
 
+**The leader contract is a core plus a by-case reference.** The core
+(`templates/pipeline/roles/leader.md.tmpl`) holds the steps, approval gates,
+and prohibitions every run needs, in full sentences. Rules for cases most
+tasks never hit — unchecked models, native workers, recovery, disputes,
+committing, migrations — live in `leader-reference.md.tmpl`, one section per
+trigger, read only when that trigger occurs. Compressing prose to fit a word
+budget is not the same as making it short: it moves the cost to the reader.
+
+**Budgets count loops, and the closing verdict is the latest one.** Every
+counted route back to the implementer — a review loop or a test-fix loop —
+earns exactly one renewed review, so a task may record at most one pass per
+counted loop beyond the first; a pass no counter accounts for fails the
+structural check, and so does an exhausted counter. A flat ceiling on pass
+headings contradicts the budgets (two in-budget test-fix loops need a third
+pass) and leaves legitimate work unable to close. `done` requires the latest
+review to be PASS — an earlier PASS does not survive a later
+CHANGES_REQUESTED — plus a recorded test run unless every criterion is waived.
+
+**Promoted findings are agent-authored input, not trusted edits.** The
+promotion script appends only to Markdown under an approved documentation
+root (docs/ by default; the owner may add roots with `PROMOTE_DOC_ROOTS`).
+Project guidance, role contracts, scripts, hidden directories and symlinked
+paths are refused: an append there would let a read-only reviewer change
+instructions or code through a step the lead runs without a human gate.
+
 **Verification is a script, not a sixth agent.** Checking whether a
 verdict landed in the right heading, or whether a finding needs promoting
 to project docs, needs no judgment — `templates/scripts/verify-state.sh.tmpl`

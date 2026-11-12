@@ -15,6 +15,11 @@
 #   - [docs/SOME-DOC.md] one-line finding text
 # under a "## Findings for docs" heading in .agent-pipeline/tasks/T-<id>.md.
 #
+# Destinations are limited to Markdown files under docs/ (or the roots in
+# PROMOTE_DOC_ROOTS, colon-separated, set by the project owner). Anything
+# else — project guidance, role contracts, scripts, hidden directories,
+# symlinked paths — is skipped with a message for the human to place by hand.
+#
 # Usage: .agent-pipeline/bin/promote-findings.sh T-03
 
 set -eu
@@ -55,6 +60,40 @@ printf '%s\n' "$LINES" | while IFS= read -r line; do
       echo "promote-findings.sh: skip doc path escaping the repo root: $line" >&2
       continue ;;
   esac
+  # Refusing ".." is not enough: the path is still agent-authored, and an
+  # append to project guidance, a role contract, or a script is an instruction
+  # or code change made by a role that is supposed to be read-only (a line
+  # appended to a shell script runs on its next use). Findings land only in
+  # Markdown files under an approved documentation root — docs/ by default;
+  # the project owner may widen it with a colon-separated PROMOTE_DOC_ROOTS.
+  # Pipeline state and hidden tool directories are never a destination.
+  ALLOWED=0
+  OLD_IFS="$IFS"; IFS=:
+  for root in ${PROMOTE_DOC_ROOTS:-docs}; do
+    root="${root%/}"
+    case "$root" in ''|/*|.*|*/.*|*..*) continue ;; esac
+    case "$DOC" in "$root"/*) ALLOWED=1 ;; esac
+  done
+  IFS="$OLD_IFS"
+  case "$DOC" in
+    *.md) : ;;
+    *) ALLOWED=0 ;;
+  esac
+  case "/$DOC" in */.*) ALLOWED=0 ;; esac
+  if [ "$ALLOWED" -eq 0 ]; then
+    echo "promote-findings.sh: skip doc path outside the approved documentation roots (${PROMOTE_DOC_ROOTS:-docs}; Markdown only): $line" >&2
+    continue
+  fi
+  # No existing component may be a symlink, or the append leaves the root.
+  LINKED=0; probe="$DOC"
+  while [ "$probe" != "." ] && [ "$probe" != "/" ]; do
+    if [ -L "$probe" ]; then LINKED=1; break; fi
+    probe="$(dirname "$probe")"
+  done
+  if [ "$LINKED" -eq 1 ]; then
+    echo "promote-findings.sh: skip doc path through a symlink: $line" >&2
+    continue
+  fi
   mkdir -p "$(dirname "$DOC")"
   [ -f "$DOC" ] || printf '# %s\n' "$(basename "$DOC" .md)" > "$DOC"
   if grep -qF "$TEXT" "$DOC" 2>/dev/null; then

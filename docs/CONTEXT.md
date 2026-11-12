@@ -14,7 +14,7 @@ Init never injects these activation instructions into existing startup files.
 
 | Conversation | Toolkit instructions | Task/source inputs |
 | --- | --- | --- |
-| Leader | Small native entrypoint + roles/leader.md + selected backend adapters | Header/handoff between gates; approval/evidence at decisions |
+| Leader | Small native entrypoint + roles/leader.md (core) + one roles/leader-reference.md section when its case applies + selected backend adapters | Header/handoff between gates; approval/evidence at decisions |
 | Planner | Native agent + roles/planner.md | Template, request, relevant planning/architecture/source |
 | Implementer | Native agent + roles/implementer.md | Approved spec/scope, constraints, decisions, outstanding findings, source |
 | Reviewer | Native agent + roles/reviewer.md | Spec, current patch, decisions, previous finding dispositions, security docs |

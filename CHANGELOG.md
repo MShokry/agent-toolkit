@@ -10,6 +10,42 @@ update workflow. Version bumps mean: **MAJOR** = state-file contract /
 role authority / script interface changed; **MINOR** = new template,
 script, flag, or role rule; **PATCH** = prose and docs.
 
+## Unreleased
+
+- `[contract]` Split the leader contract into an always-loaded core
+  (`roles/leader.md`, eight numbered steps in full sentences, ~800 words, down
+  from 1,140 of compressed prose) and `roles/leader-reference.md`, seven
+  sections read one at a time when their case applies. No rule, gate, budget,
+  or permission was removed; conditional rules moved and were reworded. The
+  portable guide embeds the core and points to the reference. See migration 07.
+
+- `[contract]` verify-state ties review passes to the loop counters instead of
+  rejecting any `Pass 3`: allowed passes = 1 + review loops used + test-fix loops
+  used. The flat ceiling rejected in-budget work (two test-fix loops need a third
+  pass). A pass no counter accounts for still fails; tasks without counters keep
+  the two-pass ceiling. `done` now requires the latest review pass to be PASS and,
+  where the task has a Test results section, a recorded run unless every criterion
+  is waived; an uppercase `[X]` tick is checked for evidence. See migration 06.
+- `[safety]` promote-findings appends only to Markdown under an approved
+  documentation root (docs/ by default, `PROMOTE_DOC_ROOTS` to add roots) and
+  refuses symlinked paths. Previously a finding line could append to project
+  guidance, role contracts, or scripts, where an appended line executes.
+- `[safety]` oc.sh reports the session id from the run's own event stream; the
+  session-list inference is used only for the watchdog and is labelled when it is
+  all that is known. A concurrent session could previously be reported, bound,
+  and interrupted. TERM/INT now stops the client, keeps the partial transcript,
+  requests interruption, and exits 124. Client stderr no longer clobbers the
+  transcript (`2>&1`).
+- `[safety]` init.sh rejects project names, model ids, and test directories that
+  would corrupt substitution or be live syntax in generated files (`| & \ " $`
+  and backticks in names), before writing anything, and publishes each rendered
+  file by rename so a failed render cannot leave an empty file that later runs skip.
+- `[process]` release.sh pushes the branch it checked rather than always
+  `HEAD:main`, and runs the invariant and smoke suites before tagging
+  (`RELEASE_SKIP_TESTS=1` to skip).
+- `[docs]` README no longer describes a feature entrypoint that loads skills or a
+  "step 5"; skills are copied in and loaded explicitly.
+
 ## v1.0.2 — 2026-10-14
 
 - `[contract]` Make team activation explicitly opt-in. Fresh root AGENTS.md only

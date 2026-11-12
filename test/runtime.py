@@ -45,6 +45,36 @@ if mode != "success":
     print("worker failed", file=sys.stderr)
     sys.exit(7)
 '''
+OC_SERVER_FAKE = '''#!/usr/bin/env python3
+# Minimal fake of the OpenCode client for oc.sh itself: session listing,
+# message/session reads, interrupt recording, and one `run` turn.
+import os, pathlib, sys, time
+state = pathlib.Path(os.environ["OC_FAKE_STATE"])
+args = sys.argv[1:]
+if args[:1] == ["api"]:
+    method, path = args[1], args[2]
+    if method == "POST" and path.endswith("/interrupt"):
+        with (state / "interrupts").open("a") as f:
+            f.write(path.split("/")[3] + "\\n")
+    elif path == "/api/session":
+        ids = ["ses_old"]
+        if (state / "started").exists():
+            ids = ["ses_other", "ses_mine", "ses_old"]  # a concurrent session is newest
+        print("[" + ",".join('{"id":"%s"}' % i for i in ids) + "]")
+    elif path.endswith("/message"):
+        print("[]")
+    else:
+        print("{}")
+    sys.exit(0)
+assert args[:1] == ["run"], args
+sys.stdin.read()
+(state / "started").write_text("1")
+print("client diagnostic on stderr", file=sys.stderr, flush=True)
+print('{"type":"text","sessionID":"ses_mine","part":{"text":"worker answer"}}', flush=True)
+print("second diagnostic", file=sys.stderr, flush=True)
+time.sleep(float(os.environ.get("OC_FAKE_SLEEP", "0")))
+print('{"type":"text","sessionID":"ses_mine","part":{"text":" done"}}', flush=True)
+'''
 CODEX = '''#!/usr/bin/env python3
 import os, sys
 assert sys.argv[1:] == ["debug", "models"], sys.argv
@@ -646,6 +676,50 @@ else:
             process.communicate(timeout=5)
         self.assertEqual(sorted(p.returncode for p in processes), [0, 1])
         self.assertEqual(self.bg("wait", "builder-1", "5").returncode, 0)
+
+    def oc_fixture(self, sleep):
+        state = self.base / "oc-state"
+        state.mkdir()
+        self.write_executable(self.bin / "opencode", OC_SERVER_FAKE)
+        self.write_executable(self.bin / "timeout", '#!/usr/bin/env bash\nshift\nexec "$@"\n')
+        self.env.update(OC_FAKE_STATE=str(state), OC_FAKE_SLEEP=str(sleep), OC_POLL="1")
+        prompts = self.pipeline / "prompts/T-001"
+        prompts.mkdir(parents=True)
+        (prompts / "builder-1.md").write_text("literal task prompt")
+        command = [".agent-pipeline/bin/oc.sh", "--agent", "builder", "--model", "a/b", "--text",
+                   "--prompt-file", ".agent-pipeline/prompts/T-001/builder-1.md",
+                   "--raw-out", ".agent-pipeline/logs/T-001/builder-1.jsonl"]
+        return state, command, self.pipeline / "logs/T-001/builder-1.jsonl"
+
+    def test_wrapper_reports_its_own_session_not_a_concurrent_one(self):
+        _, command, transcript = self.oc_fixture(3)
+        result = self.run_command(*command)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        # The watchdog's list-diff inference would pick the concurrent session.
+        self.assertIn("oc.sh: session=ses_mine", result.stderr)
+        self.assertNotIn("session=ses_other", result.stderr)
+        self.assertEqual(result.stdout.strip(), "worker answer done")
+        retained = transcript.read_text()
+        # Client stderr and the event stream share one transcript without clobbering.
+        for expected in ("client diagnostic on stderr", "second diagnostic", '"worker answer"', '" done"'):
+            self.assertIn(expected, retained)
+
+    def test_signalled_wrapper_stops_worker_and_keeps_transcript(self):
+        state, command, transcript = self.oc_fixture(60)
+        process = subprocess.Popen(command, cwd=self.project, env=self.env,
+                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        deadline = time.time() + 10
+        while not (state / "started").exists() and time.time() < deadline:
+            time.sleep(0.1)
+        time.sleep(0.5)
+        process.terminate()
+        _, stderr = process.communicate(timeout=10)
+        self.assertEqual(process.returncode, 124, stderr)
+        self.assertIn("termination signal", stderr)
+        self.assertIn("oc.sh: session=ses_mine", stderr)
+        self.assertIn('"worker answer"', transcript.read_text())
+        self.assertEqual((state / "interrupts").read_text().split(), ["ses_mine"])
+
 
     def test_background_paths_resolve_from_nested_cwd(self):
         nested = self.project / "nested"

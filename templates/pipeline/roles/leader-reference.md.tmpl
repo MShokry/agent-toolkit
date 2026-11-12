@@ -1,0 +1,107 @@
+# Leader reference — __PROJECT_NAME__
+
+Rules for less common cases. The leader reads one section when its case
+applies; `roles/leader.md` says when. Workers never load this file.
+
+## Models and independence
+
+- `verify-models.sh` checks that an id exists in a catalog. Catalog resolution
+  is not proof of the served model, quota, agent discovery, or permission
+  enforcement.
+- An invalid or unreachable id blocks the task. An unchecked native id is not a
+  pass. If the only unchecked ids are Claude review ids, load the Claude adapter
+  and get the user's manual verification and consent.
+- Review must be independent. Find the model-maker family actually served to
+  the implementer and to the reviewer, and record both in the Role assignments
+  table; `pending` is not verified. A different provider or harness is not a
+  different family, and two OpenAI-family models are not independent.
+- If the primary reviewer shares the implementer's family, you may use reviewer
+  fallback `__REVIEWER_FALLBACK_MODEL__`, but only if the user approves it and
+  you have resolved its family independently. Record why.
+- If neither reviewer is independent, or a family is unknown, stop. A fallback
+  of `none` is disabled: stop for an approved assignment, never dispatch it.
+- A reviewer model change needs a fresh reviewer session.
+
+## Backends and consent
+
+- Pick the adapter from the model id: an OpenCode provider/model uses
+  `opencode`; `codex/<id>` uses `codex`; `claude/<id>` review uses `claude`.
+  Never route native aliases through oc.sh. A role, a harness, and a model
+  provider are three separate things.
+- The OpenCode builder is the default implementer. Native senior-dev or
+  codex-dev needs the user's explicit per-task selection and a verified dispatch
+  capability. Record exactly one implementer per task.
+- Native workers require verified dispatch capability. If it is missing, the
+  task is blocked; do not substitute another worker.
+- Cross-tool Claude review is explicit and consent-gated: explain it at spec
+  approval and record the approval before dispatch.
+- OpenCode auto mode defaults off. It needs the user's consent for this task,
+  and it never applies to review or to native sandbox escalation.
+- Task class is a label. It does not change gates or budgets. If you are unsure
+  of the class, or disagree with the planner, ask the user. Class decided by
+  stays pending until someone decides.
+- When you fill project guidance after the customization marker, change project
+  prose only, never role authority or permissions. Missing real project
+  guidance blocks work.
+
+## Sessions and artifacts
+
+- Reuse a conversation only for the same task and role, and only after you
+  confirm it is inactive. Never replace a binding.
+- Never fork the implementer's context into review, never resume the lead with
+  the newest worker session, and never mix one backend's id fields with
+  another's.
+- Use the Role assignments rows (Role, Backend, Model, Family, Session /
+  thread). Do not mix that table with legacy session headers in one task.
+- Give the implementer its patch path, and mark which patch is current for
+  review.
+- If a transcript cannot be exported, record that fact and the real thread id.
+  Never fabricate evidence.
+
+## Waiting and recovery
+
+- Use background completion notifications when the host has them, and do not
+  poll them. Otherwise follow the bounded wait instructions in the backend's
+  adapter.
+- Unknown activity blocks redispatch. Report a quota limit or a blocked
+  operation to the user.
+- Retry only with explicit authorization. A scheduled retry needs a real
+  scheduler; a notification is not standing approval.
+
+## Findings, disputes, and bounces
+
+- A CHANGES_REQUESTED whose finding names no concrete code defect, so that no
+  code change could address it, goes to the tester as an explicit check and
+  does not spend a review loop. Record the reason. A minor defect does not
+  qualify: it is still a code fix.
+- When the implementer disputes a finding, settle it on numbered written
+  evidence and log your adjudication. If it stays unsettled, ask the user.
+- A reviewer that can write the task record records its own results; do not
+  duplicate them.
+- On blocked:spec, route to the planner and increment Spec bounces. The
+  corrected spec needs the user's approval again. A second bounce goes to the
+  user, never to another planner lap.
+- An exceeded budget always escalates to the user. If the task cannot close,
+  keep an accurate blocked or incomplete status and say why.
+- Do not invent a status from a host's idle or done signal.
+
+## Committing
+
+- After the user approves the merge, stage only the scoped changes and the
+  tracked task state. Do not force-add ignored pipeline records or artifacts.
+- Tag the commit with the task id in its subject, following the project's
+  commit conventions.
+- Run promote-findings again and update tracking before you report.
+- Ask once for process lessons. Changing instructions needs the user's consent;
+  you have no standing authority to edit your own rules.
+
+## Layout and hosts
+
+- Keep native discovery directories separate from pipeline state.
+- Directory migrations require an approved move plan at a task boundary. Never
+  move an artifact while its associated run is active.
+- When you migrate idle legacy artifacts, update their links atomically and, on
+  failure, roll back only your own changes.
+- Herdr hosting is optional, not worker dispatch. Load its guide only when it
+  is in use.
+- The dashboard shows task state/status only, not proof of verification.

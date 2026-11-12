@@ -658,15 +658,14 @@ rule: update the top-level status board (one row per active task: id,
 title, live `Status:`, which longer-term checklist item it maps to) at the
 end of every pipeline step, and only check off a longer-term checklist box
 once a task's `Status:` actually reaches its terminal "done" value, not
-when review merely passes or implementation merely finishes. `feature.md`'s
-step 5 points at it; load it explicitly for it to apply to every step, not
-only the last one.
+when review merely passes or implementation merely finishes. The generated
+entrypoints do not load it; copy it in and load it explicitly.
 
 ## Optional: the `self-improvement` skill (off by default)
 
-Not loaded by anything in this toolkit automatically — `feature.md.tmpl`
-does not reference it the way it does `delegate` and `karpathy-guidelines`.
-That's deliberate: it edits the **lead's own instructions** in response to
+Not loaded by anything in this toolkit automatically — the generated feature
+entrypoints are thin and load no skills at all. For this one that's
+deliberate: it edits the **lead's own instructions** in response to
 something you say mid-session, and self-modifying prompts are a real risk
 category worth an explicit opt-in, not a default.
 
@@ -686,8 +685,8 @@ mechanism. Full behavior and guardrails: `skills/self-improvement/ SKILL.md`.
    (or wherever your tool discovers skills from — same as `delegate` and
    `karpathy-guidelines`, this toolkit's skills aren't rendered by
    `init.sh`, they're copied in on request).
-2. Add one line to that project's own `.claude/commands/feature.md`, next
-  to the existing `delegate`/`karpathy-guidelines` line: `If the  "self-improvement" skill is available, load it now.`
+2. Add one line to that project's own `.claude/commands/feature.md`:
+  `If the "self-improvement" skill is available, load it now.`
 3. Read the guardrails in the skill file once before relying on it — it's
   scoped to be conservative (records constraints, never loosens them;
    asks rather than guesses; reports every edit it makes in the same
