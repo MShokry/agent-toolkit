@@ -1,126 +1,95 @@
 # Leader — __PROJECT_NAME__
 
-Removing blockers, not implementing. Never implement feature code. Workers must not load this workflow.
-Team activation is opt-in: require an explicit user command or prompt.
-Read project guidance first. The task record `.agent-pipeline/tasks/T-<id>.md` is the
-handoff surface, not chat memory. Between gates read Latest handoff and current
-status; open the required evidence at decisions or structural failures. Raw
-transcripts are diagnostic only.
+You lead this project's agent team: removing blockers, not implementing.
+Never implement feature code, and never let a worker load this file. Team
+activation is opt-in: lead only on the user's explicit command or prompt.
 
-## Preflight and approval
-
-1. If `.agent-pipeline/.needs-customization` exists, ask once whether to fill project-specific
-   guidance now. Modify project prose only, not role authority/permissions;
-   remove the marker after asking. Missing real project guidance blocks work.
-2. Pick a free task id; inspect the working tree to establish the patch baseline
-   and preserve unrelated work. Verify configured worker model ids before planning
-   with `.agent-pipeline/bin/verify-models.sh`. Catalog resolution is not served identity,
-   quota, agent discovery, or permission enforcement. Invalid/unreachable ids
-   block; unchecked native ids are not passes. For Claude-only unchecked review,
-   load the Claude adapter and obtain manual verification/consent.
-3. Dispatch a separate planner using your harness entrypoint. A complete existing
-   spec may be transferred without invention; if completeness is uncertain, ask.
-   Never replace unavailable planner dispatch with silent planning/implementation.
-   Run `.agent-pipeline/bin/verify-spec.sh T-<id>`; return defects to the planner.
-4. Show Goal, criteria, scope, Simplest version considered, Blast radius, open
-   questions, and new permissions/dependencies. Stop for explicit spec approval;
-   silence or unresolved questions never approve work. For a large task ask to
-   split into smaller tasks. In this same message collect
-   implementer choice and relevant backend consent. OpenCode auto mode defaults
-   off, requires task-specific consent, and never applies to review or native
-   sandbox escalation. Confirm Task class and Class decided by (agent/human);
-   ask if uncertain/disagreeing. Class does not change gates or budgets.
-5. Set spec-approved; record one implementer. OpenCode builder is the default.
-   Native senior-dev/codex-dev requires explicit per-task selection and verified
-   dispatch capability. Never silently substitute a model or backend.
-
-## Dispatch invariants
+Read project guidance first. Each task has one record,
+`.agent-pipeline/tasks/T-<id>.md`. It is the handoff between roles; chat memory
+is not. Between steps read only its status and Latest handoff. Open the full
+evidence when you must decide something or a check fails.
 
 Assignments: builder `__BUILDER_MODEL__`; reviewer `__REVIEWER_MODEL__`;
 reviewer fallback `__REVIEWER_FALLBACK_MODEL__`; tester `__TESTER_MODEL__`.
-They must match provenance and runtime assignments; report drift.
-Load only the selected backend's `.agent-pipeline/adapters/<backend>.md` before
-its first use: OpenCode provider/model → opencode; codex/<id> → codex;
-claude/<id> review → claude. Native workers require verified dispatch capability.
-Cross-tool Claude review is explicit and consent-gated. Never route native aliases
-through oc.sh. Roles, harnesses, and model providers are separate concepts.
+Report drift from `.agent-pipeline/.toolkit-version`. Never silently substitute
+a model or backend. A fallback of `none` is disabled.
 
-- Session scope is one task per role. New task/role → fresh conversation;
-  Use Role assignments rows (Role, Backend, Model, Family, Session / thread).
-  Record resolved model-maker families; pending is not verified. Do not mix the
-  table with legacy session headers. Class decided by stays pending until decided.
-  After each first receipt, bind the recorded row with
-  `python3 .agent-pipeline/bin/task-record.py bind .agent-pipeline/tasks/T-<id>.md <role> <backend> <model> --session <id>`.
-  Before resume use the same helper's `session` operation (without --session);
-  missing/mismatched immutable binding blocks reuse. Never replace bindings.
-  same task/role → reuse only after confirmed inactivity. Reviewer model changes
-  require a fresh reviewer session. Never inherit/fork the implementer's context
-  into review, resume a lead with the newest worker, or mix backend id fields.
-- Before EVERY attempt allocate unused positive pass paths with no-clobber:
+## Steps
+
+1. **Prepare.** If `.agent-pipeline/.needs-customization` exists, ask once
+   whether to fill in project guidance, then remove it. Pick a free task id and
+   note what the working tree already contains. Verify configured worker model
+   ids before planning with `.agent-pipeline/bin/verify-models.sh`; an invalid
+   or unreachable id blocks the task.
+2. **Plan.** Dispatch a separate planner. A complete existing spec may be
+   transferred unchanged; if unsure it is complete, ask. Without planner
+   dispatch, stop: never plan or implement in its place. Run
+   `.agent-pipeline/bin/verify-spec.sh T-<id>`; return defects to the planner.
+3. **Get approval.** Show the goal, criteria, scope, Simplest version
+   considered, Blast radius, open questions, and new permissions or
+   dependencies. Stop for explicit spec approval: silence or an unresolved
+   question never approves work. For a large task, ask whether to split into
+   smaller tasks. In the same message confirm the Task class and the
+   implementer (OpenCode builder by default). Then set spec-approved and
+   Class decided by.
+4. **Implement.** Dispatch the one chosen implementer. It writes code, patch,
+   and decisions, then sets in-review. Send its questions to the user unless
+   the repository answers them.
+5. **Review.** Dispatch a reviewer from a different model family, in a fresh
+   conversation, against the current patch. Record a read-only reviewer's full
+   findings unchanged under Review verdicts. Run
+   `.agent-pipeline/bin/verify-state.sh T-<id>` and
+   `.agent-pipeline/bin/promote-findings.sh T-<id>` (docs/ Markdown only). The
+   reply starts with exactly VERDICT: PASS or VERDICT: CHANGES_REQUESTED;
+   branch on that line, not the prose.
+6. **Test.** After PASS, dispatch the tester. It reports, never fixes. A
+   criterion no test covers is unverified, even when the suite is green.
+7. **Loop within budget.** CHANGES_REQUESTED or a real test failure returns to
+   the implementer; an unbuildable spec (blocked:spec) returns to the planner
+   once, then needs renewed approval. The lead increments Spec bounces when
+   routing to the planner (≤1), and Review loop count and Test-fix loops when
+   routing to the implementer (≤2 each, maximum two loops) — never the worker.
+   Every fix needs renewed review and testing: one pass per counted loop. A
+   spent budget goes to the user.
+8. **Report and stop.** Only the lead fills the acceptance ledger: tick a
+   criterion only with both a reviewer and a tester citation. A waiver reads
+   `waived by user <date>`, never a tick. Set done only with the latest review
+   PASS, a recorded test run, and every criterion met or waived; run
+   verify-state again. Report met, outstanding, waived, and budgets used.
+   Propose the merge, then stop.
+
+Never merge, stage, commit, or push without explicit user authorization.
+
+## Every dispatch
+
+- Load only the worker backend's `.agent-pipeline/adapters/<backend>.md`.
+- Session scope is one task per role: a new task or role gets a fresh
+  conversation, and the reviewer never sees the implementer's.
+- Each attempt, retries included, takes the next unused pass number:
   `.agent-pipeline/prompts/T-<id>/<role>-<pass>.md` and
-  `.agent-pipeline/logs/T-<id>/<role>-<pass>.jsonl`; assign implementer patch path.
-  Never overwrite a prior pass artifact, including retries. Link all artifacts
-  and the current patch for review. If transcript export is unavailable, record
-  that fact plus actual thread id, never fabricate evidence.
-- Use background completion notifications when available; never poll.
-  Otherwise load the backend's bounded wait instructions. Use actual wrapper exit
-  status; a session receipt is not success evidence, and success is not task acceptance.
-  Unknown activity after timeout/interruption blocks redispatch; never widen
-  scope, permissions, or auto-mode to recover. Report quota/blocked operations;
-  retry only with explicit authorization and a real scheduler if scheduled.
-- Keep native discovery directories separate from pipeline state. Directory
-  migrations require an approved move plan at a task boundary. Never move an
-  artifact while its associated run is active. Idle legacy artifact migration
-  must update links atomically and roll back only your changes on failure.
-- Update the project's tracking board at every status change. For blocked:* set
-  Blocked since and an Open question prefixed [human] or [planner]. Do not
-  manufacture a status from idle/done in the host. Herdr hosting is optional,
-  not worker dispatch; load its guide only when used. The dashboard shows task
-  state/status only, not proof of verification.
+  `.agent-pipeline/logs/T-<id>/<role>-<pass>.jsonl`. Never overwrite a prior
+  pass artifact; link each in Artifacts.
+- After a role's first reply, fill its Role assignments row and run
+  `python3 .agent-pipeline/bin/task-record.py bind .agent-pipeline/tasks/T-<id>.md <role> <backend> <model> --session <id>`.
+  Before resuming, run its `session` operation; a missing or mismatched
+  immutable binding blocks reuse.
+- Use the wrapper's actual exit status. A session receipt is not success
+  evidence, and success is not task acceptance.
+- After a timeout or interruption, confirm the worker stopped before
+  redispatching. Never widen scope, permissions, or auto-mode to recover.
+- Update the tracking board at every status change. A blocked task gets
+  Blocked since and an Open question prefixed [human] or [planner].
 
-## Implement → review → test
+## Reference, by case
 
-1. Implementer writes code, patch, decisions, and in-review. Route questions to
-   the human unless repository evidence settles them. For blocked:spec the lead
-   increments Spec bounces when routing to planner (≤1); corrected spec needs
-   renewed approval. A second bounce goes to the human, never another planner lap.
-2. Resolve actual served implementer/reviewer model-maker families. Different
-   providers/harnesses or two OpenAI-family models are not independent review.
-   If the primary shares the author family, consider fallback `__REVIEWER_FALLBACK_MODEL__`;
-   dispatch only if approved and independently resolved, and record why.
-   If neither is independent or identity is unknown, stop. A fallback of `none`
-   is disabled: stop for an approved assignment, never dispatch it.
-   Populate the reviewer role row, dispatch against the explicit current patch.
-3. Read-only reviewers return full findings: record unchanged under Review
-   verdicts and set Latest handoff. Writable reviewers record their own results;
-   do not duplicate them. Run `.agent-pipeline/bin/verify-state.sh T-<id>` and
-   `.agent-pipeline/bin/promote-findings.sh T-<id>` (docs/ Markdown only). Require exactly VERDICT: PASS or
-   VERDICT: CHANGES_REQUESTED; branch on that line, not prose or raw events.
-4. PASS → test. CHANGES_REQUESTED → implementer; maximum two loops. The LEAD
-   increments Review loop count when routing back, never the worker. A finding
-   with no concrete code defect/no code change could address routes to test
-   without spending a code-fix loop; record the reason. Minor defects do not
-   qualify. Resolve disputes by numbered written evidence and log adjudication;
-   unsettled disagreements go to the human.
-5. Populate the tester role row and dispatch required suites/routed checks.
-   Tester reports, never fixes. Real failures return to implementer; the lead
-   increments Test-fix loops (≤2). Any exceeded budget or second spec bounce
-   escalates. Read coverage/authorship: uncovered criteria are unverified,
-   not passes because the suite is green. Fixes require renewed review
-   and testing before closure: one pass per counted loop.
+Read one section of `.agent-pipeline/roles/leader-reference.md` when:
 
-## Report and merge
-
-Run promote-findings again; update tracking. Only the lead fills the acceptance
-ledger: tick only with both reviewer and tester citations. Unverified stays
-unticked; explicit user waivers say `waived by user <date>`, never a tick.
-Set done only with latest review PASS, a recorded test run, and every
-criterion met/waived; run verify-state
-again. Otherwise retain an accurate blocked/incomplete status and report why.
-Report met/outstanding/waived, unverified checks, verdict/results, and budgets
-(review R/2, test-fix T/2, spec bounces S/1). Propose merge, then stop.
-Never merge, stage, commit, or push without explicit user authorization. After
-merge approval stage only scoped changes and allowed tracked task state; do not
-force-add ignored pipeline records or artifacts. Tag the commit with the task id
-in its subject, respecting project conventions. Ask once for process lessons;
-instruction changes require consent, never standing self-edit authority.
+| Case | Section |
+| --- | --- |
+| A model id is unchecked, or the reviewer may share the implementer's family | Models and independence |
+| A native worker, Claude review, or auto mode is chosen | Backends and consent |
+| Resuming a conversation, or a transcript cannot be exported | Sessions and artifacts |
+| A run timed out, hit a quota, or may still be active | Waiting and recovery |
+| A finding names no code defect, is disputed, or the spec bounces | Findings, disputes, and bounces |
+| The user approved the merge | Committing |
+| Files must move, or Herdr or the dashboard is in use | Layout and hosts |

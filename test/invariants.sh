@@ -30,6 +30,10 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 FEATURE="templates/pipeline/roles/leader.md.tmpl"
+# The leader contract is a short core plus a reference read by case. A leader
+# rule may live in either; rules that must be in the always-loaded core use
+# core_rule below.
+LEADER_REFERENCE="templates/pipeline/roles/leader-reference.md.tmpl"
 SYSTEM="SYSTEM.md"
 FLOW="skills/dev-team-generator/reference/flow-example.md"
 STATE="templates/agents-state/TEMPLATE.md.tmpl"
@@ -68,12 +72,31 @@ rule() {
     # Match against the file with newlines flattened: these rules are prose
     # that wraps, so a phrase can legitimately span a line break. Presence in
     # the document is the question, not presence on one line.
-    elif ! tr '\n' ' ' < "$f" | tr -s ' ' | grep -qiE "$pattern"; then
+    elif ! { cat "$f"; if [ "$f" = "$FEATURE" ]; then cat "$LEADER_REFERENCE"; fi; } \
+        | tr '\n' ' ' | tr -s ' ' | grep -qiE "$pattern"; then
       printf 'invariants: %s does not carry rule "%s"\n' "$f" "$id" >&2
       FAIL=1
     fi
   done
 }
+
+# core_rule <id> <extended-regex>: must be in the always-loaded leader core,
+# not only in the by-case reference. Gates and prohibitions belong here.
+core_rule() {
+  CHECKS=$((CHECKS + 1))
+  if ! tr '\n' ' ' < "$FEATURE" | tr -s ' ' | grep -qiE "$2"; then
+    printf 'invariants: leader core does not carry rule "%s"\n' "$1" >&2
+    FAIL=1
+  fi
+}
+core_rule "leader never implements" 'never implement feature code'
+core_rule "spec approval is an explicit stop" 'stop for explicit spec approval'
+core_rule "merge needs explicit authorization" 'never merge, stage, commit, or push without explicit user authorization'
+core_rule "verdict line decides the branch" 'branch on that line'
+core_rule "lead owns counters and budgets" 'never the worker'
+core_rule "structural checks run every task" 'verify-spec\.sh.*verify-state\.sh'
+core_rule "recovery never widens permissions" 'never widen scope, permissions, or auto-mode'
+core_rule "reference is read by case" 'roles/leader-reference\.md'
 
 # --- the three hand-synced copies of the lead's flow ------------------------
 rule "timeout guidance never widens permissions automatically" \

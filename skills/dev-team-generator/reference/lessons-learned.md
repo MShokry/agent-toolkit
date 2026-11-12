@@ -852,3 +852,7 @@ under test.
   substituted into, before the first write, and publish rendered files by
   rename. A half-written file that a never-overwrite scaffolder later skips
   is a failure that cannot repair itself.
+- A word budget on a contract rewards compression, not brevity: dropped verbs
+  and stacked noun phrases cost the reader what they save the counter. Budget
+  what every run must load, move rules for rare cases behind a named trigger,
+  write both in full sentences, and do not restate what a script enforces.

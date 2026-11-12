@@ -141,6 +141,14 @@ anyone — including `done`, which nothing set, while the status-board rule
 keyed off exactly that value. A status nobody owns is a status that lies,
 and everything downstream that reads it inherits the lie.
 
+**The leader contract is a core plus a by-case reference.** The core
+(`templates/pipeline/roles/leader.md.tmpl`) holds the steps, approval gates,
+and prohibitions every run needs, in full sentences. Rules for cases most
+tasks never hit — unchecked models, native workers, recovery, disputes,
+committing, migrations — live in `leader-reference.md.tmpl`, one section per
+trigger, read only when that trigger occurs. Compressing prose to fit a word
+budget is not the same as making it short: it moves the cost to the reader.
+
 **Budgets count loops, and the closing verdict is the latest one.** Every
 counted route back to the implementer — a review loop or a test-fix loop —
 earns exactly one renewed review, so a task may record at most one pass per

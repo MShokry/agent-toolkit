@@ -5,6 +5,8 @@ at a task boundary and preserve local customizations.
 
 ## v1.0.2 opt-in activation update
 
+[Migration 07](../migrations/07-leader-contract-split.md) splits the leader
+contract into a core and a by-case reference.
 [Migration 06](../migrations/06-loop-accounting-and-findings-scope.md) covers
 loop-counted review passes, the stricter `done` gate, and docs-only finding
 promotion. [Migration 05](../migrations/05-manual-team-activation.md) removes automatic team

@@ -12,6 +12,13 @@ script, flag, or role rule; **PATCH** = prose and docs.
 
 ## Unreleased
 
+- `[contract]` Split the leader contract into an always-loaded core
+  (`roles/leader.md`, eight numbered steps in full sentences, ~800 words, down
+  from 1,140 of compressed prose) and `roles/leader-reference.md`, seven
+  sections read one at a time when their case applies. No rule, gate, budget,
+  or permission was removed; conditional rules moved and were reworded. The
+  portable guide embeds the core and points to the reference. See migration 07.
+
 - `[contract]` verify-state ties review passes to the loop counters instead of
   rejecting any `Pass 3`: allowed passes = 1 + review loops used + test-fix loops
   used. The flat ceiling rejected in-budget work (two test-fix loops need a third

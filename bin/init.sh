@@ -597,6 +597,7 @@ scaffold_files() {
   for role in leader planner implementer reviewer tester; do
     "$mode" "$TEMPLATES/pipeline/roles/$role.md.tmpl" "$TARGET/.agent-pipeline/roles/$role.md"
   done
+  "$mode" "$TEMPLATES/pipeline/roles/leader-reference.md.tmpl" "$TARGET/.agent-pipeline/roles/leader-reference.md"
   for backend in opencode codex claude; do
     "$mode" "$TEMPLATES/pipeline/adapters/$backend.md.tmpl" "$TARGET/.agent-pipeline/adapters/$backend.md"
   done

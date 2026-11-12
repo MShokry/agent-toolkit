@@ -28,7 +28,7 @@ manual; see `docs/PERMISSIONS.md` and `docs/BACKLOG.md`.
 | `bin/init.sh` | Scaffold, preview updates, refresh provenance; never overwrite existing generated files |
 | `bin/migrate-layout.py` | Read-only plan / approved transactional layout move with private backups |
 | `bin/release.sh`, `skills/toolkit-release/` | Checked tag/push and conversational release approval |
-| `templates/pipeline/` | Compact neutral role contracts and lazily loaded dispatch adapters |
+| `templates/pipeline/` | Neutral role contracts (leader core + by-case reference) and lazily loaded dispatch adapters |
 | `templates/claude/` | Thin native feature/worker adapters and the reconciliation source |
 | `templates/codex/` | Codex lead instructions/skills, planner, and optional native worker adapters |
 | `templates/opencode/agent/` | Active builder/reviewer/tester definitions in supported legacy syntax |
@@ -58,6 +58,10 @@ manual; see `docs/PERMISSIONS.md` and `docs/BACKLOG.md`.
   `skills/dev-team-generator/reference/flow-example.md`. Add load-bearing rules
   to `test/invariants.sh` in the same change. Presence checks do not replace
   reading sibling copies for wording drift.
+- Write contracts in full sentences: who acts, what they produce, what to check,
+  where to stop. The leader core holds steps, gates, and prohibitions every run
+  needs; a rule for a case most tasks never hit goes in `leader-reference.md`
+  under the section its trigger names. Do not restate what a script enforces.
 - Keep feature entrypoints thin and explicit workers out of lead routing.
   Test contract links/word budgets/profile selection in `test/context.py`.
   Changing model provider assignments must not add another behavioral flow.

@@ -42,7 +42,7 @@ class ContextTests(unittest.TestCase):
         entrypoints = {"claude": ".claude/commands/feature.md",
                        "codex": ".agents/skills/feature/SKILL.md",
                        "opencode": ".opencode/commands/feature.md"}
-        for profile, expected_count in (("claude", 26), ("codex", 26), ("opencode", 25)):
+        for profile, expected_count in (("claude", 27), ("codex", 27), ("opencode", 26)):
             with self.subTest(profile=profile):
                 target = self.project(profile)
                 files = self.snapshot(target)
@@ -231,7 +231,14 @@ class ContextTests(unittest.TestCase):
         self.assertEqual(before, self.snapshot(target))
 
     def test_runtime_contract_word_budgets_and_role_boundaries(self):
-        budgets = {"leader": 1150, "planner": 400, "implementer": 450, "reviewer": 450, "tester": 400}
+        # The always-loaded leader core is a budget on what every run reads;
+        # conditional rules live in the by-case reference, in full sentences.
+        reference = (ROOT / "templates/pipeline/roles/leader-reference.md.tmpl").read_text()
+        self.assertLessEqual(len(reference.split()), 1000)
+        self.assertNotIn("adapters/", reference)
+        self.assertIn("roles/leader-reference.md",
+                      (ROOT / "templates/pipeline/roles/leader.md.tmpl").read_text())
+        budgets = {"leader": 850, "planner": 400, "implementer": 450, "reviewer": 450, "tester": 400}
         for role, budget in budgets.items():
             text = (ROOT / f"templates/pipeline/roles/{role}.md.tmpl").read_text()
             self.assertLessEqual(len(text.split()), budget, role)
@@ -288,7 +295,7 @@ class ContextTests(unittest.TestCase):
     def test_migration_links_resolve_after_unreleased_consolidation(self):
         expected = {"01-delivery-contract.md", "02-artifact-layout.md",
                     "03-pipeline-directory.md", "04-team-upgrade.md", "05-manual-team-activation.md",
-                    "06-loop-accounting-and-findings-scope.md"}
+                    "06-loop-accounting-and-findings-scope.md", "07-leader-contract-split.md"}
         self.assertEqual({p.name for p in (ROOT / "migrations").glob("*.md")}, expected)
         obsolete = ("04-role-sessions.md", "05-codex-workers.md",
                     "06-lead-resume-claude-review.md", "07-lean-context.md")
